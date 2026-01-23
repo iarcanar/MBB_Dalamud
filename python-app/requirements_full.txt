@@ -1,0 +1,29 @@
+# Magicite Babel Dalamud Bridge - Full Dependencies
+# Python 3.11+ required
+
+# === Core Dependencies ===
+requests>=2.31.0
+pillow>=10.0.0
+python-dotenv>=1.0.0
+
+# === Windows Integration ===
+pywin32>=306
+
+# === OCR Engine (REMOVED - Project is 100% text hook) ===
+# easyocr>=1.7.0  # No longer needed
+
+# === System Monitoring ===
+psutil>=5.9.0
+
+# === Keyboard/Hotkey ===
+keyboard>=0.13.5
+
+# === AI Translation (Gemini) ===
+google-generativeai>=0.3.0
+
+# === UI Components ===
+sv-ttk>=2.5.0
+
+# === Optional: Performance (REMOVED - OCR removed) ===
+# torch>=2.0.0  # No longer needed (was for OCR GPU acceleration)
+# torchvision>=0.15.0  # No longer needed (was for OCR)
