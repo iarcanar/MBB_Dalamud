@@ -56,11 +56,12 @@
 
 ### Step 3: Download Python App (1 minute)
 
-1. Go to [Releases Page](https://github.com/iarcanar/MBB_Dalamud/releases)
+1. Go to [Releases Page](https://github.com/iarcanar/MBB_Dalamud/releases/latest)
 
-2. Download **`MBB_v1.0.0.zip`**
+2. Download **`MBB_v1.0.0.zip`** (72 MB)
 
 3. Extract to any location (e.g., `C:\MBB\`)
+   - **Important:** Extract the entire folder, not just MBB.exe!
 
 ### Step 4: Configure Plugin (2 minutes)
 
@@ -175,12 +176,13 @@ To manually check for updates:
 
 ## 📚 Documentation
 
+- [Installation Testing Guide](INSTALLATION_TESTING.md) - ⭐ Test installation steps
 - [Installation Guide](INSTALLATION.md)
 - [Build Protocol](BUILD_PROTOCOL.md)
 - [Starting Guide](STARTING_GUIDE.md)
 - [UI Troubleshooting](UI_TROUBLESHOOTING.md)
 - [Master Plan](MASTER_PLAN.md)
-- [Changelog](CHANGELOG.md)
+- [Changelog](CHANGELOG.md) - Version history
 
 ---
 
