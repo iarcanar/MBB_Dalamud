@@ -1,0 +1,92 @@
+# =============================================================================
+# MBB Dalamud - Git Ignore Rules
+# =============================================================================
+
+# Environment variables and secrets
+.env
+*.env
+!.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# PyInstaller
+*.spec.bak
+*.manifest
+*.spec.swp
+
+# C# build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.cache
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# User data
+settings.json
+font_settings.json
+last_directory.txt
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Release packages
+*.zip
+!plugins/**/latest.zip
+*.rar
+*.7z
+*.tar.gz
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation builds
+docs/_build/
