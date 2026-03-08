@@ -5,6 +5,7 @@ HeaderBar - Manages header UI components
 import tkinter as tk
 from PIL import Image, ImageTk
 from typing import Callable, Dict, Optional
+from resource_utils import resource_path
 
 
 class HeaderBar:
@@ -87,7 +88,7 @@ class HeaderBar:
     def _load_logo(self):
         """Load logo image"""
         try:
-            logo = Image.open("assets/mbb_pixel.png")
+            logo = Image.open(resource_path("assets/mbb_pixel.png"))
             logo.thumbnail((64, 64), Image.Resampling.LANCZOS)
             self._logo_icon = ImageTk.PhotoImage(logo)
         except Exception as e:
@@ -97,7 +98,7 @@ class HeaderBar:
         """Create close button"""
         bg_color = self.appearance.bg_color
         try:
-            close_img = Image.open("assets/del.png")
+            close_img = Image.open(resource_path("assets/del.png"))
             close_img = close_img.resize((20, 20), Image.Resampling.LANCZOS)
             self._close_icon = ImageTk.PhotoImage(close_img)
 
@@ -128,9 +129,9 @@ class HeaderBar:
         bg_color = self.appearance.bg_color
         try:
             # Load icons
-            pin_img = Image.open("assets/pin.png").resize((24, 24), Image.Resampling.LANCZOS)
+            pin_img = Image.open(resource_path("assets/pin.png")).resize((24, 24), Image.Resampling.LANCZOS)
             self._pin_icon = ImageTk.PhotoImage(pin_img)
-            unpin_img = Image.open("assets/unpin.png").resize((24, 24), Image.Resampling.LANCZOS)
+            unpin_img = Image.open(resource_path("assets/unpin.png")).resize((24, 24), Image.Resampling.LANCZOS)
             self._unpin_icon = ImageTk.PhotoImage(unpin_img)
 
             self.btn_pin = self.button_factory.create_icon_button(
@@ -147,7 +148,7 @@ class HeaderBar:
         """Create theme toggle button"""
         bg_color = self.appearance.bg_color
         try:
-            theme_img = Image.open("assets/theme.png").resize((24, 24), Image.Resampling.LANCZOS)
+            theme_img = Image.open(resource_path("assets/theme.png")).resize((24, 24), Image.Resampling.LANCZOS)
             self._theme_icon = ImageTk.PhotoImage(theme_img)
 
             self.btn_theme = self.button_factory.create_icon_button(
@@ -164,7 +165,7 @@ class HeaderBar:
     def set_version(self, version: str):
         """Set version text"""
         if self.lbl_version:
-            self.lbl_version.config(text=f"Dalamud v{version}")
+            self.lbl_version.config(text=f"v{version}")
 
     def update_pin_state(self, is_pinned: bool):
         """

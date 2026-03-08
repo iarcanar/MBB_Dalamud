@@ -14,7 +14,6 @@ class AdvanceUI:
         self.parent = parent
         self.settings = settings
         self.apply_settings_callback = apply_settings_callback
-        # OCR removed - ocr_toggle_callback parameter deleted
         self.advance_window = None
         self.is_changed = False
         self.create_advance_window()
@@ -410,11 +409,6 @@ class AdvanceUI:
             )
             self.detect_button.pack(side=tk.RIGHT, padx=5)
 
-            # ========================================================================
-            # OCR Settings section removed (49 lines deleted)
-            # Project is now 100% text hook - no OCR UI needed
-            # ========================================================================
-
             # Save Button
             self.save_button = appearance_manager.create_styled_button(
                 self.advance_window, "Save", self.save_settings, hover_bg="#404040"
@@ -461,7 +455,6 @@ class AdvanceUI:
             # Bind Events
             self.width_combo.bind("<<ComboboxSelected>>", self.on_change)
             self.height_combo.bind("<<ComboboxSelected>>", self.on_change)
-            # OCR removed - gpu_var trace listener deleted
 
             # Window Movement
             self.advance_window.bind("<Button-1>", self.start_move)
@@ -967,14 +960,8 @@ class AdvanceUI:
         width, height = screen_size.split("x")
         self.screen_width_var.set(width)
         self.screen_height_var.set(height)
-        # OCR removed - gpu_var line deleted
         self.is_changed = False
         self.update_save_button()
-
-    # OCR removed - toggle_gpu() method deleted
-    # def toggle_gpu(self):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
 
     def save_settings(self):
         """Save current settings"""
@@ -985,11 +972,8 @@ class AdvanceUI:
             )
             self.settings.set_screen_size(screen_size)
 
-            # OCR removed - GPU setting lines deleted
-
             print(f"\n=== Settings Saved ===")
             print(f"Screen Size: {screen_size}")
-            # OCR removed - GPU print line deleted
             print("====================\n")
 
             new_settings = {"screen_size": screen_size}

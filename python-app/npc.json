@@ -5,42 +5,42 @@
             "lastName": "",
             "gender": "Female",
             "role": "Scion, Black mage",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Alphinaud",
             "lastName": "",
             "gender": "Male",
             "role": "Scion, Academician",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Alisaie",
             "lastName": "",
             "gender": "Female",
             "role": "Scion, Red Mage",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Urianger",
             "lastName": "",
             "gender": "Male",
             "role": "Scion, Astrologian",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Thancred",
             "lastName": "",
             "gender": "Male",
             "role": "Scion, Gunbreaker",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Wuk Lamat",
             "lastName": "",
             "gender": "Female",
             "role": "Hrothgar, Third Promise, lamaty'i",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Zoraal Ja",
@@ -61,28 +61,28 @@
             "lastName": "",
             "gender": "Male",
             "role": "Alexandria Battle Robot",
-            "relationship": "New ally"
+            "relationship": "New Ally"
         },
         {
             "firstName": "Koana",
             "lastName": "",
             "gender": "Male",
             "role": "Prince",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Gulool Ja",
             "lastName": "",
             "gender": "Male",
             "role": "Mamool Ja, Prince of Alexandria",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "G'raha Tia",
             "lastName": "",
             "gender": "Male",
             "role": "Scion, Historian, Crystal Exarch",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Crystal Exarch",
@@ -96,14 +96,14 @@
             "lastName": "",
             "gender": "Female",
             "role": "Scion, Pictomancer",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Erenville",
             "lastName": "",
             "gender": "Male",
             "role": "Gleaner",
-            "relationship": "New ally"
+            "relationship": "Ally"
         },
         {
             "firstName": "Hythlodaeus",
@@ -120,18 +120,11 @@
             "relationship": "Neutral"
         },
         {
-            "firstName": "EmetSelch",
-            "lastName": "",
-            "gender": "Male",
-            "role": "Ascians",
-            "relationship": "Past ally"
-        },
-        {
             "firstName": "Meteion",
             "lastName": "",
             "gender": "Female",
             "role": "Elpis Citizen",
-            "relationship": "New ally"
+            "relationship": "New Ally"
         },
         {
             "firstName": "Hermes",
@@ -159,7 +152,7 @@
             "lastName": "",
             "gender": "Female",
             "role": "Neutral",
-            "relationship": "Unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "2B",
@@ -201,14 +194,14 @@
             "lastName": "",
             "gender": "Male",
             "role": "Mamool Ja",
-            "relationship": "neutral"
+            "relationship": "Neutral"
         },
         {
             "firstName": "Bakool Ja Ja the Mystic",
             "lastName": "",
             "gender": "Male",
             "role": "Mamool Ja",
-            "relationship": "neutral"
+            "relationship": "Neutral"
         },
         {
             "firstName": "Prishe",
@@ -236,7 +229,7 @@
             "lastName": "",
             "gender": "Male",
             "role": "Hrothgar",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Alxaal",
@@ -264,7 +257,7 @@
             "lastName": "",
             "gender": "Female",
             "role": "Elvan",
-            "relationship": "Close ally"
+            "relationship": "Close Ally"
         },
         {
             "firstName": "Genolt",
@@ -285,7 +278,7 @@
             "lastName": "",
             "gender": "Male",
             "role": "นักวิจัยของ Zoraal Ja",
-            "relationship": "unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "Teeshal Ja",
@@ -312,7 +305,7 @@
             "firstName": "Hhwato",
             "lastName": "",
             "gender": "Male",
-            "role": "หัวหน้าหมู่บ้านย่าน 'Hhetsarro' ",
+            "role": "หัวหน้าหมู่บ้านย่าน 'Hhetsarro'",
             "relationship": "Ally"
         },
         {
@@ -372,7 +365,7 @@
             "relationship": "Close Ally"
         },
         {
-            "firstName": "Estinien​",
+            "firstName": "Estinien",
             "lastName": "",
             "gender": "Male",
             "role": "Dragoon, Scion",
@@ -432,7 +425,7 @@
             "lastName": "",
             "gender": "Male",
             "role": "น้องชายของ Yotsuyu",
-            "relationship": "unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "Tobli",
@@ -500,7 +493,7 @@
         {
             "firstName": "Zero",
             "lastName": "",
-            "gender": "none",
+            "gender": "None",
             "role": "Reaper",
             "relationship": "Close Ally"
         },
@@ -509,7 +502,7 @@
             "lastName": "",
             "gender": "Male",
             "role": "Dark Lord",
-            "relationship": "Unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "Azdaja",
@@ -612,21 +605,21 @@
         {
             "firstName": "Livingway",
             "lastName": "",
-            "gender": "unknown",
+            "gender": "Unknown",
             "role": "Loporrit (Endwalker)",
             "relationship": "Close Ally"
         },
         {
             "firstName": "Puddingway",
             "lastName": "",
-            "gender": "unknown",
+            "gender": "Unknown",
             "role": "Loporrit (Endwalker)",
             "relationship": "Close Ally"
         },
         {
             "firstName": "Jammingway",
             "lastName": "",
-            "gender": "unknown",
+            "gender": "Unknown",
             "role": "Loporrit (Endwalker)",
             "relationship": "Close Ally"
         },
@@ -654,7 +647,7 @@
         {
             "firstName": "Beq Lugg",
             "lastName": "",
-            "gender": "unknown",
+            "gender": "Unknown",
             "role": "Scholar in Il Mheg",
             "relationship": "Ally"
         },
@@ -704,7 +697,7 @@
             "firstName": "Ketenramm",
             "lastName": "",
             "gender": "Male",
-            "role": "unknow",
+            "role": "Unknown",
             "relationship": "Ally"
         },
         {
@@ -817,21 +810,21 @@
             "lastName": "",
             "gender": "Female",
             "role": "Samurai",
-            "relationship": "unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "Solus zos Galvus",
             "lastName": "",
             "gender": "Male",
             "role": "Ascians, Emet-Selch",
-            "relationship": "enemy"
+            "relationship": "Enemy"
         },
         {
             "firstName": "Warrior of Darkness",
             "lastName": "",
             "gender": "Male",
             "role": "นักรบแห่งความมืด",
-            "relationship": "unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "Papalymo",
@@ -891,7 +884,7 @@
         },
         {
             "firstName": "Cloud",
-            "lastName": "Striff",
+            "lastName": "Strife",
             "gender": "Male",
             "role": "Champion, Soldier First Class",
             "relationship": "Player"
@@ -901,19 +894,19 @@
             "lastName": "",
             "gender": "Male",
             "role": "Boss",
-            "relationship": "Unknow"
+            "relationship": "Unknown"
         },
         {
             "firstName": "Kurohime",
             "lastName": "",
-            "gender": "female",
+            "gender": "Female",
             "role": "maid of honor",
             "relationship": "intimate ally"
         },
         {
             "firstName": "The Endsinger",
             "lastName": "",
-            "gender": "female",
+            "gender": "Female",
             "role": "End of darkness",
             "relationship": "Enemy"
         },
@@ -948,29 +941,22 @@
         {
             "firstName": "Cymet",
             "lastName": "",
-            "gender": "female",
+            "gender": "Female",
             "role": "Adventure",
             "relationship": "Ally"
         },
         {
             "firstName": "Almet",
             "lastName": "",
-            "gender": "female",
+            "gender": "Female",
             "role": "Adventure",
             "relationship": "Ally"
         },
         {
             "firstName": "Uimet",
             "lastName": "",
-            "gender": "female",
-            "role": "Adventure",
-            "relationship": "Ally"
-        },
-        {
-            "firstName": "Feo UI",
-            "lastName": "",
             "gender": "Female",
-            "role": "Pixie queen",
+            "role": "Adventure",
             "relationship": "Ally"
         },
         {
@@ -983,7 +969,7 @@
         {
             "firstName": "Sadu",
             "lastName": "",
-            "gender": "female",
+            "gender": "Female",
             "role": "warrior",
             "relationship": "Neutral"
         },
@@ -1086,13 +1072,6 @@
             "relationship": "Enemy"
         },
         {
-            "firstName": "Nanamo Ul Namo",
-            "lastName": "",
-            "gender": "Female",
-            "role": "Princess of Uldah",
-            "relationship": "Close Ally"
-        },
-        {
             "firstName": "Iceheart",
             "lastName": "",
             "gender": "Female",
@@ -1158,7 +1137,7 @@
         {
             "firstName": "Omega",
             "lastName": "",
-            "gender": "์Neutral",
+            "gender": "Neutral",
             "role": "Android",
             "relationship": "Neutral"
         },
@@ -1324,7 +1303,7 @@
             "relationship": "Neutral"
         },
         {
-            "firstName": "Tataru​",
+            "firstName": "Tataru",
             "lastName": "",
             "gender": "Female",
             "role": "ผู้ช่วยแสนน่ารัก",
@@ -1334,15 +1313,8 @@
             "firstName": "???",
             "lastName": "",
             "gender": "Neutral",
-            "role": "unknow",
-            "relationship": "unknow"
-        },
-        {
-            "firstName": "​?​?​",
-            "lastName": "",
-            "gender": "Female",
-            "role": "Adventure",
-            "relationship": "Neutral"
+            "role": "Unknown",
+            "relationship": "Unknown"
         },
         {
             "firstName": "Ofangeim",
@@ -1377,7 +1349,7 @@
             "lastName": "",
             "gender": "Female",
             "role": "ผู้ดูแล Pandaemonium",
-            "relationship": "ally"
+            "relationship": "Ally"
         },
         {
             "firstName": "Lahabrea",
@@ -1496,28 +1468,6 @@
         },
         {
             "firstName": "Fonjeantaine",
-            "lastName": "",
-            "gender": "Female",
-            "role": "Adventure",
-            "relationship": "Neutral",
-            "appearance": "",
-            "personality": "",
-            "background": "",
-            "notes": ""
-        },
-        {
-            "firstName": "Venat​",
-            "lastName": "",
-            "gender": "Female",
-            "role": "Adventure",
-            "relationship": "Neutral",
-            "appearance": "",
-            "personality": "",
-            "background": "",
-            "notes": ""
-        },
-        {
-            "firstName": "​​​",
             "lastName": "",
             "gender": "Female",
             "role": "Adventure",
@@ -1740,11 +1690,6 @@
             "description": "ชายหนุ่มผู้มุ่งมั่น คนรักของ Loazenikwe"
         },
         {
-            "name": "Leophyne",
-            "role": "นักรบเผ่าเอลฟ์",
-            "description": "นักรบหญิง วายร้ายผู้โจรกรรม Cradle เครื่องรางแห่งการหลับไหล"
-        },
-        {
             "name": "Khloe Aliapoh",
             "role": "แม่ค้าเผ่าแมว",
             "description": "สาวน้อยน่ารัก สดใสประจำเมือง Idyllshire"
@@ -1805,19 +1750,9 @@
             "description": "ผู้มีเชื้อสาย Allagan"
         },
         {
-            "name": "Xande",
-            "role": "Emperor of Allagan",
-            "description": "จักรพรรดิ์แห่งอาณาจักร Allagan"
-        },
-        {
             "name": "Fordola",
             "role": "ทหารจักรวรรดิ์",
             "description": "ทหารหญิงผู้กลับใจ"
-        },
-        {
-            "name": "Warrior of Darkness",
-            "role": "ผู้กล้าแห่งความมืดจาก The First",
-            "description": "ผู้กล้าแห่งความมืด หรือ Ardbert"
         },
         {
             "name": "The Griffin",
@@ -1845,11 +1780,6 @@
             "description": "เผ่ากระต่ายน้อย ผู้ซุ่มซ่าม"
         },
         {
-            "name": "Livingway",
-            "role": "Loporrits",
-            "description": "เผ่ากระต่ายน้อย คำพูดจริงจัง"
-        },
-        {
             "name": "Mappingway",
             "role": "Loporrits",
             "description": "เผ่ากระต่ายน้อย นักนำทาง"
@@ -1858,11 +1788,6 @@
             "name": "Singingway",
             "role": "Loporrits",
             "description": "เผ่ากระต่ายน้อย เจ้าบทเจ้ากลอน"
-        },
-        {
-            "name": "Puddingway",
-            "role": "Loporrits",
-            "description": "เผ่ากระต่ายน้อย นักปรุงอาหาร"
         },
         {
             "name": "Barnier",
@@ -1915,11 +1840,6 @@
             "description": "นักรบนิรนาม"
         },
         {
-            "name": "KaiShirr",
-            "role": "mystel",
-            "description": "เด็กหนุ่มชนบท ผู้มุ่งมั่นเพื่อพวกพ้อง"
-        },
-        {
             "name": "Kairos",
             "role": "Time Keeper guardian",
             "description": "เทพผู้คุ้มกฎแห่งเวลา ณ เมือง Elpis"
@@ -1970,24 +1890,9 @@
             "description": "เจ้าหน้าที่จัดการเรื่องหุ่นยนต์"
         },
         {
-            "name": "Artoirel",
-            "role": "knight",
-            "description": "องครักษ์ของ lord edmond"
-        },
-        {
-            "name": "Honoroit",
-            "role": "อัศวินฝึกหัด",
-            "description": "เด็กฝึกของ Lord edmond"
-        },
-        {
             "name": "Archive",
             "role": "ผู้เฝ้าสุสาน",
             "description": "ตัว Tonberry ผู้เฝ้าสุสาน พูดจาตลก มึนๆ แต่เข้าใจประวัติศาสตร์อย่างดี"
-        },
-        {
-            "name": "Jeffroy",
-            "role": "knight",
-            "description": "ทหารเรือ น้ำเสียงเข้มแข็ง ดุดัน อ่อนน้อม"
         },
         {
             "name": "Mauwyl",
@@ -2006,24 +1911,24 @@
         }
     ],
     "lore": {
-        "Scions": "กลุ่มนักผจญภัยของตัวเอก เรียกสั้นๆว่า 'ไซออนส์' ",
+        "Scions": "กลุ่มนักผจญภัยของตัวเอก เรียกสั้นๆว่า 'ไซออนส์'",
         "The Seven Dawn": "ชื่อเดิมของกลุ่มนักรบที่มีภารกิจคล้ายกับ Scions",
         "Calamity": "เหตุการณ์หายนะครั้งใหญ่ที่ทำลายล้างโลกในอดีต เช่น หายนะจากดวงจันทร์ Dalamud",
-        "Seven hells": "คำอุทาน เช่น 'นี่มันเรื่องบ้าบออะไรกัน !!', ใช้พูดถึงเรื่องแย่ๆ 'เรื่องบ้าบอ' ",
+        "Seven hells": "คำอุทาน เช่น 'นี่มันเรื่องบ้าบออะไรกัน !!', ใช้พูดถึงเรื่องแย่ๆ 'เรื่องบ้าบอ'",
         "Rejoining": "เรียกสั้นๆว่า 'การรวมโลก' คือ มหันตภัย การเอ่อล้นของธาตุจากโลกสะท้อนทะลักสู่ 'the Source' จนเกิดหายนะ",
         "By the Twelve!": "พระเจ้าช่วย!..",
         "Godsdammit!": "บ้าเอ๊ย!",
         "Bloody hells!": "มันบ้าอะไรเนี่ย!",
         "Baldesion": "ชื่อขององค์กรของนักวิชาการ 'Students of Baldesion' ที่ก่อตั้งโดย 'Galuf Baldesion'",
-        "Aether": "พลังงานลึกลับที่เป็นแหล่งกำเนิดชีวิตและเวทมนตร์ในโลก",
+        "Aether": "'เอเทอร์' พลังงานต้นกำเนิดของทุกสรรพสิ่ง",
         "Reflection": "โลกสะท้อน ปัจจุบันมี 13 แห่ง",
         "Echo": "พลังพิเศษที่ทำให้ผู้ใช้งานเห็นความทรงจำของผู้อื่นและเข้าใจภาษาต่างๆ",
         "the First": "โลกสะท้อน ลำดับที่ 1 ที่ถูกกลืนกินด้วย แสง",
         "the Source": "โลกหลักใน Final Fantasy XIV",
-        "linkpearls": "อุปกรณ์สื่อสารเล็กๆ คล้ายโทรศัพท์ที่ติดไว้หลังใบหู",
+        "linkpearls": "'ลิ้งค์เพิร์ล' : อุปกรณ์สื่อสารขนาดเล็ก",
         "Ascians": "เผ่าพันธุ์ผู้บุกเบิก มีพลังที่สมบูรณ์แบบ มีเป้าหมายในการคืนชีพ Zodiark และการรวมโลก",
-        "vessel": "ร่าง ที่ใช้อาศัยของจิตวิญญาณ",
-        "Endless": " เอนด์เลส คือ สถานะหลังความตายที่ข้อมูลวิญญาณถูกนำมาประกอบสร้างเป็นรูปร่างดั่งยามมีชีวิต",
+        "vessel": "เมื่อใช้กับคน : ร่างที่ใช้บรรจุวิญญาณ ใน Living Memory , แปลว่า 'เรือเหาะ' เมื่อใช้พูดถึงวัตถุ",
+        "Endless": "เอนด์เลส คือ สถานะหลังความตายที่ข้อมูลวิญญาณถูกนำมาประกอบสร้างเป็นรูปร่างดั่งยามมีชีวิต",
         "Primal": "'ไพรมัล'สิ่งมีชีวิตที่ถูกอัญเชิญมาโดยการใช้พลังงาน Aether จากแรงศรัทธา",
         "Tuliyollal": "เมืองหลักในตอนเหนือของ Yok Tural",
         "barrier": "เขตแดน คั่นพื้นที่ระหว่างโลกภายนอกและเมือง Alexandria",
@@ -2032,34 +1937,34 @@
         "Kozama'uka": "พื้นที่เขตร้อนใต้ของ Tuliyollal",
         "Shaaloani": "โซนแห้งแล้งใน Tural ตอนกลาง",
         "Heritage Found": "โซนที่เชื่อมโยงระหว่างอารยธรรมเก่าและใหม่ใน New World",
-        "Living Memory": "เมืองจำลองของ Alexandria",
+        "Living Memory": "'ลิฟวิ่งเมมโมรี' : เมืองจำลองของ Alexandria",
         "Solution Nine": "เมืองล้ำสมัยสร้างขึ้นจาก Electrope",
         "Earthen Sky": "พื้นที่ธรรมชาติที่เน้นภูมิทัศน์ทางธรณีวิทยา",
         "Electric Potential": "บริเวณที่มีกิจกรรมทางไฟฟ้าและแหล่งพลังงานสำคัญ",
         "Tesh'pyani Village": "หมู่บ้านเล็กๆ ที่มีเอกลักษณ์ทางวัฒนธรรมในพื้นที่ Yyasulani",
         "The Thunderyards": "พื้นที่ที่มีฟ้าร้องและกิจกรรมทางไฟฟ้าเป็นปกติ",
         "Electrope": "เทคโนโลยีที่ประยุกต์ใช้การดักจับสายฟ้าจากธรรมชาติ มาประยุกต์ใช้สร้างพลังงานธาตุต่างๆได้",
-        "Convocation of Fourteen": " 'องค์คณะทั้ง 14' เป็นกลุ่มสมาชิกที่มีอำนาจสูงสุดในหมู่ Ascians ",
-        "Fourteen": " 'องค์คณะทั้ง 14' เป็นกลุ่มสมาชิกที่มีอำนาจสูงสุดในหมู่ Ascians ",
+        "Convocation of Fourteen": "'องค์คณะทั้ง 14' เป็นกลุ่มสมาชิกที่มีอำนาจสูงสุดในหมู่ Ascians",
+        "Fourteen": "'องค์คณะทั้ง 14' เป็นกลุ่มสมาชิกที่มีอำนาจสูงสุดในหมู่ Ascians",
         "the Final Days": "วันสิ้นโลก",
         "dragoon": "นักรบมังกร",
         "viper": "คลาสอาชีพ นักล่าผู้ใช้ดาบคู่ ทับศัพท์ได้ว่า 'ไวเปอร์'",
         "The Temple Knights": "กลุ่มอัศวินศักดิ์สิทธิ์",
         "Alexandria": "อาณาจักรโบราณบนโลกสะท้อนของ Etheirys ที่มีการใช้แร่ธาตุ electrope ร่วมกับ arcanima เพื่อพัฒนาเทคโนโลยีและป้องกันพายุฟ้าคะนองที่คุกคามดินแดน",
         "Jeuno": "เมืองร้างที่มีแหล่ง electrope อยู่มากมาย ทำให้เป็นที่หมายปองของนักล่าสมบัติ แม้จะมีพลังชั่วร้ายของ Shadow Lord สิงสถิตอยู่",
-        "a Mamool Ja woman": "Mamool Ja's Mother หรือ เรียกได้ว่า 'แม่ขององค์ชายMaMool Ja' ",
+        "a Mamool Ja woman": "Mamool Ja's Mother หรือ เรียกได้ว่า 'แม่ขององค์ชายMaMool Ja'",
         "rroneek": "สัตว์ใหญ่ประจำท้องถิ่น Shaaloani",
         "Hhetsarro": "ถิ่นอาศัยของชนเผ่าเร่ร่อน ในโซน 'Shaaloani'",
         "dome": "คำง่ายๆที่อธิบายขอบเขตของ New Alexandria",
         "Cradle": "เครื่องราง แห่งการหลับไหล",
-        "Champion": "คำแทนตัวละครหลักของผู้เล่น เรียกสั้นๆว่า 'ผู้กล้า' ",
+        "Champion": "คำแทนตัวละครหลักของผู้เล่น เรียกสั้นๆว่า 'ผู้กล้า'",
         "the Flood": "การท่วมครั้งใหญ่ ของแสงที่กลืนกิน the First",
-        "Sin eater": " 'ตัวกินบาป' ปีศาจที่มีร่างกายขาวโพลน เดิมดีเคยเป็นสิ่งมีชีวิต หรือมนุษย์มาก่อน",
+        "Sin eater": "'ตัวกินบาป' ปีศาจที่มีร่างกายขาวโพลน เดิมดีเคยเป็นสิ่งมีชีวิต หรือมนุษย์มาก่อน",
         "Lightwarden": "นางพญา ของเหล่าตัวกินบาป",
         "Eighth Umbral Calamity": "'มหาภิบัติ ครั้งที่ 8'",
         "Black Rose": "'แบล็คโรส' ก๊าซชั่วร้ายที่ใช้คร่าชีวิตผู้คนจำนวนมาก และยังคงเป็นปริศนาในที่มา",
         "Minfilia": "ในโลกหลัก (the Source) เธอคือหัวหน้ากลุ่ม Scions, แต่ใน the First เธอคือเด็กสาวผู้แทนตำแหน่ง Minfilia (Oracle of Light) ซึ่งปัจจุบันคือ 'Lyne'",
-        "City of Gold": "ณครทองคำ",
+        "City of Gold": "นครทองคำ",
         "Valigarmanda": "สัตว์ในตำนานแห่ง Yok tural",
         "materia": "ลูกแก้วที่ผนึกพลังเอาไว้ เรียกสั้นๆว่า 'มาทีเรีย'",
         "yalm": "replace 'yard'",
@@ -2072,7 +1977,6 @@
         "Antecedent": "ใช้เรียกตำแหน่งผู้นำ Scions เรียกสั้นๆว่า 'หัวหน้า'",
         "Moogle": "เผ่า ม็อกเกิ้ล ขนขาว น่ารัก มีพลังวิเศษ",
         "Kupo !": "คำลงท้ายของเผ่า moogle เช่น \"คูโปะ !\"",
-        "็Humble": "อ่อนพลังลง",
         "Old man": "คำเรียกคนแก่อย่างสนิทสนม สั้นๆว่า 'ลุง'",
         "Voidsent": "สิ่งมีชีวิตที่หลุดมาจากมิติมืด",
         "restricted shelves": "ชั้นหนังสือต้องห้าม",
@@ -2130,28 +2034,33 @@
         "Dawn's Promise": "คำใช้เรียกตำแหน่งทายาทแห่ง Dawnservant",
         "First Promise": "ผู้สืบทอดลำดับที่ 1",
         "Second Promise": "ผู้สืบทอดลำดับที่ 2",
-        "Thirth Promise": "ผู้สืบทอดลำดับที่ 3",
         "Beans": "เมื่อพูดถึงกาแฟ ควรจะแปลว่า 'เมล็ดกาแฟ'",
         "Demiatma": "*เดมิแอ็ทม่า*: ผลึกที่บรรจุพลังลึกลับ ใช้ในการคราฟอาวุธ Relic",
         "FATEs": "*FATEs* : เควสท์จำกัดเวลา เกิดแบบสุ่มตาม Map ต่างๆ",
         "Arkveld": "'อาร์คเวลด์' : มังกรในตำนาน",
         "Seikret": "สัตว์ขี่ชนิดหนึ่ง",
-        "wyrm": "มังกร"
+        "wyrm": "มังกร",
+        "porxie": "'น้องหมู'",
+        "Oblivion": "องค์กรที่ศึกษาเทคโนโลยีเก่าของเมือง Alenxandria",
+        "Clerk": "ผู้ช่วย",
+        "Humble": "อ่อนพลังลง",
+        "Third Promise": "ผู้สืบทอดลำดับที่ 3",
+        "Thavnair": "เมือง 'ทาฟแนร์'"
     },
     "character_roles": {
         "Y'shtola": "ใช้ภาษาแบบสาวเฟียส เฉลียวฉลาดและมั่นใจในตัวเอง",
         "Urianger": "ใช้ภาษาซับซ้อน แต่ไม่ถึงกับโบราณ, เลี่ยงการใช้คำราชาศัพท์",
         "Wuk Lamat": "ใช้ภาษากระชับ แบบนักรบ ดุดันในยามรบ แต่มีความห่วงใย และสุภาพในบทสนทนาปกติ",
         "Zoraal Ja": "ใช้ภาษาที่เยือกเย็น แฝงความน่ากลัว โหดร้าย",
-        "Sphene": "ใช้คำพูดแบบ สุภาพ อ่อนโยน ห่วงใย ทันสมัย",
+        "Sphene": "เจ้าหญิงจากยุคโบราณตื่นขึ้นในยุคปัจจุบัน ใช้สรรพนาม 'ข้า/เรา' พูดสั้นกระชับ น้ำเสียงอ่อนโยนแต่มีความสง่า ใช้คำกึ่งโบราณปนสมัยใหม่ ห้ามใช้ราชาศัพท์เต็มรูปแบบอย่าง 'หม่อมฉัน'",
         "Otis": "พูดจาด้วยสำนวนนักรบที่ภักดีต่ออาณาจักร Alexandria และเจ้าหญิง Sphene",
         "Koana": "พูดด้วยมาดเจ้าชาย ที่แสนอบอุ่นและเข้มแข็ง",
         "Gulool Ja": "ใช้ภาษาแบบเด็กหนุ่ม สุภาพ กล้าหาญ ฉลาด",
         "G'raha Tia": "ใช้ภาษาที่เป็นมิตร อบอุ่น มีความเป็นผู้นำ ใช้คำสุภาพเสมอ",
-        "Krile": "ใช้ภาษาแบบเนิร์ด นักวิชาการ ละเอียดรอบคอบ",
+        "Krile": "ใช้ภาษาแบบเนิร์ดวัยรุ่น ฉลาดล้ำลึก",
         "Erenville": "ใช้ภาษาแบบใจเย็น มีความรับผิดชอบและมุ่งมั่น",
         "Alisaie": "สาววัยรุ่นใช้ภาษาทันสมัย คำพูดขวานผ่าซาก แต่ยังคงสุภาพ แฝงความไร้เดียงสาอยู่บ้าง",
-        "Alphinaud": "ใช้ภาษาทางการ เนิร์ด ไหวพริบดี มุ่งมั่น",
+        "Alphinaud": "น้ำเสียงเด็กหนุ่ม ฉลาด มีวาทะศิลป์",
         "Emet-Selch": "ในบทที่จริงจัง น้ำเสียงสุขุม ดุดัน เย่อหยิ่ง บทสนทนาทั่วไปจะแอบใจดีลึกๆ",
         "EmetSelch": "ใช้ภาษาแบบชายผู้มากประสบการณ์ เย่อหยิ่ง บางเวลาจะแฝงความใจดีแบบเสียมิได้",
         "Hythlodaeus": "ใช้ภาษานักวิชาการ แฝงมุกตลก ฉลาด ใจดี",
@@ -2223,7 +2132,6 @@
         "Rammbroes": "พูดจาแบบนักโบราณคดี ผู้มีประสบการณ์",
         "Nero tol Scaeva": "พูดจาเย่อหยิ่ง ฉลาด เป็นปริศนา",
         "Xande": "สำเนียงโบราณ เย่อหยิ่ง เจ้าสำราญ และ ละโมบ",
-        "Vorporlor": "คำพูดท้องถิ่นของยักษ์ หยาบและเข้าใจยาก",
         "Gurfurlur": "พูดภาษายักษ์ ห้วน โบราณ",
         "Raubahn": "พูดสำเนียงทหารองครักษ์ หนักแน่น กระชับ แข็งกร้าว",
         "Runar": "ชายหนุ่ม ผู้นอบน้อม อ่อนไหว",
@@ -2272,7 +2180,6 @@
         "Titania": "น้ำเสียงงดงาม ยิ่งใหญ่แบบเจ้าหญิง",
         "Innocence": "หลงตัวเอง เย่อหยิ่ง ชั่วร้าย",
         "Nanamo Ul Namo": "คำพูดแบบเจ้าหญิงผู้สูงศักดิ์ แต่มีคุณธรรม กล้าหาญ",
-        "Nanamo UI Namo": "คำพูดแบบเจ้าหญิงผู้สูงศักดิ์ แต่มีคุณธรรม กล้าหาญ",
         "Iceheart": "น้ำเสียงหนักแน่น ขบถ เยือกเย็น แฝงความเศร้า",
         "Ysayle": "น้ำเสียงหนักแน่น เยือกเย็น แฝงความเศร้า",
         "Haurchefant": "น้ำเสียงกล้าหาญ เรียบง่าย สุภาพ",
@@ -2310,7 +2217,7 @@
         "Drivingway": "น้ำเสียงหนักแน่น นักขับขี่ผู้ชำนาญทาง",
         "Researchingway": "นักวิจัย เนิร์ด สุภาพ ช่างพูดคุย",
         "Ciriatto": "ภูติผู้ตื่นกลัว และเศร้าโศก",
-        "Tataru​": "น้ำเสียงอ่อนโยน ห่วงใย น่าเอ็นดู , เป็นผู้จัดการ และ นักบัญชี",
+        "Tataru": "น้ำเสียงอ่อนโยน ห่วงใย น่าเอ็นดู , เป็นผู้จัดการ และ นักบัญชี",
         "Ofangeim": "น้ำเสียงอบอุ่น ช่ำชองการเดินทาง",
         "Iris": "แฟรี่ ใช้คำพูดจิกกัด แต่ยังสุภาพ และชอบช่วยเหลือ",
         "Hegemone": "น้ำเสียงหนักแน่น เคร่งครัด สุภาพ",
@@ -2327,33 +2234,27 @@
         "Halone": "น้ำเสียงดุดัน เจ้าระเบียบ",
         "Menphina": "น้ำเสียงเยือกเย็น อ่อนโยน มีความเป็นศิลปิน",
         "Omphalos Monument": "คำพูดอลังการ กังวาล, ใช้เพื่อบรรยายเรื่องราวของเทพ",
-        "Venat​": "น้ำเสียงนุ่มลึก พรรณาเก่ง",
         "Gerolt": "สำเนียงบ้านๆ บ้าพลัง",
         "Kam'lanaut": "สำเนียงแบบคนโบราณ แต่ศัพท์เรียบง่าย",
         "Bakool Ja Ja": "น้ำเสียงดุดัน ฉลาด เย้ยหยัน",
         "Bakool Ja Ja the Mighty": "น้ำเสียงดุดัน ฉลาด เย้ยหยัน",
         "Bakool Ja Ja the Mystic": "น้ำเสียง ฉลาด เฉียบแหลม",
         "Nashu Mhakaracca": "น้ำเสียงน่ารัก เด๋อด๋า, ไม่ประสีประสา",
-        "Thavnair": "เมือง 'ทาฟแนร์'",
         "Hildibrand": "สำเนียงพิลึก ตลกหน้าตาย คำพูดมีหลักการและเลอะเทอะในเวลาเดียวกัน",
         "Hardiboiled": "คำพูดแบบภูมิฐาน และแฝงความเพี้ยน",
         "Stray Felyne": "คำพูดแบบแมวจอมกวน ฉลาด ท้าชน",
         "Metem": "น้ำเสียงแบบพิธีกรการแข่งขันต่อสู้ น้ำเสียงขึงขัง",
-        "Nidhogg": "น้ำเสียงมังกรโบราณ ดุดัน ป่าเถื่อน",
-        "Estinien​": "น้ำเสียง สั้นห้วน แต่อบอุ่น"
+        "Nidhogg": "น้ำเสียงมังกรโบราณ ดุดัน ป่าเถื่อน"
     },
     "word_fixes": {
         "namel": "name !",
         "Well;": "Well..",
-        "Im": "I'm",
-        "$": "s",
         "--": "-",
         "-_": "...",
         "Wait_I": "Wait... I",
         "tis_or_Tis": "'tis or 'Tis",
         "Twas": "'Twas",
-        "|": "i",
-        "Sphenel": "Shpene",
+        "Sphenel": "Sphene",
         "__": "-",
         "22": "??",
         "222": "???",
@@ -2362,12 +2263,10 @@
         "zp": "2p",
         "ZPI": "2P",
         "ZB": "2B",
-        "95": "9S",
         "Tll": "I'll",
         "lll": "I'll",
         "tll": "I'll",
         "1ll": "i'll",
-        "'ll": "will",
         "1'll": "I will",
         "FII": "I will",
         "Araneal": "Aranea !",
@@ -2388,7 +2287,6 @@
         "Graha Tia Tia": "G'raha Tia",
         "Graha Tial": "G'raha Tia",
         "Graha": "G'raha",
-        "Tia": "Tia",
         "Lamatyi": "Lamaty'i",
         "Lamatyil": "Lamaty'i !",
         "Papal": "PaPa !",
@@ -2400,19 +2298,15 @@
         "Lugg Beq": "Beq Lugg",
         "Zenos yae Galvvus": "Zenos yae Galvus",
         "KanESenna": "Kan-E-Senna",
-        "1": "i",
-        "MI": "I'll",
         "M|": "I'll",
         "!,": "!",
         ".,": ".",
         ",,": ",",
         "z0s": "zos",
         "207": "zos",
-        "0": "o",
         "Warrior 0f Darkness": "Warrior of Darkness",
         "Alisaiel": "Alisaie !",
         "EmetSelch": "Emet-Selch",
-        "50": "so",
         "Seohiroth": "Sephiroth",
         "Aphinaud": "Alphinaud",
         "Aisaie": "Alisaie",
@@ -2429,8 +2323,6 @@
         "Arkas": "Ark",
         "Lvse": "Lyse",
         "Aranea1": "Aranea !",
-        "2": "?",
-        "III": "I will",
         "In the future I came from": "What will you say?",
         "Maylaska": "May i ask",
         "Ifthis": "if this",

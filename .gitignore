@@ -6,6 +6,7 @@
 .env
 *.env
 !.env.example
+python-app/.env
 
 # Python cache
 __pycache__/
@@ -90,3 +91,34 @@ htmlcov/
 
 # Documentation builds
 docs/_build/
+
+# Claude Code configuration (local only)
+.claude/
+.claude/**/*
+
+# Dev session notes (temporary, not part of source)
+ASSET_DEBUG_BUILD05.md
+BUILD06_FIX_SUMMARY.md
+BUILD07_FINAL_FIX.md
+BUILD09_CLEANUP.md
+BUILD_FIXES_SUMMARY.md
+BUILD_NOTES_v1.7.0.md
+CLOSE_FIX_SUMMARY.md
+DEPRECATED_FEATURES.md
+OFFICIAL_REPO_REQUIREMENTS.md
+PROJECT_COMPLETE.md
+PUSH_CHECKLIST.md
+RELEASE_v1.7.0.md
+REPOSITORY_STATUS.md
+WEBSITE_SKILL.md
+
+# Backups and legacy code (local only)
+python-app/backups/
+python-app/Legacy/
+
+# Adobe / design source files
+*.ai
+*.psd
+
+# Windows artifacts
+nul

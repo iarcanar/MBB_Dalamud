@@ -57,7 +57,7 @@ class DalamudBridge:
         self.consecutive_failures = 0
         self.max_failures_before_backoff = 5  # Fast retries before backing off
         self.max_total_failures = 20  # Total failures before giving up temporarily
-        self.base_retry_delay = 2  # Base delay in seconds
+        self.base_retry_delay = 0.5  # Base delay in seconds (fast initial reconnect)
         self.max_retry_delay = 30  # Maximum delay between retries
         self.last_connection_attempt = 0
         self.connection_health = "healthy"  # healthy, degraded, failed
@@ -218,7 +218,7 @@ class DalamudBridge:
 
         try:
             # รอ pipe server จาก Dalamud - เพิ่ม timeout สำหรับ stability
-            win32pipe.WaitNamedPipe(self.pipe_name, 10000)  # Wait 10 seconds (improved)
+            win32pipe.WaitNamedPipe(self.pipe_name, 2000)  # Wait 2 seconds (fast fail for quicker retry)
 
             # เปิดการเชื่อมต่อ
             self.pipe_handle = win32file.CreateFile(

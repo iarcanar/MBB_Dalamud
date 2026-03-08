@@ -16,17 +16,11 @@ Features:
 
 import tkinter as tk
 from tkinter import BooleanVar
-import os
 import logging
 from asset_manager import AssetManager
 import time
 import hashlib
-from PIL import ImageTk, Image
 from appearance import appearance_manager
-from settings import Settings
-import win32gui
-from ctypes import windll
-from font_manager import FontSettings, FontManager, FontUI, FontUIManager
 
 # เพิ่ม import สำหรับการจัดการ monitor position
 try:
@@ -41,8 +35,26 @@ except ImportError:
 logging.basicConfig(level=logging.ERROR)
 
 # --- Design System Constants ---
-FONT_FAMILY = "Bai Jamjuree"
+# Fallback font สำหรับ UI elements ใน translated_logs (ตัวอักษรใน bubble โหลดจาก settings)
+FONT_FAMILY = "Anuphan"
 SINGLE_BUBBLE_COLOR = "#1C1C1C"
+
+# Window size defaults
+DEFAULT_LOG_WIDTH = 300
+DEFAULT_LOG_HEIGHT = 800
+FALLBACK_LOG_GEOMETRY = "240x600+1480+100"
+
+# Transparency alpha values per mode
+ALPHA_MAP = {
+    "A": 0.95,   # normal
+    "B": 0.70,   # transparent
+    "C": 0.50,   # super transparent
+    "D": 1.00,   # opaque
+}
+TRANSPARENCY_MODES = list(ALPHA_MAP.keys())
+
+# Message cache max size
+MAX_CACHE_SIZE = 200
 
 
 class LightweightChatBubble(tk.Frame):
@@ -142,16 +154,11 @@ class Translated_Logs:
         self.is_ui_locked = False
         self._is_first_show = True
 
-        # Transparency settings
-        self.normal_alpha = 0.95
-        self.transparent_alpha = 0.7
-        self.super_transparent = 0.5
-        self.solid_alpha = 1.0
+        # Transparency settings — ค่า alpha อยู่ใน ALPHA_MAP constant
         self.current_mode = "A"
 
         # Bubble and font settings
         self.bubble_list = []
-        self.current_font_size = 11
 
         # Animation state
         self._scroll_animation_id = None
@@ -168,11 +175,10 @@ class Translated_Logs:
         self.last_message_hash = None
         self.enable_smart_replacement = True
 
-        # Font Management System
-        self.font_manager = FontManager(os.path.dirname(__file__))
-        self.font_settings = FontSettings(self.settings)
-        self.font_settings.add_observer(self)
-        self.current_font_family = self.font_settings.font_name
+        # Font — โหลดจาก settings โดยตรง (ไม่ผ่าน FontManager)
+        self.current_font_family = self.settings.get("font", FONT_FAMILY)
+        logs_ui = self.settings.get("logs_ui") or {}
+        self.current_font_size = int(logs_ui.get("font_size", 16))
 
         # Initialize UI components
         self.setup_ui()
@@ -191,12 +197,15 @@ class Translated_Logs:
         )
         logging.info(f"_is_first_show: {self._is_first_show}")
 
-    def on_font_changed(self, font_name: str, font_size: int):
-        """รับการแจ้งเตือนจาก FontSettings เมื่อมีการเปลี่ยนฟอนต์"""
-        logging.info(f"🎨 Font changed to: {font_name}, size: {font_size}")
+    def update_font_settings(self, font_name: str, font_size: int):
+        """Public API — เรียกจาก MBB.apply_font_with_target() เมื่อ target=logs หรือ both"""
         self.current_font_family = font_name
-        # ไม่เปลี่ยน font_size จาก font_manager เพราะเรามีระบบควบคุมเอง
-        self._update_all_fonts()
+        self.current_font_size = font_size
+        self._update_all_fonts(font_name)
+        self._update_font_display()
+        # บันทึกลง logs_ui เพื่อให้ persist ข้ามการ restart
+        self.settings.set_logs_settings(font_family=font_name, font_size=font_size)
+        logging.info(f"🔤 TranslatedLogs font updated: {font_name} {font_size}pt")
 
     def hide_window(self):
         # บันทึกตำแหน่งสุดท้ายก่อนซ่อน (ถ้าอยู่ในสถานะ lock)
@@ -208,7 +217,7 @@ class Translated_Logs:
             )
         else:
             # UNLOCK mode: รีเซ็ทการบันทึกตำแหน่งเพื่อให้แสดงที่ริมขวาสุดเสมอ
-            print("UNLOCK mode: Clearing position data for next show at right edge")
+            logging.info("UNLOCK mode: clearing position data")
             self.settings.clear_logs_position_cache()
             self._is_first_show = True  # บังคับให้ใช้ logic การแสดงใหม่
 
@@ -235,9 +244,11 @@ class Translated_Logs:
         self.content_frame.pack(fill=tk.BOTH, expand=True)
 
         # Setup UI components in order
+        # หมายเหตุ: bottom_controls ต้องเรียกหลัง chat_area เพื่อให้ z-order สูงกว่า
+        # (ใน Tkinter widget ที่สร้างทีหลัง = อยู่บนสุด, place() จึงมองเห็นได้)
         self.setup_header()
-        self.setup_bottom_controls()
         self.setup_chat_area()
+        self.setup_bottom_controls()
 
         self.setup_resize_handle()
         self.setup_bindings()
@@ -250,17 +261,44 @@ class Translated_Logs:
         header_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
         header_frame.pack_propagate(False)
 
+        # pack RIGHT ก่อน LEFT เพื่อให้ controls_frame ได้พื้นที่เสมอ
+        controls_frame = tk.Frame(header_frame, bg=appearance_manager.bg_color)
+        controls_frame.pack(side=tk.RIGHT, padx=8)
+
         self.title_label = tk.Label(
             header_frame,
-            text="💬 ประวัติบทสนทนา",
-            font=(FONT_FAMILY, 12, "bold"),
+            text="💬 บทสนทนา",
+            font=(FONT_FAMILY, 10, "bold"),
             fg="#38bdf8",
             bg=appearance_manager.bg_color,
         )
-        self.title_label.pack(side=tk.LEFT, padx=12, pady=8)
+        self.title_label.pack(side=tk.LEFT, padx=(8, 4), pady=8)
 
-        controls_frame = tk.Frame(header_frame, bg=appearance_manager.bg_color)
-        controls_frame.pack(side=tk.RIGHT, padx=8)
+        hide_btn = tk.Button(
+            controls_frame,
+            text="✕",
+            command=self.hide_window,
+            font=("Tahoma", 10, "bold"),
+            fg="#ff6b6b",
+            bg=appearance_manager.bg_color,
+            bd=0,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            highlightthickness=0,
+            activebackground="#ff6b6b",
+            activeforeground="white",
+        )
+        hide_btn.pack(side=tk.RIGHT, padx=(8, 0))
+
+        def on_hide_enter(e):
+            hide_btn.configure(bg="#ff6b6b", fg="white")
+
+        def on_hide_leave(e):
+            hide_btn.configure(bg=appearance_manager.bg_color, fg="#ff6b6b")
+
+        hide_btn.bind("<Enter>", on_hide_enter)
+        hide_btn.bind("<Leave>", on_hide_leave)
 
         font_frame = tk.Frame(controls_frame, bg=appearance_manager.bg_color)
         font_frame.pack(side=tk.LEFT, padx=(0, 5))
@@ -290,7 +328,7 @@ class Translated_Logs:
             font_frame,
             text=str(self.current_font_size),
             font=(FONT_FAMILY, 9),
-            fg="#888888",
+            fg=appearance_manager.get_theme_color("text_dim", "#888888"),
             bg=appearance_manager.bg_color,
             width=3,
         )
@@ -316,32 +354,6 @@ class Translated_Logs:
         )
         font_plus_btn.pack(side=tk.LEFT, padx=(1, 0))
         self._add_hover_effect(font_plus_btn)
-
-        hide_btn = tk.Button(
-            controls_frame,
-            text="✕",
-            command=self.hide_window,
-            font=("Tahoma", 10, "bold"),
-            fg="#ff6b6b",
-            bg=appearance_manager.bg_color,
-            bd=0,
-            padx=6,
-            pady=2,
-            cursor="hand2",
-            highlightthickness=0,
-            activebackground="#ff6b6b",
-            activeforeground="white",
-        )
-        hide_btn.pack(side=tk.RIGHT, padx=(8, 0))
-
-        def on_hide_enter(e):
-            hide_btn.configure(bg="#ff6b6b", fg="white")
-
-        def on_hide_leave(e):
-            hide_btn.configure(bg=appearance_manager.bg_color, fg="#ff6b6b")
-
-        hide_btn.bind("<Enter>", on_hide_enter)
-        hide_btn.bind("<Leave>", on_hide_leave)
 
         self._bind_drag_to_widget(header_frame)
         self._bind_drag_to_widget(self.title_label)
@@ -371,6 +383,7 @@ class Translated_Logs:
             self.current_font_size += 1
             self._update_all_fonts()
             self._update_font_display()
+            self._sync_font_to_settings()
 
     def _decrease_font_size(self):
         """Decrease font size by 1pt (min 10pt)"""
@@ -378,6 +391,24 @@ class Translated_Logs:
             self.current_font_size -= 1
             self._update_all_fonts()
             self._update_font_display()
+            self._sync_font_to_settings()
+
+    def _sync_font_to_settings(self):
+        """Persist logs font to settings and sync FontPanel if open."""
+        self.settings.set_logs_settings(
+            font_family=self.current_font_family,
+            font_size=self.current_font_size,
+        )
+        # Sync FontPanel ถ้าเปิดอยู่และ target=logs
+        try:
+            sp = getattr(self.main_app, "settings_ui", None) if self.main_app else None
+            fp = getattr(sp, "_font_panel", None) if sp else None
+            if fp and fp.isVisible() and fp._target_mode == "logs":
+                fp._size_value = self.current_font_size
+                fp._size_label.setText(str(self.current_font_size))
+                fp._update_preview()
+        except Exception:
+            pass
 
     def _update_all_fonts(self, font_family_override=None):
         """Update fonts smartly - only repack if wrapping changed significantly"""
@@ -530,12 +561,14 @@ class Translated_Logs:
             logging.error(f"Error in scrollbar drag: {e}")
 
     def setup_bottom_controls(self):
-        """สร้าง controls ด้านล่างพร้อมไอคอน"""
+        """สร้าง controls ด้านล่างพร้อมไอคอน — ซ่อนเริ่มต้น, แสดงเมื่อ hover"""
         bottom_frame = tk.Frame(
             self.content_frame, bg=appearance_manager.bg_color, height=30
         )
-        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+        # ไม่ pack/place เริ่มต้น — ใช้ place_forget/place ผ่าน hover events
         bottom_frame.pack_propagate(False)
+        self._bottom_frame = bottom_frame
+        self._controls_visible = False
 
         left_frame = tk.Frame(bottom_frame, bg=appearance_manager.bg_color)
         left_frame.pack(side=tk.LEFT, padx=5)
@@ -546,24 +579,8 @@ class Translated_Logs:
         self.setup_smart_button(left_frame)  # เพิ่มปุ่ม smart replacement
         self.setup_font_button(left_frame)  # เพิ่มปุ่ม font manager
 
-        right_frame = tk.Frame(bottom_frame, bg=appearance_manager.bg_color)
-        right_frame.pack(
-            side=tk.RIGHT, padx=(5, 105)
-        )  # เพิ่ม margin ขวา 100px เพื่อเลี่ยงไอคอน resize
-
-        self.status_label = tk.Label(
-            right_frame,
-            text="Ready",
-            font=("Tahoma", 8),
-            fg="#888888",
-            bg=appearance_manager.bg_color,
-        )
-        self.status_label.pack(pady=6)
-
         self._bind_drag_to_widget(bottom_frame)
         self._bind_drag_to_widget(left_frame)
-        self._bind_drag_to_widget(right_frame)
-        self._bind_drag_to_widget(self.status_label)
 
     def setup_lock_button(self, parent):
         """สร้างปุ่ม lock/unlock ตำแหน่ง พร้อมไอคอน"""
@@ -639,17 +656,12 @@ class Translated_Logs:
                 else:
                     self.lock_button.config(text="🔒", fg="#FF6B6B")
 
-                if hasattr(self, 'status_label'):
-                    self.status_label.config(text="position+UI Saved!", fg="#FF6B6B")
             else:
                 # Unlocked state
                 if hasattr(self, "unlock_icon") and self.unlock_icon:
                     self.lock_button.config(image=self.unlock_icon)
                 else:
                     self.lock_button.config(text="🔓", fg="#888888")
-
-                if hasattr(self, 'status_label'):
-                    self.status_label.config(text="Smart Mode", fg="#888888")
 
         except Exception as e:
             logging.error(f"Error updating lock button state: {e}")
@@ -674,7 +686,7 @@ class Translated_Logs:
                 self.settings.set("logs_position_locked", True)
                 self.settings.set("logs_locked_geometry", current_geometry)
 
-                print(f"position+UI Saved! at: {current_geometry} - will auto-save any changes")
+                logging.info(f"Lock: position saved {current_geometry}")
 
             else:
                 # Unlock: เคลียร์ flag เท่านั้น ไม่ปรับตำแหน่งทันที
@@ -683,7 +695,7 @@ class Translated_Logs:
                 self.settings.set("logs_locked_geometry", "")  # เคลียร์
                 self.settings.clear_logs_position_cache()  # เคลียร์ cache หลัก
 
-                print("Position UNLOCKED - will use smart positioning on next show")
+                logging.info("Position unlocked")
 
                 # ไม่เรียก _apply_smart_positioning() ทันที เพื่อป้องกัน UI หาย
                 # smart positioning จะทำงานในรอบถัดไปที่เปิด UI
@@ -794,12 +806,14 @@ class Translated_Logs:
         """สร้างปุ่ม font manager - minimal flat design"""
         try:
             # ใช้ข้อความ "Font" แทนตัว F
+            _dim = appearance_manager.get_theme_color("text_dim", "#888888")
+            _border = appearance_manager.get_theme_color("border", "#444444")
             font_btn = tk.Button(
                 parent,
                 text="Font",
                 command=self.open_font_manager,
-                font=("Arial", 9, "bold"),
-                fg="#888888",
+                font=(FONT_FAMILY, 9, "bold"),
+                fg=_dim,
                 bg=appearance_manager.bg_color,
                 bd=1,
                 padx=4,
@@ -807,8 +821,8 @@ class Translated_Logs:
                 cursor="hand2",
                 highlightthickness=0,
                 relief="solid",
-                highlightcolor="#666666",
-                highlightbackground="#666666",
+                highlightcolor=_border,
+                highlightbackground=_border,
             )
             font_btn.pack(side=tk.LEFT, padx=2)
             self.font_button = font_btn
@@ -821,7 +835,7 @@ class Translated_Logs:
                 text="Font",
                 command=self.open_font_manager,
                 font=("Tahoma", 9),
-                fg="#888888",
+                fg=appearance_manager.get_theme_color("text_dim", "#888888"),
                 bg=appearance_manager.bg_color,
                 bd=1,
                 padx=3,
@@ -832,90 +846,55 @@ class Translated_Logs:
             self.font_button = font_btn
 
     def open_font_manager(self):
-        """เปิด Font Manager window แบบไม่ซ้ำซ้อน"""
+        """เปิด FontPanel (PyQt6) ข้างๆ Logs UI"""
         try:
-            # ใช้ FontUIManager
-            font_ui_manager = FontUIManager.get_instance()
+            if not self.main_app:
+                logging.warning("open_font_manager: no main_app reference")
+                return
 
-            # เพิ่ม callback สำหรับการใช้ฟอนต์
-            def apply_font_callback(font_data):
-                """Callback เมื่อมีการเลือกฟอนต์ใหม่"""
-                font_name = font_data.get("font", "Bai Jamjuree")
-                font_size = font_data.get("font_size", 16)
-                target = font_data.get("target", "translated_ui")
+            sp = getattr(self.main_app, "settings_ui", None)
+            if not sp:
+                return
 
-                logging.info(f"Font applied to translated_logs: {font_name}")
+            # pre-set target mode เป็น logs เสมอเมื่อเปิดจาก Logs UI
+            self.settings.set("font_target_mode", "logs")
 
-                # *** สำคัญ: Apply เฉพาะ target ที่เลือกเท่านั้น ***
-                if target == "translated_logs":
-                    # Apply to self ONLY
-                    # อัพเดต current font family
-                    self.current_font_family = font_name
-                    # อัพเดต font ใน bubbles ทั้งหมด
-                    self._update_all_fonts(font_name)
-                    # บันทึก settings
-                    self.save_settings()
-                    logging.info(f"Font applied to Translation Logs: {font_name}")
-
-                elif target == "translated_ui":
-                    # Apply to translated_ui ONLY
-                    logging.info("📌 Applying to translated_ui ONLY...")
-                    try:
-                        if (
-                            self.main_app
-                            and hasattr(self.main_app, "translated_ui")
-                            and self.main_app.translated_ui
-                        ):
-                            # ส่งต่อ font ไปยัง translated_ui (ส่งเฉพาะ font_name)
-                            if hasattr(self.main_app.translated_ui, "update_font"):
-                                self.main_app.translated_ui.update_font(font_name)
-                                logging.info(
-                                    f"✅ Font applied to Translation UI: {font_name}"
-                                )
-                            else:
-                                logging.warning(
-                                    "⚠️ translated_ui does not have update_font method"
-                                )
-                                if hasattr(self, "status_label"):
-                                    self.status_label.config(
-                                        text="UI update method not found", fg="#FF6B6B"
-                                    )
-                                    self.root.after(3000, lambda: self._update_status())
-                        else:
-                            logging.warning("⚠️ Cannot find translated_ui to apply font")
-                            if hasattr(self, "status_label"):
-                                self.status_label.config(
-                                    text="Translated UI not found", fg="#FF6B6B"
-                                )
-                                self.root.after(3000, lambda: self._update_status())
-                    except Exception as e:
-                        logging.error(f"Error applying font to translated_ui: {e}")
-                        if hasattr(self, "status_label"):
-                            self.status_label.config(
-                                text="Font apply error", fg="#FF6B6B"
-                            )
-                            self.root.after(3000, lambda: self._update_status())
-                else:
-                    logging.info(f"⏩ Unknown target: {target}")
-
-                logging.info(f"✅ Font callback completed for target: {target}")
-
-            # สร้างหรือดึง FontUI instance ผ่าน FontUIManager
-            font_ui = font_ui_manager.get_or_create_font_ui(
-                self.root, self.font_manager, self.settings, apply_font_callback
-            )
-
-            # เรียก open_font_ui เพื่อแสดง UI
-            font_ui.open_font_ui()
-
-            logging.info("📝 Opened Font Manager successfully")
+            # เปิด FontPanel (ไม่ใช้ _toggle_font — ป้องกันกรณี panel เปิดอยู่แล้วถูกปิด)
+            if hasattr(sp, "_ensure_font_panel"):
+                sp._ensure_font_panel()
+            fp = getattr(sp, "_font_panel", None)
+            if fp:
+                fp.reload_target()
+                if not fp.isVisible():
+                    fp.show()
+                fp.raise_()
+                fp.activateWindow()
+                self._position_font_panel_near_logs(fp)
 
         except Exception as e:
             logging.error(f"Error opening font manager: {e}")
-            # แสดง error message
-            if hasattr(self, "status_label"):
-                self.status_label.config(text="Font Manager Error", fg="#FF6B6B")
-                self.root.after(3000, lambda: self._update_status())
+
+    def _position_font_panel_near_logs(self, font_panel):
+        """วาง FontPanel ข้าง Logs UI — ตรวจจับว่าควรอยู่ซ้ายหรือขวา"""
+        try:
+            logs_x = self.root.winfo_x()
+            logs_y = self.root.winfo_y()
+            logs_w = self.root.winfo_width()
+            fp_w = font_panel.width() or font_panel.sizeHint().width() or 260
+            screen_w = self.root.winfo_screenwidth()
+            gap = 8
+
+            # ถ้า logs อยู่ฝั่งขวา → แสดง font panel ทางซ้าย
+            if logs_x + logs_w // 2 > screen_w // 2:
+                x = logs_x - fp_w - gap
+            else:
+                x = logs_x + logs_w + gap
+
+            # clamp ไม่ให้ออกนอกจอ
+            x = max(0, min(x, screen_w - fp_w))
+            font_panel.move(x, logs_y)
+        except Exception:
+            pass
 
     def setup_transparency_button(self, parent):
         """สร้างปุ่ม transparency พร้อมไอคอน trans.png"""
@@ -964,14 +943,25 @@ class Translated_Logs:
             trans_btn.pack(side=tk.LEFT, padx=2)
 
     def setup_resize_handle(self):
-        """สร้าง resize handle พร้อมไอคอน resize.png"""
+        """สร้าง resize handle — ซ่อนเริ่มต้น, แสดงเมื่อ hover ตรงตำแหน่ง"""
+        bg = appearance_manager.bg_color
         try:
             self.resize_icon = AssetManager.load_icon("resize.png", (16, 16))
+
+            # สร้าง blank icon สำหรับซ่อน (16×16 transparent)
+            self._resize_blank_icon = None
+            try:
+                from PIL import Image, ImageTk
+                _blank = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+                self._resize_blank_icon = ImageTk.PhotoImage(_blank)
+            except Exception:
+                pass
+
             if self.resize_icon:
                 self.resize_handle = tk.Label(
                     self.content_frame,
-                    image=self.resize_icon,
-                    bg=appearance_manager.bg_color,
+                    image=self._resize_blank_icon or self.resize_icon,
+                    bg=bg,
                     cursor="arrow",
                 )
             else:
@@ -979,10 +969,8 @@ class Translated_Logs:
                     self.content_frame,
                     text="⋮⋮",
                     font=("Arial", 8),
-                    fg=appearance_manager.darken_color(
-                        appearance_manager.fg_color, 0.6
-                    ),
-                    bg=appearance_manager.bg_color,
+                    fg=bg,  # ซ่อน — fg = bg เริ่มต้น
+                    bg=bg,
                     cursor="arrow",
                 )
             self.resize_handle.place(relx=1.0, rely=1.0, anchor="se", x=-1, y=-1)
@@ -990,6 +978,29 @@ class Translated_Logs:
             self.resize_handle.bind("<Button-1>", self.start_resize)
             self.resize_handle.bind("<B1-Motion>", self.do_resize)
             self.resize_handle.bind("<ButtonRelease-1>", self.stop_resize)
+
+            # แสดง/ซ่อนเมื่อ hover ตรงตำแหน่ง icon
+            def _show_handle(e):
+                if self.resize_icon and self._resize_blank_icon:
+                    self.resize_handle.config(image=self.resize_icon, cursor="sizing")
+                else:
+                    self.resize_handle.config(
+                        fg=appearance_manager.darken_color(
+                            appearance_manager.fg_color, 0.6
+                        ),
+                        cursor="sizing",
+                    )
+
+            def _hide_handle(e):
+                if self.resize_icon and self._resize_blank_icon:
+                    self.resize_handle.config(
+                        image=self._resize_blank_icon, cursor="arrow"
+                    )
+                else:
+                    self.resize_handle.config(fg=bg, cursor="arrow")
+
+            self.resize_handle.bind("<Enter>", _show_handle)
+            self.resize_handle.bind("<Leave>", _hide_handle)
         except Exception as e:
             logging.error(f"Error setting up resize handle: {e}")
 
@@ -1000,6 +1011,43 @@ class Translated_Logs:
         # เพิ่ม Configure event handler สำหรับการ track ขนาดหน้าต่าง
         self.root.bind("<Configure>", self._on_window_configure)
         logging.info("✅ Enhanced drag bindings setup complete!")
+
+        # Hover polling — แสดง/ซ่อน bottom controls ตาม mouse position
+        self.root.after(200, self._start_hover_check)
+
+    def _is_mouse_over_window(self) -> bool:
+        """ตรวจสอบว่า mouse อยู่บน window หรือไม่"""
+        try:
+            px = self.root.winfo_pointerx()
+            py = self.root.winfo_pointery()
+            widget_at = self.root.winfo_containing(px, py)
+            if not widget_at:
+                return False
+            return widget_at.winfo_toplevel() == self.root
+        except Exception:
+            return False
+
+    def _start_hover_check(self):
+        """Poll 120ms — แสดง/ซ่อน bottom bar ด้วย place/place_forget"""
+        try:
+            if not self.root.winfo_exists():
+                return
+            hovering = self._is_mouse_over_window()
+            if hovering != self._controls_visible:
+                self._controls_visible = hovering
+                if hovering:
+                    self._bottom_frame.place(
+                        relx=0, rely=1.0, anchor="sw", relwidth=1.0, height=30
+                    )
+                else:
+                    self._bottom_frame.place_forget()
+        except Exception:
+            pass
+        finally:
+            try:
+                self.root.after(120, self._start_hover_check)
+            except Exception:
+                pass
 
     def _get_reverse_color(self):
         return "#00BFFF" if self.reverse_mode.get() else appearance_manager.fg_color
@@ -1030,7 +1078,7 @@ class Translated_Logs:
                     self.settings.set("logs_locked_geometry", current_geometry)
 
                     self._last_save_time = current_time
-                    print(f"Lock mode: Size updated and saved: {current_geometry}")
+                    logging.debug(f"Lock: size saved {current_geometry}")
 
         except Exception as e:
             logging.error(f"Error in window configure handler: {e}")
@@ -1152,20 +1200,8 @@ class Translated_Logs:
         self._update_status()
 
     def _show_replacement_indicator(self):
-        """แสดงสัญลักษณ์บอกว่ามีการแทนที่ข้อความ"""
-        if hasattr(self, "status_label"):
-            original_text = self.status_label.cget("text")
-            self.status_label.config(
-                text=f"{original_text} ↻", fg="#4ade80"
-            )  # สีเขียว + สัญลักษณ์ refresh
-
-            # กลับเป็นปกติหลัง 2 วินาที
-            self.root.after(2000, lambda: self._reset_status_indicator(original_text))
-
-    def _reset_status_indicator(self, original_text):
-        """รีเซ็ตสถานะกลับเป็นปกติ"""
-        if hasattr(self, "status_label"):
-            self.status_label.config(text=original_text, fg="#888888")
+        """No-op — status label ถูกลบออกแล้ว"""
+        pass
 
     # === CORE MESSAGE HANDLING - Enhanced with Smart Cache ===
 
@@ -1396,26 +1432,26 @@ class Translated_Logs:
         return SINGLE_BUBBLE_COLOR
 
     def _limit_bubbles(self):
-        """จำกัดจำนวน bubbles อย่างชาญฉลาด"""
+        """จำกัดจำนวน bubbles และ cache อย่างชาญฉลาด"""
         max_bubbles = 100
         if len(self.bubble_list) > max_bubbles:
-            # Remove oldest bubbles
             bubbles_to_remove = len(self.bubble_list) - max_bubbles
             for old_bubble in self.bubble_list[:bubbles_to_remove]:
                 old_bubble.destroy()
             self.bubble_list = self.bubble_list[bubbles_to_remove:]
             logging.info(f"Cleaned up {bubbles_to_remove} old bubbles")
 
-    def _scroll_to_latest(self):
-        """Legacy instant scroll - kept for compatibility"""
-        self.canvas.update_idletasks()
-        self.canvas.yview_moveto(1.0 if not self.reverse_mode.get() else 0.0)
+        # evict oldest cache entries เมื่อเกิน MAX_CACHE_SIZE
+        if len(self.message_cache) > MAX_CACHE_SIZE:
+            sorted_keys = sorted(
+                self.message_cache, key=lambda k: self.message_cache[k]["timestamp"]
+            )
+            for k in sorted_keys[: len(self.message_cache) - MAX_CACHE_SIZE]:
+                del self.message_cache[k]
 
     def _update_status(self):
-        """อัพเดทสถานะ"""
-        self.status_label.config(
-            text=f"{len(self.bubble_list)} msgs • {'⥁' if self.reverse_mode.get() else '⥁'}"
-        )
+        """No-op — status label ถูกลบออกแล้ว"""
+        pass
 
     def toggle_reverse_mode(self):
         """สลับ reverse mode - ใช้ full repack เนื่องจากเปลี่ยนลำดับการแสดงผล"""
@@ -1459,15 +1495,9 @@ class Translated_Logs:
 
     def toggle_transparency(self):
         """สลับความโปร่งใส 4 ระดับ"""
-        modes = {"A": "B", "B": "C", "C": "D", "D": "A"}
-        alphas = {
-            "A": self.normal_alpha,
-            "B": self.transparent_alpha,
-            "C": self.super_transparent,
-            "D": self.solid_alpha,
-        }
-        self.current_mode = modes[self.current_mode]
-        alpha = alphas[self.current_mode]
+        next_mode = {"A": "B", "B": "C", "C": "D", "D": "A"}
+        self.current_mode = next_mode[self.current_mode]
+        alpha = ALPHA_MAP[self.current_mode]
         try:
             if self.is_visible:
                 self.root.attributes("-alpha", alpha)
@@ -1492,13 +1522,12 @@ class Translated_Logs:
             monitor_left = monitor_info["left"]
             monitor_top = monitor_info["top"]
             
-            # ใช้ขนาดเริ่มต้น 300x800 สำหรับ unlock mode
-            window_width = 300
-            window_height = 800
-            
+            window_width = DEFAULT_LOG_WIDTH
+            window_height = DEFAULT_LOG_HEIGHT
+
             # จำกัดขนาดตามหน้าจอ
-            max_width = min(window_width, monitor_width - 80)  # เว้นพื้นที่ 80px
-            max_height = min(window_height, monitor_height - 100)  # เว้นพื้นที่ 100px
+            max_width = min(window_width, monitor_width - 80)
+            max_height = min(window_height, monitor_height - 100)
             
             # ตำแหน่งริมขวาสุด เว้นจากขอบ 100px ตามที่กำหนด
             pos_x = monitor_left + monitor_width - max_width - 100
@@ -1513,7 +1542,7 @@ class Translated_Logs:
         except Exception as e:
             logging.error(f"Error in position_at_right_edge: {e}")
             # Fallback to default positioning
-            self.root.geometry("480x600+100+100")
+            self.root.geometry(FALLBACK_LOG_GEOMETRY)
 
     def check_screen_size_and_adjust(self, mbb_side="left", monitor_info=None):
         """ปรับขนาดและตำแหน่งหน้าต่างแบบฉลาด - แสดงที่ขอบจอของอีกฝั่ง
@@ -1589,9 +1618,8 @@ class Translated_Logs:
 
             # คำนวณขนาดหน้าต่าง Log
             if use_smart_positioning:
-                # ใช้ขนาดเริ่มต้น 300x800 สำหรับ unlock mode
-                window_width = 300
-                window_height = 800
+                window_width = DEFAULT_LOG_WIDTH
+                window_height = DEFAULT_LOG_HEIGHT
 
                 # คำนวณตำแหน่ง Y เว้นจากขอบบน 100px
                 y = monitor_top + 100
@@ -1616,7 +1644,7 @@ class Translated_Logs:
                 x = monitor_left
                 y = max(monitor_top, (monitor_height - window_height) // 2)
 
-                print(f"Log UI using fallback positioning: {x}, {y}")
+                logging.info(f"Log UI fallback positioning: {x}, {y}")
 
             default_geometry = f"{window_width}x{window_height}+{x}+{y}"
             self.root.geometry(default_geometry)
@@ -1685,9 +1713,8 @@ class Translated_Logs:
             # Priority 2: เปิดครั้งแรกใน session และไม่ได้ lock - ใช้ค่าเริ่มต้น
             logging.info(f"✓ Taking Priority 2: First open in session - using default position")
             
-            # กำหนดขนาดเริ่มต้น 300x800
-            default_width = 300
-            default_height = 800
+            default_width = DEFAULT_LOG_WIDTH
+            default_height = DEFAULT_LOG_HEIGHT
             
             if monitor_info:
                 # คำนวณตำแหน่งขวาสุดของจอ - 200px
@@ -1721,7 +1748,7 @@ class Translated_Logs:
             logging.info("✓ Taking Priority 4: Fallback logic")
             current_geometry = self.root.geometry()
             if not current_geometry or current_geometry in ["1x1+0+0", "200x200+0+0"]:
-                self.root.geometry("240x600+1480+100")
+                self.root.geometry(FALLBACK_LOG_GEOMETRY)
         
         logging.info(f"=== END DEBUG TRACE ===\n")
 
@@ -1741,21 +1768,8 @@ class Translated_Logs:
 
         self.root.lift()
         self.root.attributes("-topmost", True)
+        self.root.attributes("-alpha", ALPHA_MAP.get(self.current_mode, ALPHA_MAP["A"]))
         self.is_visible = True
-
-        # Set alpha based on transparency mode
-        alpha_map = {
-            "A": self.normal_alpha,
-            "B": self.transparent_alpha,
-            "C": self.super_transparent,
-            "D": self.solid_alpha,
-        }
-        try:
-            self.root.attributes(
-                "-alpha", alpha_map.get(self.current_mode, self.normal_alpha)
-            )
-        except Exception:
-            pass
 
         self._smooth_scroll_to_latest()
 
@@ -1782,17 +1796,6 @@ class Translated_Logs:
             if self.is_position_locked:
                 self.locked_geometry = self.root.geometry()
 
-                # Throttled saving (ไม่เกิน 1 ครั้งต่อ 2 วินาที)
-                current_time = time.time()
-                if current_time - self._last_save_time >= 2.0:
-                    self.save_locked_position()
-                    self._last_save_time = current_time
-                    print(f"Lock mode: Throttled save at: {self.locked_geometry}")
-                else:
-                    print(
-                        f"Lock mode: Position updated (will save on stop): {self.locked_geometry}"
-                    )
-
     def stop_move(self, event):
         if hasattr(self, "drag_start_x"):
             delattr(self, "drag_start_x")
@@ -1803,7 +1806,7 @@ class Translated_Logs:
         if self.is_position_locked:
             self.locked_geometry = self.root.geometry()
             self.save_locked_position()
-            print(f"Lock mode: Final position saved: {self.locked_geometry}")
+            logging.info(f"Lock mode: saved {self.locked_geometry}")
 
     def save_locked_position(self):
         """บันทึกตำแหน่งที่ล็อกลง settings.json"""
@@ -1816,7 +1819,7 @@ class Translated_Logs:
                     y=self.root.winfo_y(),
                 )
                 self.settings.set("logs_locked_geometry", self.root.geometry())
-                print(f"Locked position saved to settings: {self.root.geometry()}")
+                logging.debug(f"Lock: saved {self.root.geometry()}")
         except Exception as e:
             logging.error(f"Error saving locked position: {e}")
 
@@ -1825,7 +1828,7 @@ class Translated_Logs:
             return isinstance(
                 event.widget.winfo_containing(event.x_root, event.y_root), tk.Button
             )
-        except:
+        except (AttributeError, tk.TclError):
             return False
 
     def start_resize(self, event):
@@ -1979,7 +1982,7 @@ class Translated_Logs:
                 try:
                     self.ghost_frame.destroy()
                     delattr(self, "ghost_frame")
-                except:
+                except (AttributeError, tk.TclError):
                     pass
 
         # Cleanup resize state variables
@@ -2019,7 +2022,7 @@ class Translated_Logs:
 
                 # โหลด transparency mode
                 mode = logs_settings.get("transparency_mode")
-                if mode in ["A", "B", "C", "D"]:
+                if mode in TRANSPARENCY_MODES:
                     self.current_mode = mode
 
                 # ไม่โหลด geometry จาก settings เมื่อเปิดโปรแกรมใหม่
@@ -2043,9 +2046,6 @@ class Translated_Logs:
                     self.lock_button.config(image=self.unlock_icon)
                 else:
                     self.lock_button.config(text="🔓", fg="#888888")
-                # อัปเดต status label
-                if hasattr(self, "status_label"):
-                    self.status_label.config(text="Smart Positioning")
             logging.info("Initial state: UNLOCKED (always start unlocked)")
 
         except Exception as e:
@@ -2077,7 +2077,7 @@ class Translated_Logs:
                     # อัปเดตตำแหน่งล็อกเป็นปัจจุบัน
                     self.locked_geometry = self.root.geometry()
                     self.settings.set("logs_locked_geometry", self.locked_geometry)
-                    print(f"Auto-saved locked position: {self.locked_geometry}")
+                    logging.debug(f"Lock: auto-saved {self.locked_geometry}")
 
                 logging.info(
                     f"Saved logs settings: {width}x{height}+{x}+{y}, font:{self.current_font_size}, mode:{self.current_mode}, locked:{self.is_position_locked}"
@@ -2119,9 +2119,7 @@ class Translated_Logs:
                 bg=appearance_manager.bg_color,
             )
 
-        if hasattr(self, "status_label"):
-            self.status_label.config(text=f"Smart: {status}", fg="#888888")
-            self.root.after(3000, lambda: self._update_status())  # กลับเป็นปกติหลัง 3 วินาที
+        logging.info(f"Smart replacement: {status}")
 
     def get_cache_stats(self):
         """ดูสถิติ cache ปัจจุบัน"""

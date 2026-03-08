@@ -1,7 +1,18 @@
 import logging
 import tkinter as tk
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 from appearance import appearance_manager
+from resource_utils import resource_path
+
+# ── MBB Monochrome Dark Palette ──
+_BG_DARK = "#1a1a1a"
+_BG_DEEPER = "#141414"
+_BG_HOVER = "#2a2a2a"
+_BORDER_SUBTLE = "#2a2a2a"
+_TEXT_SECONDARY = "#888888"
+_STATUS_IDLE = "#555555"
+_STATUS_ACTIVE = "#4CAF50"
+_HIGHLIGHT_COLOR = "#e0e0e0"
 
 
 class MiniUI:
@@ -14,223 +25,205 @@ class MiniUI:
         self.blink_icon = None
         self.black_icon = None
         self.mini_ui_blink_label = None
-        self.mini_loading_label = None  # <-- เพิ่มบรรทัดนี้
+        self.mini_loading_label = None
         self.mini_ui_blinking = False
         self.is_translating = False
-        self.toggle_translation_callback = None  # สำหรับเก็บ callback จาก main UI
+        self.toggle_translation_callback = None
 
-        # NEW: Add icon and button references for vertical layout
+        # Icon and button references for vertical layout
         self.play_icon = None
         self.pause_icon = None
-        self.play_pause_button = None  # Reference to icon button
+        self.play_pause_button = None
 
+        # Status dot (PIL-rendered smooth circle)
+        self._dot_label = None
+        self._dot_idle_img = None
+        self._dot_active_img = None
+
+        self._create_dot_images()
         self.load_icons()
         self.create_mini_ui()
 
+    def _create_dot_images(self):
+        """Create smooth anti-aliased dot images using PIL supersampling"""
+        dot_size = 10
+        scale = 4  # render at 4x then downscale for smooth edges
+        big = dot_size * scale
+        for color_hex, attr in [(_STATUS_IDLE, "_dot_idle_img"),
+                                (_STATUS_ACTIVE, "_dot_active_img")]:
+            img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            r = int(color_hex[1:3], 16)
+            g = int(color_hex[3:5], 16)
+            b = int(color_hex[5:7], 16)
+            draw.ellipse([0, 0, big - 1, big - 1], fill=(r, g, b, 255))
+            img = img.resize((dot_size, dot_size), Image.LANCZOS)
+            setattr(self, attr, ImageTk.PhotoImage(img))
+
     def load_icons(self):
-        # เพิ่มขนาดไอคอนจาก 10x10 เป็น 15x15
         icon_size = (15, 15)
         self.blink_icon = ImageTk.PhotoImage(
-            Image.open("assets/red_icon.png").resize(icon_size)
+            Image.open(resource_path("assets/red_icon.png")).resize(icon_size)
         )
         self.black_icon = ImageTk.PhotoImage(
-            Image.open("assets/black_icon.png").resize(icon_size)
+            Image.open(resource_path("assets/black_icon.png")).resize(icon_size)
         )
-        # เพิ่มไอคอน expand สำหรับปุ่ม toggle (ขนาดใหญ่ขึ้น 2 เท่า)
         toggle_icon_size = (32, 32)
         self.expand_icon = ImageTk.PhotoImage(
-            Image.open("assets/expand.png").resize(toggle_icon_size)
+            Image.open(resource_path("assets/expand.png")).resize(toggle_icon_size)
         )
-
-        # NEW: Play/Pause icons (22×22 - reduced 20% from 28×28)
         play_pause_size = (22, 22)
         self.play_icon = ImageTk.PhotoImage(
-            Image.open("assets/play.png").resize(play_pause_size)
+            Image.open(resource_path("assets/play.png")).resize(play_pause_size)
         )
         self.pause_icon = ImageTk.PhotoImage(
-            Image.open("assets/pause.png").resize(play_pause_size)
+            Image.open(resource_path("assets/pause.png")).resize(play_pause_size)
         )
 
     def create_mini_ui(self):
-        """Create vertical Mini UI with play/pause icons"""
+        """Create vertical Mini UI with MBB monochrome dark theme"""
         if self.mini_ui and self.mini_ui.winfo_exists():
             self.mini_ui.destroy()
 
         self.mini_ui = tk.Toplevel(self.root)
-
-        # NEW: Vertical geometry (50×176 - reduced 20% from 220)
         self.mini_ui.geometry("50x176")
-
         self.mini_ui.overrideredirect(True)
         self.mini_ui.attributes("-topmost", True)
-
-        bg_c = getattr(appearance_manager, "bg_color", "#0a0a0f")  # Cyberpunk: very dark
-        self.mini_ui.configure(bg=bg_c)
+        self.mini_ui.configure(bg=_BG_DARK)
         self.mini_ui.withdraw()
 
-        # Main frame (NO BORDER in normal state for seamless look)
+        # Main frame — 1px subtle border
         main_frame = tk.Frame(
             self.mini_ui,
-            bg=bg_c,
-            highlightthickness=0,  # No border in normal state
+            bg=_BG_DARK,
+            highlightthickness=1,
+            highlightbackground=_BORDER_SUBTLE,
+            highlightcolor=_BORDER_SUBTLE,
         )
         main_frame.pack(expand=True, fill=tk.BOTH, padx=0, pady=0)
 
-        # COMPONENT 1: Toggle button (expand icon) - TOP
+        # ── Expand button (top) ──
         toggle_button = tk.Button(
             main_frame,
             image=self.expand_icon,
             command=self.show_main_ui_callback,
-            bg=bg_c,
+            bg=_BG_DARK,
+            activebackground=_BG_HOVER,
             bd=0,
             highlightthickness=0,
             cursor="hand2",
         )
-        toggle_button.pack(side=tk.TOP, pady=(8, 8))
+        toggle_button.pack(side=tk.TOP, pady=(16, 10))
 
-        # COMPONENT 2: Play/Pause button (icon-based) - MIDDLE
+        # ── Play/Pause button (middle) ──
         self.play_pause_button = tk.Button(
             main_frame,
-            image=self.play_icon,  # Start with play icon
+            image=self.play_icon,
             command=self._handle_toggle_translation,
-            bg=bg_c,
+            bg=_BG_DARK,
+            activebackground=_BG_HOVER,
             bd=0,
             highlightthickness=0,
             cursor="hand2",
         )
-        self.play_pause_button.pack(side=tk.TOP, pady=(8, 8))
+        self.play_pause_button.pack(side=tk.TOP, pady=(10, 6))
 
-        # COMPONENT 3: Loading indicator (keep for compatibility, smaller font)
+        # ── Loading indicator ──
         self.mini_loading_label = tk.Label(
             main_frame,
             text="",
-            bg=bg_c,
-            fg="#00FFFF",  # Cyberpunk: cyan text
-            font=("Arial", 8, "bold"),  # Smaller for narrow width
+            bg=_BG_DARK,
+            fg=_TEXT_SECONDARY,
+            font=("Consolas", 8, "bold"),
         )
-        self.mini_loading_label.pack(side=tk.TOP, pady=(2, 2))
+        self.mini_loading_label.pack(side=tk.TOP, pady=(0, 0))
 
-        # COMPONENT 4: Status indicator - BOTTOM
-        status_frame = tk.Frame(
+        # ── Status dot (PIL anti-aliased smooth circle) ──
+        self._dot_label = tk.Label(
             main_frame,
-            bg=bg_c,
-            width=25,
-            height=25,
+            image=self._dot_idle_img,
+            bg=_BG_DARK,
+            bd=0,
         )
-        status_frame.pack(side=tk.TOP, pady=(8, 8))
-        status_frame.pack_propagate(False)
+        self._dot_label.pack(side=tk.TOP, pady=(12, 16))
 
-        self.mini_ui_blink_label = tk.Label(
-            status_frame,
-            image=self.black_icon,
-            bg=bg_c
-        )
-        self.mini_ui_blink_label.pack(expand=True, fill=tk.BOTH)
+        # Keep blink_label reference for API compatibility
+        self.mini_ui_blink_label = self._dot_label
 
-        # Hover effects
-        def on_play_pause_enter(e):
-            self.play_pause_button.config(bg="#2a2a3e")  # Cyberpunk: dark blue-gray
+        # ── Hover effects ──
+        def on_hover_enter(widget):
+            widget.config(bg=_BG_HOVER)
 
-        def on_play_pause_leave(e):
-            current_bg = getattr(appearance_manager, "bg_color", "#1a1a1a")
-            self.play_pause_button.config(bg=current_bg)
+        def on_hover_leave(widget):
+            widget.config(bg=_BG_DARK)
 
-        def on_toggle_enter(e):
-            toggle_button.config(bg="#2a2a3e")  # Cyberpunk: dark blue-gray
+        self.play_pause_button.bind("<Enter>", lambda e: on_hover_enter(self.play_pause_button))
+        self.play_pause_button.bind("<Leave>", lambda e: on_hover_leave(self.play_pause_button))
+        toggle_button.bind("<Enter>", lambda e: on_hover_enter(toggle_button))
+        toggle_button.bind("<Leave>", lambda e: on_hover_leave(toggle_button))
 
-        def on_toggle_leave(e):
-            current_bg = getattr(appearance_manager, "bg_color", "#1a1a1a")
-            toggle_button.config(bg=current_bg)
+        # Store toggle_button ref for theme updates
+        self._toggle_button = toggle_button
 
-        self.play_pause_button.bind("<Enter>", on_play_pause_enter)
-        self.play_pause_button.bind("<Leave>", on_play_pause_leave)
-        toggle_button.bind("<Enter>", on_toggle_enter)
-        toggle_button.bind("<Leave>", on_toggle_leave)
-
-        # Event bindings for window dragging
+        # ── Window dragging ──
         self.mini_ui.bind("<Button-1>", self.start_move_mini_ui)
         self.mini_ui.bind("<B1-Motion>", self.do_move_mini_ui)
         self.mini_ui.bind("<Double-Button-1>", lambda e: self.show_main_ui_from_mini())
 
         # Apply asymmetric rounded corners
-        self.mini_ui.after(100, lambda: self.apply_asymmetric_rounded_corners())
+        self.mini_ui.after(100, self.apply_asymmetric_rounded_corners)
 
     def apply_asymmetric_rounded_corners(self):
         """
         Apply rounded corners ONLY to the right side (top-right, bottom-right).
         Left side remains sharp since it touches the screen edge.
+        Uses ctypes gdi32 directly (win32gui lacks CreateRectRgn).
         """
         try:
-            import win32gui
-            import win32con
             from ctypes import windll
 
-            self.mini_ui.update_idletasks()
-            hwnd = windll.user32.GetParent(self.mini_ui.winfo_id())
+            gdi32 = windll.gdi32
+            user32 = windll.user32
+            RGN_OR = 2
 
-            # Remove window decorations
-            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
-            style &= ~win32con.WS_CAPTION
-            style &= ~win32con.WS_THICKFRAME
-            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+            self.mini_ui.update_idletasks()
+            hwnd = user32.GetParent(self.mini_ui.winfo_id())
 
             width = self.mini_ui.winfo_width()   # 50
-            height = self.mini_ui.winfo_height() # 176
-            radius = 12
+            height = self.mini_ui.winfo_height()  # 176
+            corner = 10  # ellipse size for ~5px radius
 
-            # Create left rectangle (sharp corners)
-            left_region = win32gui.CreateRectRgn(0, 0, 25, height)
+            # Left half: sharp rectangle (no rounding)
+            left_rgn = gdi32.CreateRectRgn(0, 0, width // 2, height)
 
-            # Create right rounded rectangle
-            right_region = win32gui.CreateRoundRectRgn(
-                25 - radius,  # Overlap for seamless join
-                0,
-                width,
-                height,
-                radius,
-                radius
+            # Right half: rounded rect, starts overlapping left to hide its left corners
+            right_rgn = gdi32.CreateRoundRectRgn(
+                width // 2 - corner // 2, 0,
+                width + 1, height + 1,
+                corner, corner,
             )
 
-            # Combine regions
-            combined_region = win32gui.CreateRectRgn(0, 0, 0, 0)
-            win32gui.CombineRgn(combined_region, left_region, right_region, win32con.RGN_OR)
+            # Combine: left sharp + right rounded
+            combined = gdi32.CreateRectRgn(0, 0, 0, 0)
+            gdi32.CombineRgn(combined, left_rgn, right_rgn, RGN_OR)
+            user32.SetWindowRgn(hwnd, combined, True)
 
-            # Apply to window
-            win32gui.SetWindowRgn(hwnd, combined_region, True)
-
-            # Cleanup temporary regions (SetWindowRgn takes ownership of combined_region)
-            win32gui.DeleteObject(left_region)
-            win32gui.DeleteObject(right_region)
+            # Cleanup temp regions (SetWindowRgn owns combined)
+            gdi32.DeleteObject(left_rgn)
+            gdi32.DeleteObject(right_rgn)
 
         except Exception as e:
             print(f"Error applying asymmetric rounded corners: {e}")
-            # Fallback: Try uniform corners on all sides
-            try:
-                import win32gui
-                from ctypes import windll
-                hwnd = windll.user32.GetParent(self.mini_ui.winfo_id())
-                region = win32gui.CreateRoundRectRgn(0, 0, 50, 176, 12, 12)
-                win32gui.SetWindowRgn(hwnd, region, True)
-            except:
-                pass  # Give up on rounded corners
 
     def get_monitor_bounds_for_window(self, window_x, window_y):
         """
         Detect which monitor contains the given window coordinates.
         Returns the monitor's left edge X coordinate.
-
-        Args:
-            window_x: X coordinate of the window
-            window_y: Y coordinate of the window
-
-        Returns:
-            int: Left edge X coordinate of the monitor (0 for primary, 2560 for secondary, etc.)
         """
         try:
             import ctypes
             from ctypes import wintypes, windll, Structure
 
-            # Define RECT structure
             class RECT(Structure):
                 _fields_ = [
                     ('left', wintypes.LONG),
@@ -239,7 +232,6 @@ class MiniUI:
                     ('bottom', wintypes.LONG)
                 ]
 
-            # Define MONITORINFO structure
             class MONITORINFO(Structure):
                 _fields_ = [
                     ('cbSize', wintypes.DWORD),
@@ -248,58 +240,40 @@ class MiniUI:
                     ('dwFlags', wintypes.DWORD)
                 ]
 
-            # Get window handle
             hwnd = windll.user32.GetParent(self.root.winfo_id())
-
-            # Get monitor containing this window (MONITOR_DEFAULTTONEAREST = 2)
             monitor = windll.user32.MonitorFromWindow(hwnd, 2)
-
-            # Get monitor information
             info = MONITORINFO()
             info.cbSize = ctypes.sizeof(MONITORINFO)
             result = windll.user32.GetMonitorInfoW(monitor, ctypes.byref(info))
 
             if result:
-                monitor_left = info.rcMonitor.left
-                print(f"🖥️ Detected monitor left edge: {monitor_left}")
-                return monitor_left
-            else:
-                print("⚠️ Monitor detection failed, defaulting to x=0")
-                return 0
+                return info.rcMonitor.left
+            return 0
 
-        except Exception as e:
-            print(f"❌ Error detecting monitor bounds: {e}")
-            return 0  # Default to primary monitor
+        except Exception:
+            return 0
 
     def show_loading(self):
-        """แสดง loading indicator ใน Mini UI"""
         try:
             if hasattr(self, "mini_loading_label") and self.mini_loading_label:
-                # ตรวจสอบว่า widget ยังมีอยู่
                 if self.mini_loading_label.winfo_exists():
-                    self.mini_loading_label.config(text="...")  # หรือใช้สัญลักษณ์อื่น เช่น ⏳
+                    self.mini_loading_label.config(text="...")
         except tk.TclError:
-            # Widget ถูกทำลายแล้ว - ไม่ต้องทำอะไร
             pass
         except Exception as e:
             print(f"Error in show_loading: {e}")
 
     def hide_loading(self):
-        """ซ่อน loading indicator ใน Mini UI"""
         try:
             if hasattr(self, "mini_loading_label") and self.mini_loading_label:
-                # ตรวจสอบว่า widget ยังมีอยู่
                 if self.mini_loading_label.winfo_exists():
                     self.mini_loading_label.config(text="")
         except tk.TclError:
-            # Widget ถูกทำลายแล้ว - ไม่ต้องทำอะไร
             pass
         except Exception as e:
             print(f"Error in hide_loading: {e}")
 
-    # เมธอด lighten_color ควรมีอยู่ในคลาส MiniUI ด้วย ถ้ายังไม่มี
     def lighten_color(self, color, factor=1.3):
-        """ทำให้สีอ่อนลงตามค่า factor (เหมือนใน control_ui)"""
         if not isinstance(color, str) or not color.startswith("#"):
             return color
         try:
@@ -310,14 +284,12 @@ class MiniUI:
             g = min(int(g * factor), 255)
             b = min(int(b * factor), 255)
             return f"#{r:02x}{g:02x}{b:02x}"
-        except Exception as e:
-            print(f"Error lightening color: {e}")
+        except Exception:
             return color
 
     def add_highlight_border(self):
-        """เพิ่มเอฟเฟกต์ขอบสีฟ้าเมื่อ Mini UI ปรากฏ"""
+        """White border flash effect when Mini UI appears"""
         try:
-            # หา main frame (frame แรกใน mini_ui)
             main_frame = None
             for child in self.mini_ui.winfo_children():
                 if isinstance(child, tk.Frame):
@@ -325,100 +297,69 @@ class MiniUI:
                     break
 
             if main_frame:
-                # เก็บสีขอบเดิม
                 original_color = main_frame.cget("highlightbackground")
                 original_thickness = main_frame.cget("highlightthickness")
 
-                # เปลี่ยนเป็นขอบสีฟ้าหนาขึ้น - เพิ่มความหนาเป็น 3 (จากเดิม 2)
                 main_frame.configure(
-                    highlightthickness=3, highlightbackground="#00FFFF"
+                    highlightthickness=2, highlightbackground=_HIGHLIGHT_COLOR
                 )
 
-                # ตั้งเวลาเปลี่ยนกลับหลังจาก 1.5 วินาที (เพิ่มจาก 1 วินาที)
                 self.mini_ui.after(
-                    1500,
+                    1200,
                     lambda: main_frame.configure(
-                        highlightthickness=original_thickness,
-                        highlightbackground=original_color,
+                        highlightthickness=1,
+                        highlightbackground=_BORDER_SUBTLE,
                     ),
                 )
         except Exception as e:
             print(f"Error adding highlight effect: {e}")
 
     def update_theme(self, accent_color=None, highlight_color=None):
-        """อัพเดท UI ของ MiniUI ด้วยสีธีมใหม่"""
+        """Update MiniUI with MBB monochrome theme"""
         try:
-            # ดึงค่าสีล่าสุดจาก appearance_manager ถ้าไม่ได้ส่งมา
-            if accent_color is None:
-                accent_color = appearance_manager.get_accent_color()
-            if highlight_color is None:
-                highlight_color = appearance_manager.get_highlight_color()
-            bg_c = appearance_manager.bg_color  # สีพื้นหลังหลัก
+            bg_c = _BG_DARK
 
             if not self.mini_ui or not self.mini_ui.winfo_exists():
                 return
 
-            # อัพเดทพื้นหลังหน้าต่างและ Frame หลัก
             self.mini_ui.configure(bg=bg_c)
             main_frame = None
             for child in self.mini_ui.winfo_children():
                 if isinstance(child, tk.Frame):
                     main_frame = child
-                    main_frame.configure(bg=bg_c)
-                    # อาจจะต้องอัพเดทขอบด้วย ถ้าใช้ highlightbackground
-                    # main_frame.configure(highlightbackground="#333333") # หรือสีขอบตามธีม
+                    main_frame.configure(
+                        bg=bg_c,
+                        highlightbackground=_BORDER_SUBTLE,
+                    )
                     break
 
             if main_frame:
-                toggle_button = None
-
                 for widget in main_frame.winfo_children():
-                    # Find toggle button by image
-                    if isinstance(widget, tk.Button) and widget.cget("image") == str(self.expand_icon):
-                        toggle_button = widget
-                        widget.configure(bg=bg_c, activebackground=bg_c)
-
-                    # Find play/pause button by reference
-                    elif isinstance(widget, tk.Button) and widget == getattr(self, "play_pause_button", None):
-                        widget.configure(bg=bg_c, activebackground=accent_color)
-
-                    # Update loading label
-                    elif isinstance(widget, tk.Label) and widget == getattr(self, "mini_loading_label", None):
+                    if isinstance(widget, tk.Button):
+                        widget.configure(bg=bg_c, activebackground=_BG_HOVER)
+                    elif isinstance(widget, tk.Label):
                         widget.configure(bg=bg_c)
 
-                    # Update status frame
-                    elif isinstance(widget, tk.Frame):
-                        widget.configure(bg=bg_c)
-                        if hasattr(self, "mini_ui_blink_label") and self.mini_ui_blink_label:
-                            self.mini_ui_blink_label.configure(bg=bg_c)
+            # Rebind hover effects
+            if hasattr(self, "play_pause_button") and self.play_pause_button:
+                self.play_pause_button.unbind("<Enter>")
+                self.play_pause_button.unbind("<Leave>")
+                self.play_pause_button.bind(
+                    "<Enter>", lambda e: self.play_pause_button.config(bg=_BG_HOVER)
+                )
+                self.play_pause_button.bind(
+                    "<Leave>", lambda e: self.play_pause_button.config(bg=bg_c)
+                )
 
-                # Re-bind hover effects with updated colors
-                def on_play_pause_enter(e):
-                    self.play_pause_button.config(bg="#2a2a3e")  # Cyberpunk: dark blue-gray
-
-                def on_play_pause_leave(e):
-                    self.play_pause_button.config(bg=appearance_manager.bg_color)
-
-                def on_toggle_enter(e):
-                    if toggle_button:
-                        toggle_button.config(bg="#2a2a3e")  # Cyberpunk: dark blue-gray
-
-                def on_toggle_leave(e):
-                    if toggle_button:
-                        toggle_button.config(bg=appearance_manager.bg_color)
-
-                # Rebind events
-                if hasattr(self, "play_pause_button"):
-                    self.play_pause_button.unbind("<Enter>")
-                    self.play_pause_button.unbind("<Leave>")
-                    self.play_pause_button.bind("<Enter>", on_play_pause_enter)
-                    self.play_pause_button.bind("<Leave>", on_play_pause_leave)
-
-                if toggle_button:
-                    toggle_button.unbind("<Enter>")
-                    toggle_button.unbind("<Leave>")
-                    toggle_button.bind("<Enter>", on_toggle_enter)
-                    toggle_button.bind("<Leave>", on_toggle_leave)
+            if hasattr(self, "_toggle_button") and self._toggle_button:
+                self._toggle_button.unbind("<Enter>")
+                self._toggle_button.unbind("<Leave>")
+                self._toggle_button.bind(
+                    "<Enter>", lambda e: self._toggle_button.config(bg=_BG_HOVER)
+                )
+                self._toggle_button.bind(
+                    "<Leave>", lambda e: self._toggle_button.config(bg=bg_c)
+                )
 
             logging.info("MiniUI theme updated.")
 
@@ -427,178 +368,114 @@ class MiniUI:
             logging.error(f"Error updating mini UI theme: {e}")
 
     def _handle_toggle_translation(self):
-        """จัดการการกดปุ่ม Start/Stop โดยเรียกใช้ callback จาก main UI"""
         if self.toggle_translation_callback:
             self.toggle_translation_callback()
 
-    def update_translation_status(self, is_translating):
-        """
-        Update translation status and switch play/pause icon.
+    def _set_status_dot(self, color):
+        """Update the status dot image (smooth PIL-rendered)"""
+        try:
+            if self._dot_label:
+                img = self._dot_active_img if color == _STATUS_ACTIVE else self._dot_idle_img
+                self._dot_label.config(image=img)
+        except tk.TclError:
+            pass
 
-        Args:
-            is_translating: Boolean indicating if translation is active
-        """
+    def update_translation_status(self, is_translating):
+        """Update translation status and switch play/pause icon."""
         try:
             self.is_translating = is_translating
             self.mini_ui_blinking = is_translating
 
             if is_translating:
-                # Switch to PAUSE icon
                 if hasattr(self, 'play_pause_button') and self.play_pause_button:
                     self.play_pause_button.config(image=self.pause_icon)
-
-                # Start status indicator blinking (red)
-                if hasattr(self, "mini_ui_blink_label") and self.mini_ui_blink_label.winfo_exists():
-                    self.start_blinking()
+                self._set_status_dot(_STATUS_ACTIVE)
             else:
-                # Switch to PLAY icon
                 if hasattr(self, 'play_pause_button') and self.play_pause_button:
                     self.play_pause_button.config(image=self.play_icon)
+                self._set_status_dot(_STATUS_IDLE)
 
-                # Stop blinking (black)
-                self.stop_blinking()
-
-            # Refresh UI
             if hasattr(self, "mini_ui") and self.mini_ui.winfo_exists():
                 self.mini_ui.update_idletasks()
 
         except tk.TclError:
-            pass  # Widget destroyed
+            pass
         except Exception as e:
-            print(f"❌ Error in update_translation_status: {e}")
+            print(f"Error in update_translation_status: {e}")
 
     def set_toggle_translation_callback(self, callback):
-        """ตั้งค่า callback สำหรับการ toggle การแปล"""
         self.toggle_translation_callback = callback
 
     def start_blinking(self):
-        """แสดงไฟแดงนิ่งๆ แทนการกระพริบ เมื่อกำลังแปล"""
+        """Show solid green dot when translating"""
         try:
-            # หยุดการกระพริบที่อาจค้างอยู่ก่อน
             self.stop_blinking()
-
-            # ตั้งค่าสถานะว่ากำลังทำงาน แต่ไม่ได้กระพริบแล้ว
             self.mini_ui_blinking = True
-
-            # ตรวจสอบว่า mini_ui_blink_label มีอยู่จริง
-            if (
-                hasattr(self, "mini_ui_blink_label")
-                and self.mini_ui_blink_label.winfo_exists()
-            ):
-                # แสดงไฟแดงนิ่งๆ เมื่อเริ่มการแปล
-                self.mini_ui_blink_label.config(image=self.blink_icon)
+            self._set_status_dot(_STATUS_ACTIVE)
         except tk.TclError:
-            # Widget ถูกทำลายแล้ว
             pass
         except Exception as e:
             print(f"Error in start_blinking: {e}")
 
     def stop_blinking(self):
-        """หยุดการทำงานและเปลี่ยนไฟกลับเป็นสีดำ"""
+        """Stop and reset to idle gray dot"""
         try:
             self.mini_ui_blinking = False
 
-            # ยกเลิกการกระพริบที่อาจกำลังทำงานอยู่ (สำหรับความเข้ากันได้กับโค้ดเดิม)
             if hasattr(self, "blink_timer_id") and self.blink_timer_id:
                 try:
-                    if (
-                        hasattr(self, "mini_ui")
-                        and self.mini_ui
-                        and self.mini_ui.winfo_exists()
-                    ):
+                    if hasattr(self, "mini_ui") and self.mini_ui and self.mini_ui.winfo_exists():
                         self.mini_ui.after_cancel(self.blink_timer_id)
-                except tk.TclError:
-                    pass  # Widget ถูกทำลายแล้ว
-                except Exception:
-                    pass  # ถ้ายกเลิกไม่ได้ ก็ไม่เป็นไร
+                except (tk.TclError, Exception):
+                    pass
                 self.blink_timer_id = None
 
-            # รีเซ็ตรูปภาพกลับเป็นสีดำ
-            if (
-                hasattr(self, "mini_ui_blink_label")
-                and self.mini_ui_blink_label.winfo_exists()
-            ):
-                self.mini_ui_blink_label.config(image=self.black_icon)
+            self._set_status_dot(_STATUS_IDLE)
         except tk.TclError:
-            # Widget ถูกทำลายแล้ว
             pass
         except Exception as e:
             print(f"Error in stop_blinking: {e}")
 
     def start_move_mini_ui(self, event):
-        """เริ่มการเคลื่อนย้ายหน้าต่าง"""
         self.mini_x = event.x_root - self.mini_ui.winfo_x()
         self.mini_y = event.y_root - self.mini_ui.winfo_y()
 
     def do_move_mini_ui(self, event):
-        """ทำการเคลื่อนย้ายหน้าต่าง"""
         x = event.x_root - self.mini_x
         y = event.y_root - self.mini_y
         self.mini_ui.geometry(f"+{x}+{y}")
 
     def show_main_ui_from_mini(self):
-        """สลับกลับไปแสดง main UI"""
         if hasattr(self, "mini_ui"):
-            # บันทึกตำแหน่ง mini UI ก่อนซ่อน
             self.mini_ui.withdraw()
         self.show_main_ui_callback()
 
     def position_at_center_of_main(self, main_x, main_y, main_width, main_height):
-        """
-        Position mini UI at the left edge of the monitor containing the main UI,
-        preserving Y coordinate from main UI.
-
-        Args:
-            main_x: Main UI X coordinate
-            main_y: Main UI Y coordinate
-            main_width: Not used (kept for compatibility)
-            main_height: Not used (kept for compatibility)
-        """
-        # Detect which monitor contains main UI
+        """Position mini UI at left edge of monitor containing main UI."""
         monitor_left_edge = self.get_monitor_bounds_for_window(main_x, main_y)
-
-        # Snap to left edge of detected monitor, preserve Y
         self.mini_ui.geometry(f"+{monitor_left_edge}+{main_y}")
-        print(f"📍 Mini UI positioned at x={monitor_left_edge}, y={main_y}")
-
-        # Add highlight effect
         self.add_highlight_border()
 
     def blink_mini_ui(self):
-        """จัดการการกระพริบของไฟสถานะ"""
+        """Legacy blink animation (kept for compatibility)"""
         if (
             self.mini_ui_blinking
             and hasattr(self, "mini_ui")
             and self.mini_ui
             and self.mini_ui.winfo_exists()
         ):
-            if (
-                hasattr(self, "mini_ui_blink_label")
-                and self.mini_ui_blink_label.winfo_exists()
-            ):
-                try:
-                    current_image = self.mini_ui_blink_label.cget("image")
-                    # กรณีการเปรียบเทียบ image failed ให้ใช้วิธีสลับไปมา
-                    new_image = (
-                        self.black_icon
-                        if self.blink_timer % 2 == 0
-                        else self.blink_icon
-                    )
-                    self.mini_ui_blink_label.config(image=new_image)
-                    # เพิ่มการเก็บค่ารอบการกระพริบ
-                    self.blink_timer = (
-                        0 if not hasattr(self, "blink_timer") else self.blink_timer + 1
-                    )
+            try:
+                timer_val = getattr(self, "blink_timer", 0) or 0
+                img = self._dot_idle_img if timer_val % 2 == 0 else self._dot_active_img
+                if self._dot_label:
+                    self._dot_label.config(image=img)
+                self.blink_timer = timer_val + 1
 
-                    # กำหนดการกระพริบรอบถัดไป
-                    self.blink_timer_id = self.mini_ui.after(
-                        self.blink_interval, self.blink_mini_ui
-                    )
-                except Exception as e:
-                    print(f"Error in blink animation: {e}")
-                    # ถ้ามีข้อผิดพลาด ให้หยุดการกระพริบ
-                    self.stop_blinking()
-            else:
+                self.blink_timer_id = self.mini_ui.after(
+                    self.blink_interval, self.blink_mini_ui
+                )
+            except Exception as e:
+                print(f"Error in blink animation: {e}")
                 self.stop_blinking()
         else:
             self.stop_blinking()

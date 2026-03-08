@@ -9,46 +9,57 @@ import sys
 
 def get_npc_file_path():
     """
-    Search for NPC.json file in the main project folder
-    Main project folder is the current working directory or other folder
-    Return a single file per project or others
+    Search for NPC.json file with fallback strategy
+
+    Priority:
+    1. User-editable file (outside exe in production, current dir in dev)
+    2. Bundled copy in _internal/ (production only)
+    3. Default path for new file creation
 
     Returns:
         String: file path that found or should be used for creating new file
     """
 
-    # Part that was fixed
     if hasattr(sys, "_MEIPASS"):
-        # This is production mode - executable
-        search_dir = os.path.dirname(sys.executable)
-        print(f"[NPC File Utils] Production mode - searching in: {search_dir}")
-        # In production usually has NPC.json (capital)
-        possible_files = ["NPC.json", "npc.json"]
+        # PRODUCTION MODE - PyInstaller executable
+        exe_dir = os.path.dirname(sys.executable)
+        print(f"[NPC File Utils] Production mode - executable dir: {exe_dir}")
+
+        # Step 1: Try to find user-editable file (outside exe)
+        for filename in ["NPC.json", "npc.json"]:
+            user_path = os.path.join(exe_dir, filename)
+            if os.path.exists(user_path):
+                print(f"[NPC File Utils] Found user-editable file: {user_path}")
+                return user_path
+
+        # Step 2: Fallback to bundled copy in _internal/
+        for filename in ["NPC.json", "npc.json"]:
+            bundled_path = os.path.join(sys._MEIPASS, filename)
+            if os.path.exists(bundled_path):
+                print(f"[NPC File Utils] Using bundled copy: {bundled_path}")
+                return bundled_path
+
+        # Step 3: No file found - return default path (will be created)
+        default_path = os.path.join(exe_dir, "NPC.json")
+        print(f"[NPC File Utils] No file found, will use: {default_path}")
+        return default_path
+
     else:
-        # This is development mode - current project folder that's running files
+        # DEVELOPMENT MODE - running from source
         search_dir = os.path.abspath(".")
         print(f"[NPC File Utils] Development mode - searching in: {search_dir}")
-        # In development usually has npc.json (lowercase)
-        possible_files = ["npc.json", "NPC.json"]
-    # --- End of fixed part ---
 
-    # Search for existing files
-    for filename in possible_files:
-        full_path = os.path.join(search_dir, filename)
-        if os.path.exists(full_path):
-            print(f"[NPC File Utils] Found file: {full_path}")
-            return full_path
+        # Search for existing files (prefer lowercase in dev)
+        for filename in ["npc.json", "NPC.json"]:
+            full_path = os.path.join(search_dir, filename)
+            if os.path.exists(full_path):
+                print(f"[NPC File Utils] Found file: {full_path}")
+                return full_path
 
-    # If no file found, use an appropriate name based on mode
-    if hasattr(sys, "_MEIPASS"):
-        # Production mode uses capital
-        default_path = os.path.join(search_dir, "NPC.json")
-    else:
-        # Development mode uses lowercase
+        # No file found - return default path
         default_path = os.path.join(search_dir, "npc.json")
-
-    print(f"[NPC File Utils] File not found, will use: {default_path}")
-    return default_path
+        print(f"[NPC File Utils] File not found, will use: {default_path}")
+        return default_path
 
 
 def get_game_info_from_npc_file():

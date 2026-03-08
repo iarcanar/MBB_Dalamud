@@ -8,6 +8,7 @@ import json
 import os
 from appearance import appearance_manager
 from settings import Settings
+from resource_utils import resource_path
 
 # เพิ่ม imports สำหรับการทำขอบโค้งมน
 import win32gui
@@ -1587,25 +1588,9 @@ class Control_UI:
         theme_bg = self.theme.get("bg", "#1a1a1a")
         inactive_bg = self.theme.get("button_bg", "#262637")
 
-        # --- แถวที่ 1: Camera และ Area Buttons ---
+        # --- แถวที่ 1: Area Buttons ---
         top_row = tk.Frame(self.main_frame, bg=theme_bg, bd=0, highlightthickness=0)
         top_row.pack(pady=(0, 8), fill=tk.X, padx=10)
-
-        # ปุ่ม Camera
-        try:
-            camera_original = Image.open("assets/camera.png").resize((20, 20))
-            camera_tk_image = ImageTk.PhotoImage(camera_original)
-            self.camera_button = tk.Button(
-                top_row, image=camera_tk_image, command=self.capture_screen,
-                bg=inactive_bg, activebackground=self.theme.get("accent_light"),
-                width=30, height=30, bd=0, highlightthickness=0, relief="flat", cursor="hand2",
-            )
-            self.camera_button.image = camera_tk_image
-            self.camera_button.pack(side=tk.LEFT, padx=(0, 10))
-        except Exception as e:
-            logging.error(f"Error creating camera button: {e}")
-            self.camera_button = tk.Button(top_row, text="CAM", command=self.capture_screen)
-            self.camera_button.pack(side=tk.LEFT, padx=(0, 10))
 
         # Area buttons frame (จัดกลาง)
         area_outer_frame = tk.Frame(top_row, bg=theme_bg)
@@ -3411,34 +3396,6 @@ class Control_UI:
             import traceback
             traceback.print_exc()
 
-    def capture_screen(self):
-        """Capture screen function"""
-        try:
-            from screen_capture import ScreenCapture
-
-            capturer = ScreenCapture()
-            filepath = capturer.capture_primary_screen()
-            if filepath:
-                self.show_capture_feedback()
-        except Exception as e:
-            logging.error(f"Screen capture error: {e}")
-
-    def show_capture_feedback(self):
-        """Show capture feedback"""
-        feedback = tk.Toplevel(self.root)
-        feedback.overrideredirect(True)
-        feedback.configure(bg="black")
-        x = self.root.winfo_x() + self.camera_button.winfo_x()
-        y = self.root.winfo_y() + self.camera_button.winfo_y()
-        tk.Label(
-            feedback,
-            text="Captured!",
-            fg="lime",
-            bg="black",
-            font=("Nasalization Rg", 8),
-        ).pack(padx=10, pady=5)
-        feedback.geometry(f"+{x+30}+{y}")
-        feedback.after(1000, feedback.destroy)
 
     # === AUTO-HIDE FUNCTIONALITY ===
     

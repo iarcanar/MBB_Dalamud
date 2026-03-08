@@ -1,218 +1,173 @@
-# MBB Dalamud Bridge - Custom Plugin Repository
+# Magicite Babel — Dalamud Edition
 
 ![MBB Logo](images/icon.png)
 
-**Real-time Thai Translation for Final Fantasy XIV**
+**Real-time Thai translation overlay for Final Fantasy XIV**
+
+MBB hooks into FFXIV's text system via [Dalamud](https://github.com/goatcorp/Dalamud) plugin and translates dialogue, cutscenes, and battle text into Thai in real-time using Google Gemini AI.
+
+> **Version:** 1.7.8 &nbsp;|&nbsp; **Build:** 04032026-01
 
 ---
 
-## 🎯 What is MBB Dalamud Bridge?
+## How It Works
 
-**MBB (Magic Babel Bridge)** is a custom Dalamud plugin that provides real-time Thai translation for Final Fantasy XIV using Google Gemini AI. It features:
+```
+FFXIV Game  ──>  Dalamud Plugin (C#)  ──>  Named Pipe  ──>  Python App
+                 Text Hook                                   Gemini AI
+                 Zone Detection                              Translation UI (TUI)
+                                                             Chat Log (LOG)
+```
 
-- ✨ **Real-time Translation** - Text hook architecture for immediate translation
-- 🎭 **Character Database** - Personality, gender, status, and terminology tracking
-- 🎬 **Netflix-Quality Localization** - Context-aware, natural Thai translation
-- 🎨 **Elegant UI** - Auto-show/hide, fully customizable (size, colors, themes)
-- ⚡ **Seamless Integration** - Works alongside gameplay with minimal performance impact
+1. **Dalamud Plugin** hooks into FFXIV's chat system and captures dialogue text
+2. Text is sent to the **Python app** via named pipe (IPC)
+3. **Gemini 2.0 Flash** translates with character-aware context
+4. Translation appears on the **TUI overlay** directly on top of the game
 
 ---
 
-## 📦 Installation Guide
+## Project Structure
+
+```
+MBB_Dalamud/
+|
+|-- dalamud-plugin/                   C# Dalamud Plugin
+|   +-- DalamudMBBBridge/
+|       |-- DalamudMBBBridge.cs       Main plugin: text hook, zone detection, IPC
+|       |-- MBBConfigWindow.cs        Plugin config UI (ImGui)
+|       |-- DalamudMBBBridge.csproj   .NET project (Dalamud.NET.Sdk)
+|       +-- DalamudMBBBridge.json     Plugin manifest
+|
+|-- python-app/                       Python Translation Application
+|   |-- MBB.py                        Main application entry point
+|   |-- translator_gemini.py          Gemini AI translation engine
+|   |-- dalamud_bridge.py             Named pipe IPC client
+|   |-- dalamud_immediate_handler.py  Text routing & translation trigger
+|   |-- conversation_logger.py        Wide-context conversation tracking
+|   |-- translated_ui.py              TUI: Tkinter overlay (translation display)
+|   |-- translated_logs.py            LOG: Chat-style translation history
+|   |-- mini_ui.py                    Mini UI: compact mode
+|   |-- settings.py                   Settings backend
+|   |-- text_corrector.py             Name detection & text correction
+|   |-- enhanced_name_detector.py     NPC name matching system
+|   |-- npc_manager_card.py           NPC Manager: character database editor
+|   |-- api_key_manager.py            API key setup wizard
+|   |-- font_manager.py               Tkinter font management
+|   |-- npc.json                      Character database (290+ characters)
+|   |-- version.py                    Version constants
+|   |-- mbb.spec                      PyInstaller build spec
+|   |-- .env.example                  API key template
+|   |-- pyqt_ui/                      PyQt6 Modern UI
+|   |   |-- main_window.py            Main control window
+|   |   |-- control_panel.py          Status & controls
+|   |   |-- settings_panel.py         Settings panel
+|   |   |-- font_panel.py             Font selector
+|   |   |-- styles.py                 QSS themes & glass mode
+|   |   +-- ...
+|   |-- fonts/                        Bundled fonts (Anuphan, FC Minimal)
+|   +-- assets/                       Icons and images
+|
+|-- website/                          Project website (GitHub Pages)
+|   |-- index.html                    Single-file website
+|   +-- screenshots/                  UI screenshots
+|
+|-- plugins/                          Dalamud custom repository
+|   +-- DalamudMBBBridge/
+|       +-- latest.zip                Pre-built plugin package
+|
+|-- repo-structure/
+|   +-- pluginmaster.json             Dalamud plugin discovery manifest
+|
++-- claude.md                         Project documentation
+```
+
+---
+
+## Features
+
+- **Text Hook** -- Direct memory-based text extraction via Dalamud (no OCR)
+- **Gemini 2.0 Flash** -- Fast, context-aware Thai translation
+- **Wide-Context Translation** -- Remembers recent dialogue for consistent pronouns and honorifics
+- **NPC Database** -- 290+ named characters with customizable tone/personality
+- **TUI Overlay** -- Transparent translation overlay with rich text formatting
+- **Chat Log (LOG)** -- Scrollable translation history with chat bubbles
+- **Glass Mode** -- Fully transparent UI that blends into the game
+- **Mini UI** -- Compact 50x176px side panel
+- **Zone Change Detection** -- Auto-resets context when changing areas
+- **1-Click Install** -- Install via Dalamud custom plugin repository
+
+---
+
+## Installation
 
 ### Prerequisites
-- Final Fantasy XIV with Dalamud installed
+
+- [XIVLauncher](https://github.com/goatcorp/FFXIVQuickLauncher) with Dalamud enabled
+- [Google Gemini API Key](https://ai.google.dev/) (free tier available)
 - Windows 10/11
-- Google Gemini API Key ([Get one free here](https://aistudio.google.com/app/apikey))
 
-### Step 1: Add Custom Repository (30 seconds)
+### Steps
 
-1. Launch FFXIV and open Dalamud settings:
-   ```
-   /xlsettings
-   ```
-
-2. Go to **"Experimental"** tab
-
-3. In **"Custom Plugin Repositories"**, click **"+"** and add:
-   ```
-   https://raw.githubusercontent.com/iarcanar/MBB_Dalamud/main/pluginmaster.json
-   ```
-
-4. Click **"Save and Close"**
-
-### Step 2: Install Plugin (1 minute)
-
-1. Open plugin installer:
-   ```
-   /xlplugins
-   ```
-
-2. Search for **"MBB Dalamud Bridge"**
-
-3. Click **"Install"**
-
-4. Wait for installation to complete
-
-### Step 3: Download Python App (1 minute)
-
-1. Go to [Releases Page](https://github.com/iarcanar/MBB_Dalamud/releases/latest)
-
-2. Download **`MBB_v1.0.0.zip`** (72 MB)
-
-3. Extract to any location (e.g., `C:\MBB\`)
-   - **Important:** Extract the entire folder, not just MBB.exe!
-
-### Step 4: Configure Plugin (2 minutes)
-
-1. In FFXIV, open MBB settings:
-   ```
-   /mbb
-   ```
-
-2. Click **"Browse"** and select **`MBB.exe`** from extracted folder
-
-3. Click **"Save Path"**
-
-4. Click **"Launch Python App"**
-
-### Step 5: Set API Key (1 minute)
-
-1. In the MBB Python app window, click **"Settings"**
-
-2. Paste your **Gemini API Key**
-
-3. Click **"Save"**
-
-4. Press **F9** to start translation
+1. Download and install [XIVLauncher](https://github.com/goatcorp/FFXIVQuickLauncher/releases/latest/download/XIVLauncher-win-Setup.exe)
+2. Download the MBB application (Python app executable)
+3. In Dalamud Plugin Settings, add the MBB custom repository URL
+4. Install "Magicite Babel Bridge" from the plugin installer
+5. Set the MBB application path in plugin settings
+6. Enter your Gemini API key on first launch -- ready to play!
 
 ---
 
-## 🎮 Usage
+## Development Setup
 
-### Basic Commands
+### Python App
 
-| Command | Description |
-|---------|-------------|
-| `/mbb` | Open main configuration window |
-| `/mbb launch` | Launch Python translation app |
-| `/mbb reload` | Reload plugin configuration |
-
-### Hotkeys (in Python App)
-
-| Key | Action |
-|-----|--------|
-| **F9** | Start/Stop translation |
-| **F10** | Clear translation screen |
-| **F11** | Toggle mini/full UI mode |
-
-### UI Controls
-
-- **START/STOP Button** - Control translation engine
-- **Settings** - Configure API key, themes, fonts
-- **NPC Manager** - Manage character database
-- **Themes** - 6 built-in themes (Cyberpunk, Ocean, Sunset, Forest, Royal, Rose)
-
----
-
-## 🔧 Troubleshooting
-
-### Plugin doesn't show in installer
-- Check that custom repository URL is correct
-- Click "Refresh" in plugin installer
-- Restart Dalamud (`/xlplugins` → close → reopen)
-
-### "MBB.exe not found" error
-- Open `/mbb` and set correct path to `MBB.exe`
-- Make sure you extracted the ZIP file
-- Check that path doesn't have special characters
-
-### Translation not working
-- Verify API key in Settings
-- Check that Python app is running (green tray icon)
-- Press F9 to start translation
-- Check internet connection
-
-### Python app crashes
-- Make sure you have .NET Runtime installed
-- Check antivirus isn't blocking MBB.exe
-- Run as administrator if needed
-
----
-
-## 📝 Features
-
-### Translation Engine
-- **Text Hook Architecture** - Direct game text extraction (no OCR)
-- **Gemini AI Integration** - Context-aware translation
-- **Character Database** - NPC personality and terminology tracking
-- **Translation Memory** - Caches translations for consistency
-
-### User Interface
-- **Auto-show/hide** - Appears only when needed
-- **Mini UI Mode** - Compact overlay during gameplay
-- **Full Control Panel** - Complete settings and management
-- **6 Theme Presets** - Customizable colors and styles
-- **Font Support** - Thai fonts (Tahoma, Anakotmai, Sarabun)
-
-### Developer Features
-- **Named Pipe Communication** - C# ↔ Python bridge
-- **Modular Architecture** - Easy to extend and customize
-- **Translation Logging** - Debug and quality monitoring
-- **Error Handling** - Graceful failure recovery
-
----
-
-## 🔄 Updates
-
-The plugin will auto-update through Dalamud when new versions are released.
-
-To manually check for updates:
-```
-/xlplugins → Installed Plugins → MBB Dalamud Bridge → Update
+```bash
+cd python-app
+pip install -r requirements.txt
+python MBB.py
 ```
 
----
+**Key dependencies:** PyQt6, Tkinter, google-generativeai, python-dotenv, Pillow
 
-## 📚 Documentation
+### Dalamud Plugin (C#)
 
-- [Installation Testing Guide](INSTALLATION_TESTING.md) - ⭐ Test installation steps
-- [Installation Guide](INSTALLATION.md)
-- [Build Protocol](BUILD_PROTOCOL.md)
-- [Starting Guide](STARTING_GUIDE.md)
-- [UI Troubleshooting](UI_TROUBLESHOOTING.md)
-- [Master Plan](MASTER_PLAN.md)
-- [Changelog](CHANGELOG.md) - Version history
+```bash
+cd dalamud-plugin/DalamudMBBBridge
+dotnet build
+```
 
----
-
-## 🐛 Bug Reports & Feature Requests
-
-Please report issues on [GitHub Issues](https://github.com/iarcanar/MBB_Dalamud/issues)
-
-When reporting bugs, include:
-- Plugin version (`/mbb` → About)
-- Python app version (shown in title bar)
-- Steps to reproduce
-- Error messages or screenshots
+**SDK:** Dalamud.NET.Sdk 14.0.1  |  **Target:** .NET 10.0 (win-x64)
 
 ---
 
-## 🤝 Contributing
+## API Key Security
 
-This project is open for contributions!
-
-Areas where help is needed:
-- Translation quality improvements
-- Additional language support
-- UI/UX enhancements
-- Bug fixes and optimizations
+- API keys are stored in `.env` (gitignored, never committed)
+- `.env.example` provides the template
+- `api_key_manager.py` handles first-run setup via UI dialog
+- **Never** hardcode API keys in source files
 
 ---
 
-## 📜 License
+## Background
 
-**MIT License**
+The Python translation application (everything under `python-app/`) is an original work built from the ground up. The project started as an OCR-based screen capture translator and evolved into the current architecture using Dalamud's text hook system for direct text extraction -- eliminating the need for screenshot-based OCR entirely.
+
+---
+
+## Acknowledgments
+
+- **[Echoglossian](https://github.com/kelvin124124/Echoglossian)** -- FFXIV real-time translation plugin. MBB's C# Dalamud plugin component draws inspiration from Echoglossian's approach to hooking into the game's chat event system via Dalamud services.
+
+- **[XIVLauncher / Dalamud](https://github.com/goatcorp/FFXIVQuickLauncher)** -- The custom game launcher and plugin framework that makes this project possible. Provides the plugin API, text hook services (`IChatGui`, `IClientState`), and the custom repository system.
+
+- **[Google Gemini](https://ai.google.dev/)** -- AI model powering the translation engine (Gemini 2.0 Flash).
+
+---
+
+## License
+
+MIT License
 
 Copyright (c) 2026 iarcanar
 
@@ -224,27 +179,5 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
-## 🙏 Acknowledgments
-
-- **Dalamud Team** - For the amazing plugin framework
-- **Google Gemini AI** - For powerful translation capabilities
-- **FFXIV Community** - For testing and feedback
-- **Thai Localizers** - For translation quality insights
-
----
-
-## 📞 Contact
-
-- **Developer:** iarcanar
-- **Repository:** https://github.com/iarcanar/MBB_Dalamud
-- **Issues:** https://github.com/iarcanar/MBB_Dalamud/issues
-
----
-
-**Version:** 1.0.0
-**Last Updated:** January 23, 2026
+**Developed by** [iarcanar](https://github.com/iarcanar)
 **Framework:** Dalamud Plugin + Python + Gemini AI
-
----
-
-**Enjoy real-time Thai translation in FFXIV! 🎮✨**

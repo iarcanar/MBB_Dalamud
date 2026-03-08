@@ -9,26 +9,15 @@ from datetime import datetime
 from npc_file_utils import get_npc_file_path
 from npc_file_utils import get_game_info_from_npc_file
 from asset_manager import AssetManager
-from dialogue_simulator import DialogueSimulator
+
 
 # Removed PyQt5 and swap_data imports - already available in main MBB
 
-# Hover effect colors
-CARD_NORMAL_BG = "#252525"
-CARD_HOVER_BG = "#90EE90"  # สีเขียว (จะใช้ใน rectangle แทน canvas bg)
-CARD_HOVER_BG_SEMI = "#4A6B4A"  # สีเขียวโปร่งใส 40% (blend กับ #252525)
-CARD_HOVER_TEXT = "#FFFFFF"  # ข้อความสีขาว
-CARD_HOVER_TEXT_BG = "#2D2D2D"  # พื้นหลังข้อความสีเทาเข้ม (100% opacity)
-
-
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, relative_path)
+# Card colors
+CARD_NORMAL_BG = "#1a1a1a"
+CARD_HOVER_BG = "#222222"  # พื้นหลังเมื่อ hover (สว่างขึ้นเล็กน้อย)
+CARD_NORMAL_BORDER = "#2a2a2a"
+CARD_HOVER_BORDER = "#007AFF"  # accent blue border เมื่อ hover
 
 
 # ลองนำเข้า logging manager หากมี
@@ -86,8 +75,8 @@ class CardView:
         # สร้าง frame สำหรับการ์ด
         self.card_frame = tk.Frame(
             parent,
-            bg="#252525",
-            highlightbackground="#2D2D2D",
+            bg=CARD_NORMAL_BG,
+            highlightbackground=CARD_NORMAL_BORDER,
             highlightthickness=1,
         )
 
@@ -98,8 +87,8 @@ class CardView:
         # สร้าง UI สำหรับการ์ด
         self._create_card_ui()
 
-        # ✅ เพิ่ม hover effect overlay
-        self._create_hover_overlay()
+        # hover effect — border highlight + bg lighten (detail_mode เท่านั้น)
+        self._setup_card_hover()
 
     def _create_card_ui(self):
         """สร้าง UI สำหรับการ์ด (ย้ายปุ่ม Role Link ลงล่าง, ตัดคำชื่อ)"""
@@ -124,17 +113,17 @@ class CardView:
 
         # --- Frame บนสุด (Title, Gender Tag) ---
         # ไม่ต้องมีปุ่ม Role Link ที่นี่แล้ว
-        top_frame = tk.Frame(self.card_frame, bg="#252525")
+        top_frame = tk.Frame(self.card_frame, bg="#1a1a1a")
         top_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
         top_frame.grid_columnconfigure(0, weight=1)  # ให้ชื่อขยายได้
 
         # --- Frame เนื้อหาตรงกลาง ---
-        self.content_frame = tk.Frame(self.card_frame, bg="#252525")
+        self.content_frame = tk.Frame(self.card_frame, bg="#1a1a1a")
         self.content_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         self.content_frame.grid_columnconfigure(0, weight=1)
 
         # --- Frame ปุ่มด้านล่าง ---
-        button_frame = tk.Frame(self.card_frame, bg="#252525")
+        button_frame = tk.Frame(self.card_frame, bg="#1a1a1a")
         button_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=(5, 10))
         # กำหนดคอลัมน์สำหรับปุ่ม: Edit ซ้ายสุด, Role กลาง (ถ้ามี), Delete ขวาสุด
         button_frame.grid_columnconfigure(0, weight=1)  # Edit
@@ -164,7 +153,7 @@ class CardView:
                 top_frame,
                 text=name,
                 font=font_lg_bold,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 anchor="w",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
@@ -191,7 +180,7 @@ class CardView:
                 top_frame,
                 text=self.data.get("name", ""),
                 font=font_lg_bold,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 anchor="w",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
@@ -205,7 +194,7 @@ class CardView:
                 top_frame,
                 text=self.data.get("key", ""),
                 font=font_lg_bold,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 anchor="w",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
@@ -216,14 +205,14 @@ class CardView:
         # --- แสดงข้อมูลส่วนเนื้อหา (ใน self.content_frame) ---
         if self.section_type == "main_characters":
             role_label = tk.Label(
-                self.content_frame, text="Role:", font=font_md, bg="#252525", fg="#ABABAB"
+                self.content_frame, text="Role:", font=font_md, bg="#1a1a1a", fg="#888888"
             )
             role_label.grid(row=0, column=0, sticky="w", pady=(5, 0))
             role_value = tk.Label(
                 self.content_frame,
                 text=self.data.get("role", ""),
                 font=font_md,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
                 justify="left",
@@ -233,15 +222,15 @@ class CardView:
                 self.content_frame,
                 text="Relationship:",
                 font=font_md,
-                bg="#252525",
-                fg="#ABABAB",
+                bg="#1a1a1a",
+                fg="#888888",
             )
             rel_label.grid(row=2, column=0, sticky="w", pady=(10, 0))
             rel_value = tk.Label(
                 self.content_frame,
                 text=self.data.get("relationship", ""),
                 font=font_md,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
                 justify="left",
@@ -249,14 +238,14 @@ class CardView:
             rel_value.grid(row=3, column=0, sticky="w")
         elif self.section_type == "npcs":
             role_label = tk.Label(
-                self.content_frame, text="Role:", font=font_md, bg="#252525", fg="#ABABAB"
+                self.content_frame, text="Role:", font=font_md, bg="#1a1a1a", fg="#888888"
             )
             role_label.grid(row=0, column=0, sticky="w", pady=(5, 0))
             role_value = tk.Label(
                 self.content_frame,
                 text=self.data.get("role", ""),
                 font=font_md,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
                 justify="left",
@@ -266,22 +255,22 @@ class CardView:
                 self.content_frame,
                 text="Description:",
                 font=font_md,
-                bg="#252525",
-                fg="#ABABAB",
+                bg="#1a1a1a",
+                fg="#888888",
             )
             desc_label.grid(row=2, column=0, sticky="w", pady=(10, 0))
             desc_value = tk.Label(
                 self.content_frame,
                 text=self.data.get("description", ""),
                 font=font_md,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 wraplength=350,
                 justify="left",
             )
             desc_value.grid(row=3, column=0, sticky="w")
         elif self.section_type in ["lore", "character_roles", "word_fixes"]:
-            separator = tk.Frame(self.content_frame, height=1, bg="#3D3D3D")
+            separator = tk.Frame(self.content_frame, height=1, bg="#2a2a2a")
             separator.grid(
                 row=0, column=0, sticky="ew", pady=5
             )  # ลด pady ของ separator
@@ -289,7 +278,7 @@ class CardView:
                 self.content_frame,
                 text=self.data.get("value", ""),
                 font=font_md,
-                bg="#252525",
+                bg="#1a1a1a",
                 fg="#FFFFFF",
                 wraplength=wraplength,  # ใช้ค่า wraplength ที่ปรับตาม detail_mode
                 justify="left",
@@ -302,7 +291,7 @@ class CardView:
             button_frame,
             text="Edit",
             font=(font_xs if self.detail_mode else font_sm),
-            bg="#2D2D2D",
+            bg="#222222",
             fg="#FFFFFF",
             bd=0,
             relief="flat",
@@ -318,7 +307,7 @@ class CardView:
                 button_frame,
                 text="Copy",
                 font=(font_xs if self.detail_mode else font_sm),
-                bg="#2D2D2D",
+                bg="#222222",
                 fg="#FFFFFF",
                 bd=0,
                 relief="flat",
@@ -337,14 +326,14 @@ class CardView:
             # Hover effects for Copy button
             copy_btn.bind(
                 "<Enter>",
-                lambda e, b=copy_btn, c="#3D3D3D": (
+                lambda e, b=copy_btn, c="#2a2a2a": (
                     b.configure(bg=c) if b.winfo_exists() else None
                 ),
             )
             copy_btn.bind(
                 "<Leave>",
                 lambda e, b=copy_btn: (
-                    b.configure(bg="#2D2D2D") if b.winfo_exists() else None
+                    b.configure(bg="#222222") if b.winfo_exists() else None
                 ),
             )
 
@@ -398,7 +387,7 @@ class CardView:
             button_frame,
             text="Delete",
             font=(font_xs if self.detail_mode else font_sm),
-            bg="#2D2D2D",
+            bg="#222222",
             fg="#FF3B30",
             bd=0,
             relief="flat",
@@ -409,7 +398,7 @@ class CardView:
         delete_btn.grid(row=0, column=delete_column, sticky="e", padx=(5, 0))
 
         # Hover effects for Edit/Delete buttons
-        for btn, hover_color in [(edit_btn, "#3D3D3D"), (delete_btn, "#3D3D3D")]:
+        for btn, hover_color in [(edit_btn, "#2a2a2a"), (delete_btn, "#2a2a2a")]:
             btn.bind(
                 "<Enter>",
                 lambda e, b=btn, c=hover_color: (
@@ -419,7 +408,7 @@ class CardView:
             btn.bind(
                 "<Leave>",
                 lambda e, b=btn: (
-                    b.configure(bg="#2D2D2D") if b.winfo_exists() else None
+                    b.configure(bg="#222222") if b.winfo_exists() else None
                 ),
             )
 
@@ -509,207 +498,86 @@ class CardView:
         """ส่งคืน frame ของการ์ด"""
         return self.card_frame
 
-    def _create_hover_overlay(self):
-        """สร้าง canvas overlay สำหรับ hover effect (เฉพาะ detail_mode=True)"""
+    def _setup_card_hover(self):
+        """ตั้งค่า hover effect สำหรับ detail_mode — border highlight + bg lighten"""
+        if not self.detail_mode:
+            return
+
+        self._hover_active = False
+        self._all_bg_widgets = []
+
+        # รวบรวม widgets ทั้งหมดที่มี bg ต้องเปลี่ยนเมื่อ hover
+        self._collect_bg_widgets(self.card_frame)
+
+        # Bind Enter/Leave บน card_frame และ children ทั้งหมด
+        self._bind_hover_recursive(self.card_frame)
+
+    def _collect_bg_widgets(self, parent):
+        """รวบรวม widgets ที่ใช้ bg สีเดียวกับการ์ด"""
         try:
-            # ✅ ทำ hover effect เฉพาะเมื่อเป็น detail panel (ด้านขวา) เท่านั้น
-            if not self.detail_mode:
-                return
-
-            # สร้าง flag ป้องกัน hover loop
-            self._hover_visible = False
-
-            # ✅ FIX v4: สร้าง canvas โปร่งใสแทนที่จะใช้สีเขียวเต็ม
-            self.hover_canvas = tk.Canvas(
-                self.content_frame,
-                bg=CARD_NORMAL_BG,  # ใช้สีเดียวกับ background
-                highlightthickness=0,
-                cursor="hand2"  # เปลี่ยน cursor เป็นมือ
-            )
-
-            # ✅ FIX v4: ไม่ place canvas ตั้งแต่ตอนสร้าง - ซ่อนไว้จนกว่าจะ hover
-            # Canvas จะถูก place เมื่อ hover เท่านั้น
-
-            # ✅ สร้างพื้นหลังสีเขียวโปร่งใส 40% (ซ่อนไว้นอกจอ)
-            self.hover_rect_id = self.hover_canvas.create_rectangle(
-                -1000, -1000, -999, -999,  # ซ่อนนอกจอ - จะ update ขนาดใน event
-                fill=CARD_HOVER_BG_SEMI,  # สีเขียวโปร่งใส 40%
-                outline=""  # ไม่มีกรอบ
-            )
-
-            # ✅ สร้างพื้นหลังสำหรับข้อความ (ซ่อนไว้นอกจอ)
-            self.hover_text_bg_id = self.hover_canvas.create_rectangle(
-                -1000, -1000, -999, -999,  # ซ่อนนอกจอ - จะ update ขนาดใน event
-                fill=CARD_HOVER_TEXT_BG,
-                outline=""
-            )
-
-            # ✅ สร้างข้อความ "คลิกเพื่อแก้ไข" (ซ่อนไว้นอกจอ)
-            self.hover_text_id = self.hover_canvas.create_text(
-                -1000, -1000,  # ซ่อนนอกจอ - จะ update position ใน event
-                text="คลิกเพื่อแก้ไข",
-                font=("Bai Jamjuree", 16, "bold"),
-                fill=CARD_HOVER_TEXT,
-                anchor="center"  # ✅ จัดกึ่งกลาง
-            )
-
-            # Bind events
-            self._setup_hover_events()
-
-        except Exception as e:
-            # Silently fail if hover effect cannot be created
+            bg = str(parent.cget("bg")).lower() if hasattr(parent, "cget") else ""
+            if bg == CARD_NORMAL_BG:
+                self._all_bg_widgets.append(parent)
+            for child in parent.winfo_children():
+                self._collect_bg_widgets(child)
+        except Exception:
             pass
 
-    def _setup_hover_events(self):
-        """ผูก events สำหรับ hover effect"""
+    def _bind_hover_recursive(self, widget):
+        """Bind hover events บน widget และ children ทั้งหมด"""
         try:
-            # Bind ทั้ง content_frame และ labels ทั้งหมด
-            widgets_to_bind = [self.content_frame]
-
-            # เพิ่ม labels ทั้งหมดใน content_frame ด้วย (ยกเว้น hover_canvas)
-            for widget in self.content_frame.winfo_children():
-                if widget != self.hover_canvas:
-                    widgets_to_bind.append(widget)
-
-            # ✅ FIX v3: Bind Enter/Leave events เพื่อแสดง/ซ่อน hover effect
-            # ไม่ bind <Button-1> เพราะมี binding อยู่แล้วใน _create_card_ui()
-            for widget in widgets_to_bind:
-                widget.bind("<Enter>", self._on_hover_enter, add="+")
-                widget.bind("<Leave>", self._on_hover_leave, add="+")
-
-            # ✅ Bind canvas เอง เพื่อให้ hover ยังคงแสดงเมื่อ mouse อยู่บน canvas
-            self.hover_canvas.bind("<Leave>", self._on_hover_leave, add="+")
-            self.hover_canvas.bind("<Button-1>", lambda e: self._trigger_edit())
-
-        except Exception as e:
-            # Silently fail if event binding fails
+            widget.bind("<Enter>", self._on_card_hover_enter, add="+")
+            widget.bind("<Leave>", self._on_card_hover_leave, add="+")
+            for child in widget.winfo_children():
+                self._bind_hover_recursive(child)
+        except Exception:
             pass
 
-    def _on_hover_enter(self, event):
-        """เมื่อ mouse เข้าพื้นที่"""
+    def _on_card_hover_enter(self, event):
+        """เมื่อ mouse เข้าพื้นที่การ์ด — เปลี่ยน border + bg"""
+        if self._hover_active:
+            return
+        self._hover_active = True
         try:
-            print(f"[HOVER DEBUG] _on_hover_enter() called! _hover_visible={self._hover_visible}")
-
-            # ป้องกัน redundant calls
-            if self._hover_visible:
-                print("[HOVER DEBUG] Already visible, skipping")
-                return
-
-            # ✅ FIX v6: แสดง canvas ด้วย place (canvas จะอยู่ด้านบนอัตโนมัติเพราะถูก place หลังสุด)
-            self.hover_canvas.place(x=0, y=0, relwidth=1, relheight=1)
-            # ไม่ต้อง lift() หรือ tkraise() - Canvas ไม่รองรับ method นี้
-            self._hover_visible = True
-            print("[HOVER DEBUG] Canvas placed, scheduling update in 50ms")
-
-            # ✅ FIX v6: เพิ่ม delay เป็น 50ms เพื่อให้ canvas render เสร็จก่อน
-            self.content_frame.after(50, self._update_hover_text_position)
-        except Exception as e:
-            print(f"[HOVER DEBUG] ERROR in _on_hover_enter: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def _on_hover_leave(self, event):
-        """เมื่อ mouse ออกจากพื้นที่"""
-        try:
-            # ตรวจสอบว่า hover กำลังแสดงอยู่หรือไม่
-            if not self._hover_visible:
-                return
-
-            # ✅ FIX v6: ไม่ใช้ delay - ซ่อนทันที
-            self._check_and_hide_hover()
-        except Exception as e:
+            self.card_frame.configure(
+                highlightbackground=CARD_HOVER_BORDER,
+                highlightthickness=2,
+                cursor="hand2",
+            )
+            for w in self._all_bg_widgets:
+                try:
+                    w.configure(bg=CARD_HOVER_BG)
+                except Exception:
+                    pass
+        except Exception:
             pass
 
-    def _check_and_hide_hover(self):
-        """ตรวจสอบและซ่อน hover canvas ถ้า mouse ออกจาก content_frame จริงๆ"""
+    def _on_card_hover_leave(self, event):
+        """เมื่อ mouse ออกจากการ์ด — คืนค่าเดิม"""
+        if not self._hover_active:
+            return
+        # ตรวจสอบว่า mouse ออกจาก card_frame จริงๆ
         try:
-            if not self._hover_visible:
-                return
-
-            # ตรวจสอบว่า mouse ยังอยู่ใน content_frame หรือไม่
-            x, y = self.content_frame.winfo_pointerxy()
-            widget = self.content_frame.winfo_containing(x, y)
-
-            # ✅ FIX v3: ถ้า mouse ออกจาก content_frame → ซ่อน canvas ด้วย place_forget
-            if widget is None or not self._is_child_of(widget, self.content_frame):
-                self.hover_canvas.place_forget()
-                self._hover_visible = False
-        except Exception as e:
+            x, y = self.card_frame.winfo_pointerxy()
+            widget = self.card_frame.winfo_containing(x, y)
+            if widget is not None and self._is_child_of(widget, self.card_frame):
+                return  # ยังอยู่ใน card
+        except Exception:
             pass
 
-
-    def _update_hover_text_position(self):
-        """อัพเดทตำแหน่งข้อความและพื้นหลังให้อยู่ตรงกลาง"""
+        self._hover_active = False
         try:
-            print("[HOVER DEBUG] _update_hover_text_position() called!")
-
-            # ตรวจสอบว่า canvas ยังแสดงอยู่หรือไม่
-            if not self._hover_visible:
-                print("[HOVER DEBUG] Skipping - _hover_visible is False")
-                return
-
-            print("[HOVER DEBUG] Proceeding with update...")
-
-            # ✅ OPTION 1: บังคับ update geometry ทั้ง content_frame และ canvas
-            self.content_frame.update_idletasks()
-            self.hover_canvas.update_idletasks()
-
-            # ✅ OPTION 1: ใช้ขนาดจาก content_frame (parent ของ canvas)
-            canvas_width = self.content_frame.winfo_width()
-            canvas_height = self.content_frame.winfo_height()
-
-            # DEBUG: แสดงค่า geometry
-            print(f"[HOVER DEBUG] content_frame: {canvas_width}x{canvas_height}")
-            print(f"[HOVER DEBUG] canvas actual: {self.hover_canvas.winfo_width()}x{self.hover_canvas.winfo_height()}")
-
-            # ป้องกันการหารด้วย 0 และขนาดที่ไม่สมเหตุสมผล
-            if canvas_width > 50 and canvas_height > 50:
-                print(f"[HOVER DEBUG] Validation passed! Updating rectangle...")
-            else:
-                print(f"[HOVER DEBUG] Validation FAILED! Size too small: {canvas_width}x{canvas_height}")
-                return
-
-            if canvas_width > 50 and canvas_height > 50:
-                center_x = canvas_width / 2
-                center_y = canvas_height / 2
-
-                # ✅ Update พื้นหลังสีเขียวโปร่งใสให้เต็ม canvas
-                self.hover_canvas.coords(
-                    self.hover_rect_id,
-                    0, 0,
-                    canvas_width, canvas_height
-                )
-
-                # ✅ FIX v6: Update ตำแหน่งข้อความให้อยู่กึ่งกลาง
-                self.hover_canvas.coords(self.hover_text_id, center_x, center_y)
-
-                # ✅ FIX v6: คำนวณขนาดพื้นหลังข้อความ (หลังจาก update ตำแหน่งแล้ว)
-                text_bbox = self.hover_canvas.bbox(self.hover_text_id)
-                if text_bbox:
-                    # เพิ่ม padding รอบข้อความ
-                    padding_x = 20
-                    padding_y = 12
-
-                    bg_x1 = text_bbox[0] - padding_x
-                    bg_y1 = text_bbox[1] - padding_y
-                    bg_x2 = text_bbox[2] + padding_x
-                    bg_y2 = text_bbox[3] + padding_y
-
-                    # Update พื้นหลังข้อความ
-                    self.hover_canvas.coords(self.hover_text_bg_id, bg_x1, bg_y1, bg_x2, bg_y2)
-                else:
-                    # ถ้าวัดไม่ได้ ใช้ค่าประมาณ
-                    self.hover_canvas.coords(
-                        self.hover_text_bg_id,
-                        center_x - 100, center_y - 25,
-                        center_x + 100, center_y + 25
-                    )
-
-                # ✅ FIX v6: ยก text_bg และ text ขึ้นมาบนสุด
-                self.hover_canvas.tag_raise(self.hover_text_bg_id)
-                self.hover_canvas.tag_raise(self.hover_text_id)
-
-        except Exception as e:
+            self.card_frame.configure(
+                highlightbackground=CARD_NORMAL_BORDER,
+                highlightthickness=1,
+                cursor="",
+            )
+            for w in self._all_bg_widgets:
+                try:
+                    w.configure(bg=CARD_NORMAL_BG)
+                except Exception:
+                    pass
+        except Exception:
             pass
 
     def _trigger_edit(self):
@@ -769,7 +637,15 @@ class NPCManagerCard:
         self.current_game_info = get_game_info_from_npc_file()
 
         # กำหนดค่าเริ่มต้น - *** ลดขนาดฟอนต์เป็น 80% (จาก 24 เป็น 19) ***
-        self.font = "Bai Jamjuree Light"
+        # ใช้ Anuphan เป็นฟอนต์หลัก (รองรับภาษาไทย, bundled ใน fonts/)
+        # fallback เป็น Segoe UI ถ้า Anuphan ไม่พร้อมใช้งาน
+        self.font = "Anuphan"
+        try:
+            test_font = font.Font(root=self.parent, family="Anuphan", size=12)
+            if test_font.actual()["family"].lower() != "anuphan":
+                self.font = "Segoe UI"
+        except Exception:
+            self.font = "Segoe UI"
         self.font_size = 19  # ลดจาก 24 เป็น 19 (80%)
         # ขนาดฟอนต์สำหรับส่วนประกอบย่อยต่างๆ (คำนวณจาก 19)
         self.font_size_large_bold = 17  # ลดจาก 21 เป็น 17
@@ -838,18 +714,27 @@ class NPCManagerCard:
 
         # สร้างหน้าต่าง
         self.window = tk.Toplevel(parent)
-        self.window.title("NPC Manager v2.0")
+        self.window.title("NPC Manager")
         self.window.protocol("WM_DELETE_WINDOW", self.hide_window)
 
         # *** ปรับขนาดหน้าต่างเริ่มต้น (ลดเป็น 80% แล้วเพิ่มความสูง 100px) ***
-        default_width = 880  # ลดจาก 1100 เป็น 880
-        default_height = 772  # ลดจาก 840 เป็น 672 แล้วเพิ่ม 100px เป็น 772
+        default_width = 940
+        default_height = 820
 
-        # คำนวณตำแหน่งกลางจอ
-        screen_width = parent.winfo_screenwidth()
-        screen_height = parent.winfo_screenheight()
-        x = (screen_width - default_width) // 2
-        y = (screen_height - default_height) // 2
+        # คำนวณตำแหน่งเริ่มต้น (ทางขวาของ MBB main window)
+        x, y = 0, 0
+        try:
+            if parent_app and hasattr(parent_app, "_get_mbb_geometry"):
+                mx, my, mw, mh = parent_app._get_mbb_geometry()
+                x = mx + mw + 10
+                y = my
+            else:
+                screen_width = parent.winfo_screenwidth()
+                screen_height = parent.winfo_screenheight()
+                x = (screen_width - default_width) // 2
+                y = (screen_height - default_height) // 2
+        except Exception:
+            pass
 
         # ตั้งค่าขนาดและตำแหน่ง
         self.window.withdraw()
@@ -861,19 +746,24 @@ class NPCManagerCard:
         # การใช้ overrideredirect(True) อาจทำให้การจัดการ focus ยากขึ้น
         # ลองทดสอบกับ False ถ้ายังเจอปัญหา focus แปลกๆ
         self.window.overrideredirect(True)
-        self.window.transient(parent)  # ทำให้สัมพันธ์กับ parent แต่ไม่จำเป็นต้องอยู่บนสุดเสมอไป
+        # Only set transient when parent is visible (withdrawn parent causes display issues)
+        try:
+            if parent.winfo_viewable():
+                self.window.transient(parent)
+        except Exception:
+            pass  # Skip transient if parent state can't be determined
 
         # กำหนดสไตล์ (เหมือนเดิม)
         self.style = {
-            "bg_primary": "#1E1E1E",
-            "bg_secondary": "#252525",
-            "bg_tertiary": "#2D2D2D",
+            "bg_primary": "#141414",
+            "bg_secondary": "#1a1a1a",
+            "bg_tertiary": "#222222",
             "accent": "#007AFF",
             "accent_hover": "#0A84FF",
-            "text_primary": "#FFFFFF",
-            "text_secondary": "#ABABAB",
-            "error": "#FF3B30",
-            "success": "#34C759",
+            "text_primary": "#e0e0e0",
+            "text_secondary": "#888888",
+            "error": "#cc4444",
+            "success": "#4CAF50",
             "warning": "#FF9500",
             "info": "#3498DB",
         }
@@ -939,179 +829,126 @@ class NPCManagerCard:
         # สร้างแถบสถานะ (เหมือนเดิม)
         self._create_status_bar()
 
-        # --- *** ลบ *** การผูก Event การลากกับหน้าต่างหลัก ---
-        # self.window.bind("<Button-1>", self._start_move)
-        # self.window.bind("<B1-Motion>", self._do_move)
+        # มุมโค้ง (ใช้ after เพื่อรอ window geometry update)
+        self.window.after(100, self._apply_rounded_corners)
         # --- จบการลบ ---
 
     def _create_title_bar(self):
-        """สร้างแถบหัวเรื่องแบบกำหนดเอง (เพิ่ม event ลากกลับเข้ามา)"""
-        # สร้าง frame สำหรับแถบหัวเรื่อง
-        self.title_bar = tk.Frame(
-            self.window,
-            bg=self.style["bg_primary"],
-            height=48,
-            cursor="fleur",  # ลดจาก 60 เป็น 48
-        )  # เพิ่ม cursor fleur
-        self.title_bar.pack(fill="x", side="top")
-        self.title_bar.pack_propagate(False)
+        """สร้างแถบหัวเรื่อง — แยกเป็น 2 แถว: header + section tabs"""
+        bg = self.style["bg_primary"]
 
-        # --- *** เพิ่ม *** การผูก Event การลากกับ title_bar ---
+        # ====== ROW 1: Header — Title (left) + Pin/Close (right) ======
+        self.title_bar = tk.Frame(self.window, bg=bg, height=44, cursor="fleur")
+        self.title_bar.pack(fill="x", side="top", padx=8, pady=(8, 0))
+        self.title_bar.pack_propagate(False)
         self.title_bar.bind("<Button-1>", self._start_move)
         self.title_bar.bind("<B1-Motion>", self._do_move)
-        # --- จบการเพิ่ม ---
 
-        # Frame สำหรับข้อความหัวเรื่องด้านซ้าย
-        title_frame = tk.Frame(self.title_bar, bg=self.style["bg_primary"])
-        title_frame.place(relx=0.01, rely=0.5, anchor="w")
-        # ผูก event ลากกับ frame นี้ด้วย เพื่อให้คลิกที่ว่างๆ ข้าง title ได้
-        title_frame.bind("<Button-1>", self._start_move)
-        title_frame.bind("<B1-Motion>", self._do_move)
+        # -- Title text (left) --
+        title_text_frame = tk.Frame(self.title_bar, bg=bg)
+        title_text_frame.pack(side="left", padx=(8, 0))
+        for w in [title_text_frame]:
+            w.bind("<Button-1>", self._start_move)
+            w.bind("<B1-Motion>", self._do_move)
 
         self.title_label = tk.Label(
-            title_frame,
-            text="NPC Manager v2.0",
-            bg=self.style["bg_primary"],
+            title_text_frame, text="NPC Manager", bg=bg,
             fg=self.style["text_primary"],
             font=(self.font, self.font_size_large_bold),
-            cursor="fleur",  # เพิ่ม cursor fleur
+            cursor="fleur",
         )
         self.title_label.pack(side="left")
-        # --- *** เพิ่ม *** การผูก Event การลากกับ Label ด้วย ---
         self.title_label.bind("<Button-1>", self._start_move)
         self.title_label.bind("<B1-Motion>", self._do_move)
-        # --- จบการเพิ่ม ---
 
-        # ปุ่มเลือก section ตรงกลาง (เหมือนเดิม)
-        self.sections_frame = tk.Frame(self.title_bar, bg=self.style["bg_primary"])
-        self.sections_frame.place(relx=0.5, rely=0.5, anchor="center")
-        self._create_section_buttons()  # สร้างปุ่ม
-
-        # Frame ปุ่มควบคุมด้านขวา (รวมปุ่มปิดด้วย)
-        controls_frame = tk.Frame(self.title_bar, bg=self.style["bg_primary"])
-        controls_frame.place(relx=1.0, rely=0.5, anchor="e")  # กลับไปชิดขวาสุด
-
-        # เพิ่มปุ่ม Reset UI - ใส่ก่อนปุ่ม pin
-        reset_btn_size = 24
-        self.reset_button = tk.Button(
-            controls_frame,
-            text="⟳",  # สัญลักษณ์รีเฟรช
-            bg=self.style["bg_primary"],
-            fg="#AAAAAA",  # สีเทา
-            font=(self.font, 12),
-            bd=0,
-            relief="flat",
-            highlightthickness=0,
-            padx=5,
-            command=self.reset_ui_state,
-            cursor="hand2",
+        self.title_sub_label = tk.Label(
+            title_text_frame, text="ฐานข้อมูลตัวละคร", bg=bg,
+            fg=self.style["text_secondary"],
+            font=(self.font, self.font_size_xsmall),
+            cursor="fleur",
         )
-        self.reset_button.pack(side="right", padx=2)  # ลด padding
-        # ผูก hover effect
-        self.reset_button.bind(
-            "<Enter>",
-            lambda e: (
-                self.reset_button.config(fg="#FF9500")
-                if self.reset_button.winfo_exists()
-                else None
-            ),
-        )
-        self.reset_button.bind(
-            "<Leave>",
-            lambda e: (
-                self.reset_button.config(fg="#AAAAAA")
-                if self.reset_button.winfo_exists()
-                else None
-            ),
-        )
+        self.title_sub_label.pack(side="left", padx=(10, 0), pady=(4, 0))
+        self.title_sub_label.bind("<Button-1>", self._start_move)
+        self.title_sub_label.bind("<B1-Motion>", self._do_move)
 
-        # ปุ่ม PIN ปักหมุด (อยู่ขวาสุด)
+        # -- Controls (right): Close > Pin --
+        controls_frame = tk.Frame(self.title_bar, bg=bg)
+        controls_frame.pack(side="right", padx=(0, 4))
+
         pin_btn_size = 24
-        self.pin_button = tk.Canvas(
-            controls_frame,
-            width=pin_btn_size,
-            height=pin_btn_size,
-            bg=self.style["bg_primary"],
-            highlightthickness=0,
-            cursor="hand2",
+        self.close_button = tk.Button(
+            controls_frame, text="×", font=(self.font, 14, "bold"),
+            width=3, bg=bg, fg="#AAAAAA", bd=0, relief="flat",
+            pady=2, cursor="hand2", command=self.hide_window,
         )
-        self.pin_button.pack(side="right", padx=2)  # ลด padding
-        # ... (โค้ดโหลดไอคอนและผูก event ปุ่ม pin เหมือนเดิม) ...
+        self.close_button.pack(side="right", padx=(0, 2))
+        self.close_button.bind(
+            "<Enter>", lambda e: (
+                self.close_button.config(bg="#FF3B30", fg="white")
+                if self.close_button.winfo_exists() else None),
+        )
+        self.close_button.bind(
+            "<Leave>", lambda e: (
+                self.close_button.config(bg=bg, fg="#AAAAAA")
+                if self.close_button.winfo_exists() else None),
+        )
+
+        self.pin_button = tk.Canvas(
+            controls_frame, width=pin_btn_size, height=pin_btn_size,
+            bg=bg, highlightthickness=0, cursor="hand2",
+        )
+        self.pin_button.pack(side="right", padx=(0, 6))
         try:
             self.pin_image = self._load_icon("pin.png", pin_btn_size)
             self.unpin_image = self._load_icon("unpin.png", pin_btn_size)
             if self.pin_image and self.unpin_image:
                 self.pin_icon = self.pin_button.create_image(
-                    pin_btn_size // 2,
-                    pin_btn_size // 2,
+                    pin_btn_size // 2, pin_btn_size // 2,
                     image=(self.pin_image if self.is_topmost else self.unpin_image),
                 )
             else:
                 raise ValueError("Pin/Unpin icons not loaded")
         except Exception as e:
-            self.logging_manager.log_error(
-                f"Error loading pin icons or creating image: {e}"
-            )
+            self.logging_manager.log_error(f"Error loading pin icons: {e}")
             self.pin_icon = self.pin_button.create_oval(
-                2,
-                2,
-                pin_btn_size - 2,
-                pin_btn_size - 2,
-                fill=("#FF9500" if self.is_topmost else "#AAAAAA"),
-                outline="",
+                2, 2, pin_btn_size - 2, pin_btn_size - 2,
+                fill=("#FF9500" if self.is_topmost else "#AAAAAA"), outline="",
             )
         self.pin_button.bind("<Button-1>", lambda e: self._toggle_topmost())
         self.pin_button.bind(
-            "<Enter>",
-            lambda e: (
+            "<Enter>", lambda e: (
                 self._highlight_button(self.pin_button)
-                if self.pin_button.winfo_exists()
-                else None
-            ),
+                if self.pin_button.winfo_exists() else None),
         )
         self.pin_button.bind(
-            "<Leave>",
-            lambda e: (
+            "<Leave>", lambda e: (
                 self._unhighlight_button(self.pin_button)
-                if self.pin_button.winfo_exists()
-                else None
-            ),
+                if self.pin_button.winfo_exists() else None),
         )
 
-        # สร้างปุ่มปิดแบบ X (ปุ่มขวาสุดใน controls_frame)
-        self.close_button = tk.Button(
-            controls_frame,  # กลับมาอยู่ใน controls_frame
-            text="×",  # สัญลักษณ์ X
-            font=(self.font, 16, "bold"),  # ขนาดฟอนต์ใหญ่หน่อยสำหรับ X
-            bg=self.style["bg_primary"],
-            fg="#AAAAAA",  # สีเทาอ่อน
-            bd=0,
-            relief="flat",
-            padx=8,
-            pady=4,
-            cursor="hand2",
-            command=self.hide_window,
-        )
-        # pack เป็นปุ่มขวาสุด (padding เล็กน้อยเพื่อไม่ให้ชิดขอบมาก)
-        self.close_button.pack(side="right", padx=(2, 5))
+        # ====== Divider ======
+        tk.Frame(self.window, bg=self.style["bg_tertiary"], height=1).pack(
+            fill="x", padx=16, pady=(4, 0))
 
-        # เพิ่ม hover effect สีแดงเป็นพื้นหลัง
-        self.close_button.bind(
-            "<Enter>",
-            lambda e: (
-                self.close_button.config(bg="#FF3B30", fg="white")
-                if self.close_button.winfo_exists()
-                else None
-            ),
-        )
-        self.close_button.bind(
-            "<Leave>",
-            lambda e: (
-                self.close_button.config(bg=self.style["bg_primary"], fg="#AAAAAA")
-                if self.close_button.winfo_exists()
-                else None
-            ),
-        )
+        # ====== ROW 2: Section tabs — centered, full width ======
+        self.sections_frame = tk.Frame(self.window, bg=bg)
+        self.sections_frame.pack(fill="x", side="top", padx=12, pady=(6, 2))
+        self._create_section_buttons()
+
+    def _apply_rounded_corners(self):
+        """ใช้ Win32 API สร้างมุมโค้งให้หน้าต่าง"""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            hwnd = ctypes.windll.user32.GetParent(self.window.winfo_id())
+            w = self.window.winfo_width()
+            h = self.window.winfo_height()
+            radius = 16
+            rgn = ctypes.windll.gdi32.CreateRoundRectRgn(
+                0, 0, w + 1, h + 1, radius, radius)
+            ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+        except Exception as e:
+            self.logging_manager.log_error(f"Rounded corners error: {e}")
 
     def _start_resize(self, event):
         """เริ่มการปรับขนาดหน้าต่าง"""
@@ -1152,12 +989,10 @@ class NPCManagerCard:
             new_height = max(min_h, new_height)
 
             # กำหนดขนาดใหม่ให้หน้าต่าง
-
             self.window.geometry(f"{new_width}x{new_height}")
 
-            # อาจจะต้องเรียก update_idletasks เพื่อให้เห็นผลทันที แต่ระวังเรื่องประสิทธิภาพ
-
-            # self.window.update_idletasks()
+            # อัพเดตมุมโค้งตามขนาดใหม่
+            self._apply_rounded_corners()
 
         except Exception as e:
 
@@ -1181,51 +1016,16 @@ class NPCManagerCard:
         """
 
         try:
-
-            from PIL import Image, ImageTk
-
-            import os
-
-            # หาตำแหน่งไฟล์ไอคอน (ลองหลายโฟลเดอร์)
-
-            icon_paths = [
-                icon_name,  # โฟลเดอร์ปัจจุบัน
-                os.path.join("icons", icon_name),  # โฟลเดอร์ icons
-                os.path.join("assets", icon_name),  # โฟลเดอร์ assets
-                os.path.join("resources", icon_name),  # โฟลเดอร์ resources
-            ]
-
-            # ลองโหลดไฟล์จากแต่ละโฟลเดอร์
-
-            icon_path = None
-
-            for path in icon_paths:
-
-                if os.path.exists(path):
-
-                    icon_path = path
-
-                    break
-
-            if not icon_path:
-
-                raise FileNotFoundError(f"Icon file {icon_name} not found")
-
-            # โหลดและปรับขนาดไอคอน
+            # โหลดและปรับขนาดไอคอน (ใช้ AssetManager ที่มี resource_path() built-in)
             return AssetManager.load_icon(icon_name, (size, size))
 
         except ImportError:
-
             # กรณีไม่มี PIL ให้ใช้ PhotoImage ธรรมดา
-
             try:
-
-                return tk.PhotoImage(file=icon_name)
-
+                from resource_utils import resource_path
+                return tk.PhotoImage(file=resource_path(f"assets/{icon_name}"))
             except Exception as e:
-
                 self.logging_manager.log_error(f"Error loading icon with Tkinter: {e}")
-
                 return None
 
         except Exception as e:
@@ -1409,7 +1209,7 @@ class NPCManagerCard:
             ("NPCS", "npcs"),
             ("LORE", "lore"),
             ("ROLES", "character_roles"),
-            ("Fixes(แก้คำผิด)", "word_fixes"),  # ⭐ เปลี่ยนชื่อแท็บ
+            ("แก้คำผิด(auto)", "word_fixes"),
         ]
 
         # สร้าง frame ใส่ปุ่ม (เหมือนเดิม)
@@ -1450,8 +1250,8 @@ class NPCManagerCard:
                 bd=0,
                 highlightthickness=0,
                 relief="flat",
-                padx=20,  # เพิ่ม padding
-                pady=8,  # เพิ่ม padding
+                padx=16,
+                pady=6,
                 command=lambda s=section: self.show_section(s),
             )
 
@@ -1501,16 +1301,17 @@ class NPCManagerCard:
             self.section_description_label.configure(text=description)
 
     def _create_toolbar(self):
-        """สร้างแถบเครื่องมือและกล่องค้นหา (ปรับขนาดฟอนต์)"""
+        """สร้างแถบเครื่องมือและกล่องค้นหา"""
 
-        # สร้าง frame สำหรับแถบเครื่องมือ (เหมือนเดิม)
+        # Divider ระหว่าง tabs กับ toolbar
+        tk.Frame(self.window, bg=self.style["bg_tertiary"], height=1).pack(
+            fill="x", padx=16, pady=(2, 0))
+
         self.toolbar = tk.Frame(
-            self.window,
-            bg=self.style["bg_primary"],
-            height=48,
-            cursor="fleur",  # ลดจาก 60 เป็น 48
-        )  # เพิ่ม cursor fleur
-        self.toolbar.pack(fill="x", side="top", padx=10, pady=10)  # เพิ่ม pady
+            self.window, bg=self.style["bg_primary"],
+            height=40, cursor="fleur",
+        )
+        self.toolbar.pack(fill="x", side="top", padx=12, pady=(6, 4))
 
         # เพิ่ม binding การลากหน้าต่างกับ toolbar
         self.toolbar.bind("<Button-1>", self._start_move)
@@ -1596,66 +1397,12 @@ class NPCManagerCard:
         button_frame.bind("<Button-1>", _stop_propagation)
         button_frame.bind("<B1-Motion>", _stop_propagation)
 
-        # เพิ่มปุ่ม Dialogue Simulator
-        self.dialogue_btn = tk.Button(
-            button_frame,
-            text="🎭 ทดสอบบทสนทนา",
-            font=(self.font, self.font_size_small),
-            bg="#2D2D2D",  # สีเดียวกับพื้นหลัง NPC Manager
-            fg="#9CA3AF",
-            bd=0,
-            relief="flat",
-            padx=8,
-            pady=3,
-            command=self._show_dialogue_simulator,
-            cursor="hand2",
-            state="disabled",  # เริ่มต้นเป็น disabled
-        )
-        self.dialogue_btn.pack(side="right", padx=(2, 5))
-
-        # เพิ่ม warning label สำหรับปุ่ม dialogue (ซ่อนไว้เริ่มต้น)
-        self.dialogue_warning = tk.Label(
-            self.button_container,  # ใช้ container หลักแทน button_frame
-            text="⚠️ เลือกตัวละครในรายการด้านล่างก่อน(ในแท็ป MAIN เท่านั้น)",
-            font=(self.font, self.font_size_small - 2),
-            fg="#F59E0B",  # สีเหลือง warning
-            bg=self.style["bg_primary"],
-            wraplength=200,  # ตัดบรรทัดให้สั้นลง
-            justify="center",
-        )
-        # ไม่ pack() เพราะจะแสดงเฉพาะเมื่อจำเป็น
-
-        # เพิ่ม hover effect สำหรับปุ่ม Dialogue
-        self.dialogue_btn.bind(
-            "<Enter>",
-            lambda e: (
-                self.dialogue_btn.configure(bg="#7C3AED")
-                if self.dialogue_btn.winfo_exists()
-                and self.dialogue_btn["state"] == "normal"
-                else None
-            ),
-        )
-        self.dialogue_btn.bind(
-            "<Leave>",
-            lambda e: (
-                self.dialogue_btn.configure(bg="#8B5CF6")
-                if self.dialogue_btn.winfo_exists()
-                and self.dialogue_btn["state"] == "normal"
-                else (
-                    self.dialogue_btn.configure(bg="#2D2D2D")
-                    if self.dialogue_btn.winfo_exists()
-                    and self.dialogue_btn["state"] == "disabled"
-                    else None
-                )
-            ),
-        )
-
         # เพิ่มปุ่ม More แบบ dropdown
         self.more_btn = tk.Button(
             button_frame,
             text="More ▼",
             font=(self.font, self.font_size_small),
-            bg="#2D2D2D",  # สีเทาเข้มของ UI
+            bg="#222222",  # สีเทาเข้มของ UI
             fg="white",
             bd=0,
             relief="flat",
@@ -1670,7 +1417,7 @@ class NPCManagerCard:
         self.more_btn.bind(
             "<Enter>",
             lambda e: (
-                self.more_btn.configure(bg="#3D3D3D")
+                self.more_btn.configure(bg="#2a2a2a")
                 if self.more_btn.winfo_exists()
                 else None
             ),
@@ -1678,7 +1425,7 @@ class NPCManagerCard:
         self.more_btn.bind(
             "<Leave>",
             lambda e: (
-                self.more_btn.configure(bg="#2D2D2D")
+                self.more_btn.configure(bg="#222222")
                 if self.more_btn.winfo_exists()
                 else None
             ),
@@ -1711,12 +1458,12 @@ class NPCManagerCard:
         # กำหนดสไตล์ Scrollbar แบบ Dark Flat
         style.configure(
             "Vertical.TScrollbar",
-            background="#3D3D3D",  # สีปุ่ม scroll
-            troughcolor="#2D2D2D",  # พื้นหลัง trough
-            bordercolor="#2D2D2D",  # สีขอบ
-            arrowcolor="#2D2D2D",  # ซ่อนลูกศร (ใช้สีเดียวกับพื้น)
-            darkcolor="#3D3D3D",  # สีเงา (ทำให้เท่ากับ background เพื่อไม่มีขยัก)
-            lightcolor="#3D3D3D",  # สีไฮไลท์ (ทำให้เท่ากับ background เพื่อไม่มีขยัก)
+            background="#2a2a2a",  # สีปุ่ม scroll
+            troughcolor="#222222",  # พื้นหลัง trough
+            bordercolor="#222222",  # สีขอบ
+            arrowcolor="#222222",  # ซ่อนลูกศร (ใช้สีเดียวกับพื้น)
+            darkcolor="#2a2a2a",  # สีเงา (ทำให้เท่ากับ background เพื่อไม่มีขยัก)
+            lightcolor="#2a2a2a",  # สีไฮไลท์ (ทำให้เท่ากับ background เพื่อไม่มีขยัก)
             borderwidth=2,  # ขอบ
             relief="flat",
             arrowsize=6,  # ลูกศร
@@ -1995,12 +1742,7 @@ class NPCManagerCard:
 
         if not selected_item_ids:
             self._hide_detail_form()  # ซ่อน panel ถ้าไม่มีอะไรถูกเลือก
-            self._update_dialogue_button_state(False)  # Disable dialogue button
             return
-
-        # Enable dialogue button when character is selected (only in main_characters tab)
-        should_enable = self.current_section == "main_characters"
-        self._update_dialogue_button_state(should_enable)
 
         selected_iid = selected_item_ids[0]  # เอาเฉพาะรายการแรกที่เลือก
 
@@ -2403,39 +2145,59 @@ class NPCManagerCard:
         """
         return get_npc_file_path()
 
-    def _create_backup_if_needed(self):
-        """
-        สร้างไฟล์สำรองเฉพาะเมื่อจำเป็น (เมื่อผู้ใช้ร้องขอ)
-        ไม่ใช้อัตโนมัติเพื่อลดการสร้างไฟล์สำรองที่ไม่จำเป็น
+    def _get_backup_dir(self):
+        """คืนค่าพาธโฟลเดอร์ backup ที่อยู่ข้าง npc.json"""
+        npc_file_path = self._get_npc_file_path()
+        return os.path.join(os.path.dirname(npc_file_path), "backups")
+
+    def _create_backup(self):
+        """สร้างไฟล์สำรอง npc.json พร้อม rotation (เก็บสูงสุด 10 ไฟล์)
 
         Returns:
-            bool: True หากสร้างสำเร็จ หรือ False หากล้มเหลว
+            bool: True หากสร้างสำเร็จ
         """
+        MAX_BACKUPS = 10
         try:
             npc_file_path = self._get_npc_file_path()
-
-            # ตรวจสอบว่ามีไฟล์หรือไม่
             if not os.path.exists(npc_file_path):
                 self.logging_manager.log_info("ไม่พบไฟล์ NPC สำหรับการสำรอง")
                 return False
 
-            # สร้างโฟลเดอร์ backups ถ้ายังไม่มี
-            backup_dir = "backups"
-            if not os.path.exists(backup_dir):
-                os.makedirs(backup_dir)
+            backup_dir = self._get_backup_dir()
+            os.makedirs(backup_dir, exist_ok=True)
 
-            # สร้างชื่อไฟล์สำรองด้วยวันที่และเวลา
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_filename = f"{backup_dir}/NPC_{timestamp}.json"
+            backup_filename = os.path.join(backup_dir, f"NPC_{timestamp}.json")
 
-            # คัดลอกไฟล์
             shutil.copy2(npc_file_path, backup_filename)
-            self.logging_manager.log_info(f"สร้างไฟล์สำรองสำเร็จ: {backup_filename}")
-            return True
+            self.logging_manager.log_info(f"Backup created: {backup_filename}")
 
+            # Rotation — ลบไฟล์เก่าเกิน MAX_BACKUPS
+            self._rotate_backups(backup_dir, MAX_BACKUPS)
+
+            return True
         except Exception as e:
-            self.logging_manager.log_error(f"การสร้างไฟล์สำรองล้มเหลว: {e}")
+            self.logging_manager.log_error(f"Backup failed: {e}")
             return False
+
+    def _rotate_backups(self, backup_dir, max_keep):
+        """ลบ backup เก่าที่เกินจำนวน max_keep (เรียงตามวันที่สร้าง)"""
+        try:
+            backup_files = sorted(
+                [
+                    os.path.join(backup_dir, f)
+                    for f in os.listdir(backup_dir)
+                    if f.startswith("NPC_") and f.endswith(".json")
+                ],
+                key=os.path.getmtime,
+            )
+            # ลบไฟล์เก่าสุดจนเหลือ max_keep
+            while len(backup_files) > max_keep:
+                oldest = backup_files.pop(0)
+                os.remove(oldest)
+                self.logging_manager.log_info(f"Rotated old backup: {os.path.basename(oldest)}")
+        except Exception as e:
+            self.logging_manager.log_error(f"Backup rotation error: {e}")
 
     def load_data(self, section=None):
         """โหลดข้อมูลจาก NPC.json แบบเลือกโหลดเฉพาะส่วน
@@ -2553,151 +2315,54 @@ class NPCManagerCard:
             return False
 
     def _search_in_background(self, search_term):
-        """ทำการค้นหาในพื้นหลังเพื่อลดการกระตุก
-
+        """ค้นหาข้อมูล NPC — ทำใน main thread (ข้อมูล ~600 entries ทำได้เร็วพอ
+        และหลีกเลี่ยงปัญหา 'main thread is not in main loop' จาก Tkinter)
 
         Args:
-
             search_term (str): คำที่ต้องการค้นหา
-
         """
-
-        import threading
-
-        def _do_search():
-
-            try:
-
-                # รีเซ็ตผลการค้นหาทุก section ให้เป็น 0
-
-                for section in self.search_results:
-
-                    self.search_results[section] = 0
-
-                # ล้างแคชการค้นหาเดิม
-
-                if hasattr(self, "_search_cache"):
-
-                    self._search_cache = {}
-
-                # ถ้ามีคำค้นหา ค้นหาทุก section
-
-                if search_term:
-
-                    for section in self.data:
-
-                        # ข้ามถ้าไม่ใช่ section ที่รองรับ
-
-                        if section not in self.search_results:
-
-                            continue
-
-                        section_data = self.data[section]
-
-                        # กรณีเป็นรายการ (main_characters, npcs)
-
-                        if isinstance(section_data, list):
-                            
-                            # ใช้ batch processing เพื่อไม่ให้ทำงานนานเกินไป
-                            batch_size = 50
-                            total_items = len(section_data)
-                            
-                            for batch_start in range(0, total_items, batch_size):
-                                batch_end = min(batch_start + batch_size, total_items)
-                                batch_items = section_data[batch_start:batch_end]
-                                
-                                for item in batch_items:
-                                    # หาคำค้นหาในค่าทั้งหมดของ item
-                                    found = False
-                                    for key, value in item.items():
-                                        if search_term in str(value).lower():
-                                            self.search_results[section] += 1
-                                            found = True
-                                            break
-                                    if found:
-                                        continue
-                                        
-                                # ให้เธรดหยุดพักเล็กน้อยทุก batch เพื่อไม่ block CPU
-                                if batch_end < total_items:
-                                    import time
-                                    time.sleep(0.001)  # 1ms
-
-                        # กรณีเป็นพจนานุกรม (lore, character_roles, word_fixes)
-
-                        elif isinstance(section_data, dict):
-                            
-                            # ใช้ batch processing สำหรับ dict ด้วย
-                            dict_items = list(section_data.items())
-                            batch_size = 50
-                            total_items = len(dict_items)
-                            
-                            for batch_start in range(0, total_items, batch_size):
-                                batch_end = min(batch_start + batch_size, total_items)
-                                batch_items = dict_items[batch_start:batch_end]
-                                
-                                for key, value in batch_items:
-                                    if (
-                                        search_term in key.lower()
-                                        or search_term in str(value).lower()
-                                    ):
-                                        self.search_results[section] += 1
-                                        
-                                # ให้เธรดหยุดพักเล็กน้อยทุก batch
-                                if batch_end < total_items:
-                                    import time
-                                    time.sleep(0.001)  # 1ms
-
-                # หลังค้นหาเสร็จ อัพเดท UI ใน main thread
-
-                # เช็คว่าหน้าต่างยังมีอยู่หรือไม่ก่อนอัพเดต UI
-
-                if hasattr(self, "window") and self.window.winfo_exists():
-
-                    self._safe_after(0, lambda: self._update_after_search(search_term))
-
-            except Exception as e:
-
-                # บันทึกข้อผิดพลาดและอัพเดทสถานะใน main thread
-
-                self.logging_manager.log_error(f"Error in search thread: {e}")
-
-                if hasattr(self, "window") and self.window.winfo_exists():
-
-                    self._safe_after(
-                        0, lambda: self._update_status(f"เกิดข้อผิดพลาดในการค้นหา: {e}")
-                    )
-
-        # เริ่มทำงานในเธรดแยก
-
         try:
+            # รีเซ็ตผลการค้นหาทุก section ให้เป็น 0
+            for section in self.search_results:
+                self.search_results[section] = 0
 
-            # อัพเดทสถานะให้ผู้ใช้ทราบว่ากำลังค้นหา
+            # ล้างแคชการค้นหาเดิม
+            if hasattr(self, "_search_cache"):
+                self._search_cache = {}
 
+            # ถ้ามีคำค้นหา ค้นหาทุก section
             if search_term:
+                for section in self.data:
+                    if section not in self.search_results:
+                        continue
 
-                self._update_status(f"กำลังค้นหา '{search_term}'...")
+                    section_data = self.data[section]
 
-            else:
+                    # กรณีเป็นรายการ (main_characters, npcs)
+                    if isinstance(section_data, list):
+                        for item in section_data:
+                            for key, value in item.items():
+                                if search_term in str(value).lower():
+                                    self.search_results[section] += 1
+                                    break
 
-                self._update_status("กำลังแสดงข้อมูลทั้งหมด...")
+                    # กรณีเป็นพจนานุกรม (lore, character_roles, word_fixes)
+                    elif isinstance(section_data, dict):
+                        for key, value in section_data.items():
+                            if (
+                                search_term in key.lower()
+                                or search_term in str(value).lower()
+                            ):
+                                self.search_results[section] += 1
 
-            # สร้างและเริ่มเธรด
-
-            search_thread = threading.Thread(target=_do_search)
-
-            search_thread.daemon = True  # ทำให้เธรดจบเมื่อโปรแกรมหลักจบ
-
-            search_thread.start()
+            # อัพเดท UI ทันที (อยู่ main thread อยู่แล้ว)
+            if not self._is_destroyed:
+                self._update_after_search(search_term)
 
         except Exception as e:
-
-            self.logging_manager.log_error(f"Failed to start search thread: {e}")
-
-            self._update_status("ไม่สามารถเริ่มค้นหาได้")
-
-            # กรณีเธรดไม่ทำงาน ให้ทำการค้นหาใน main thread แทน
-
-            _do_search()
+            self.logging_manager.log_error(f"Error in search: {e}")
+            if not self._is_destroyed:
+                self._update_status(f"เกิดข้อผิดพลาดในการค้นหา: {e}")
 
     def _update_after_search(self, search_term):
         """อัพเดท UI หลังจากค้นหาเสร็จ"""
@@ -2764,266 +2429,46 @@ class NPCManagerCard:
         self._save_current_state()
 
     def save_changes(self):
-        """บันทึกการเปลี่ยนแปลงลง NPC.json"""
+        """บันทึกการเปลี่ยนแปลงลง NPC.json (auto-backup ก่อนเขียนทับ)"""
         try:
             self._update_status("กำลังบันทึกข้อมูล...")
-            import threading
 
-            def _do_save():
-                try:
-                    # ตรวจสอบข้อมูลก่อนบันทึก
-                    if not self._validate_data():
-                        self._safe_after(
-                            0,
-                            lambda: self._update_status(
-                                "ไม่สามารถบันทึกข้อมูลได้ ข้อมูลไม่ถูกต้อง"
-                            ),
-                        )
-                        return False
+            # ตรวจสอบข้อมูลก่อนบันทึก
+            if not self._validate_data():
+                self._update_status("ไม่สามารถบันทึกข้อมูลได้ ข้อมูลไม่ถูกต้อง")
+                return False
 
-                    # ดึง Path ของไฟล์ NPC ที่จะบันทึก
-                    npc_file_to_save = self._get_npc_file_path()
+            # สำรองไฟล์เดิมก่อนเขียนทับ
+            self._create_backup()
 
-                    # บันทึกข้อมูล
-                    with open(npc_file_to_save, "w", encoding="utf-8") as file:
-                        json.dump(self.data, file, indent=4, ensure_ascii=False)
+            # ดึง Path ของไฟล์ NPC ที่จะบันทึก
+            npc_file_to_save = self._get_npc_file_path()
 
-                    # รีเซ็ตสถานะและอัปเดตแคช
-                    self.has_unsaved_changes = False
-                    self.data_cache = self.data.copy()
-                    self._search_cache = {}
+            # บันทึกข้อมูล
+            with open(npc_file_to_save, "w", encoding="utf-8") as file:
+                json.dump(self.data, file, indent=4, ensure_ascii=False)
 
-                    # อัปเดต UI และ Callback ใน Main Thread
-                    success_message = (
-                        f"บันทึกไปยัง {os.path.basename(npc_file_to_save)} เรียบร้อยแล้ว"
-                    )
-                    self._safe_after(0, lambda: self._update_status(success_message))
-                    self._safe_after(
-                        0, lambda: self.flash_success_message("บันทึกข้อมูลสำเร็จ!")
-                    )
-                    if self.reload_callback:
-                        self.logging_manager.log_info("กำลังรีโหลดข้อมูล NPC...")
-                        self._safe_after(0, self.reload_callback)
+            # รีเซ็ตสถานะและอัปเดตแคช
+            self.has_unsaved_changes = False
+            self.data_cache = self.data.copy()
+            self._search_cache = {}
 
-                    return True
-                except Exception as e:
-                    self._safe_after(0, lambda err=e: self._handle_save_error(err))
-                    return False
+            # อัปเดต UI
+            success_message = (
+                f"บันทึกไปยัง {os.path.basename(npc_file_to_save)} เรียบร้อยแล้ว"
+            )
+            self._update_status(success_message)
+            self.flash_success_message("บันทึกข้อมูลสำเร็จ!")
+            if self.reload_callback:
+                self.logging_manager.log_info("กำลังรีโหลดข้อมูล NPC...")
+                self.reload_callback()
 
-            # เริ่มการบันทึกในเธรดแยก
-            save_thread = threading.Thread(target=_do_save)
-            save_thread.daemon = True
-            save_thread.start()
             return True
 
         except Exception as e:
             self._handle_save_error(e)
             return False
 
-    def _backup_current_file(self):
-        """สร้างไฟล์สำรองก่อนบันทึก"""
-
-        try:
-
-            # ตรวจสอบว่ามีไฟล์ NPC.json หรือไม่
-
-            if not os.path.exists(self._get_npc_file_path()):
-
-                return False
-
-            # สร้างโฟลเดอร์ backups ถ้ายังไม่มี
-
-            backup_dir = "backups"
-
-            if not os.path.exists(backup_dir):
-
-                os.makedirs(backup_dir)
-
-            # สร้างชื่อไฟล์สำรองด้วยวันที่และเวลา
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            backup_filename = f"{backup_dir}/NPC_{timestamp}.json"
-
-            # คัดลอกไฟล์
-
-            shutil.copy2(self._get_npc_file_path(), backup_filename)
-
-            self.logging_manager.log_info(f"Backup created: {backup_filename}")
-
-            return True
-
-        except Exception as e:
-
-            self.logging_manager.log_error(f"Backup failed: {e}")
-
-            return False
-
-    def _update_dialogue_button_state(self, enabled):
-        """อัพเดตสถานะปุ่ม Dialogue Simulator"""
-        if hasattr(self, "dialogue_btn"):
-            # เช็คว่าอยู่ใน Main Characters tab หรือไม่
-            in_main_tab = self.current_section == "main_characters"
-
-            if enabled and in_main_tab:
-                self.dialogue_btn.config(
-                    state="normal", bg="#8B5CF6", fg="white"  # สีม่วง
-                )
-                # ซ่อน warning message ถ้ามี
-                if hasattr(self, "dialogue_warning"):
-                    self.dialogue_warning.pack_forget()
-            else:
-                self.dialogue_btn.config(
-                    state="disabled",
-                    bg="#2D2D2D",  # สีเดียวกับพื้นหลัง NPC Manager
-                    fg="#9CA3AF",
-                )
-                # ซ่อน warning message เมื่อ disabled
-                if hasattr(self, "dialogue_warning"):
-                    self.dialogue_warning.pack_forget()
-
-    def _show_dialogue_simulator(self):
-        """แสดงหน้าต่าง Dialogue Simulator"""
-        # ตรวจสอบว่าปุ่มถูกคลิกในสถานะ disabled หรือไม่
-        if self.dialogue_btn["state"] == "disabled":
-            # แสดง warning message ใต้ปุ่ม
-            if hasattr(self, "dialogue_warning"):
-                self.dialogue_warning.pack(side="bottom", pady=(5, 0), anchor="center")
-                # ซ่อน warning หลัง 3 วินาที
-                self.window.after(
-                    3000,
-                    lambda: (
-                        self.dialogue_warning.pack_forget()
-                        if hasattr(self, "dialogue_warning")
-                        and self.dialogue_warning.winfo_exists()
-                        else None
-                    ),
-                )
-            return
-
-        try:
-            # ดึงข้อมูลตัวละครที่เลือกอยู่
-            selected_character = None
-
-            # Debug: แสดงข้อมูลที่มีอยู่
-            self.logging_manager.log_info(
-                "=== Debug: Looking for selected character ==="
-            )
-            self.logging_manager.log_info(f"Has tree: {hasattr(self, 'tree')}")
-            self.logging_manager.log_info(
-                f"Current section: {getattr(self, 'current_section', 'unknown')}"
-            )
-
-            # ตรวจสอบว่ามีตัวละครที่เลือกอยู่ใน TreeView หรือไม่
-            if hasattr(self, "tree"):
-                selection = self.tree.selection()
-                self.logging_manager.log_info(f"Tree selection: {selection}")
-
-                if selection:
-                    item_id = selection[0]
-                    self.logging_manager.log_info(f"Selected item ID: {item_id}")
-
-                    # Method 1: ดึงจาก tree_items
-                    if hasattr(self, "tree_items") and item_id in self.tree_items:
-                        item_data = self.tree_items[item_id]
-                        # ใน main_characters ใช้ firstName
-                        char_name = item_data.get(
-                            "firstName", item_data.get("name", "")
-                        )
-                        self.logging_manager.log_info(
-                            f"Found in tree_items: {char_name}"
-                        )
-
-                        # ค้นหาข้อมูลตัวละครจากชื่อ (ข้อมูลอยู่ใน main_characters)
-                        for char in self.data.get("main_characters", []):
-                            if char.get("firstName") == char_name:
-                                selected_character = char
-                                self.logging_manager.log_info(
-                                    f"✓ Found character data in main_characters: {char_name}"
-                                )
-                                break
-
-                    # Method 2: ถ้าไม่เจอใน tree_items ลองดึงจาก tree โดยตรง
-                    if not selected_character:
-                        values = self.tree.item(item_id, "values")
-                        self.logging_manager.log_info(f"Tree item values: {values}")
-                        if values and len(values) > 0:
-                            char_name = values[0]
-                            self.logging_manager.log_info(
-                                f"Got name from tree values: {char_name}"
-                            )
-
-                            # ค้นหาข้อมูลตัวละครจากชื่อ (ข้อมูลอยู่ใน main_characters)
-                            for char in self.data.get("main_characters", []):
-                                if char.get("firstName") == char_name:
-                                    selected_character = char
-                                    self.logging_manager.log_info(
-                                        f"✓ Found character data in main_characters: {char_name}"
-                                    )
-                                    break
-                else:
-                    self.logging_manager.log_info("No selection in tree")
-            else:
-                self.logging_manager.log_info("Tree not found")
-
-            if selected_character:
-                self.logging_manager.log_info(
-                    f"=== Character Found: {selected_character.get('name')} ==="
-                )
-            else:
-                self.logging_manager.log_info("=== No character selected or found ===")
-
-            # ดึง translator instance - ลองหลายวิธี
-            translator = None
-
-            # Method 1: จาก parent_app
-            if hasattr(self, "parent_app"):
-                if hasattr(self.parent_app, "translator"):
-                    translator = self.parent_app.translator
-                    print(f"Found translator from parent_app: {translator}")
-                # Method 2: จาก parent_app.app
-                elif hasattr(self.parent_app, "app") and hasattr(
-                    self.parent_app.app, "translator"
-                ):
-                    translator = self.parent_app.app.translator
-                    print(f"Found translator from parent_app.app: {translator}")
-
-            # Method 3: จาก main_app ถ้าส่งมาตอนสร้าง
-            if not translator and hasattr(self, "main_app"):
-                if hasattr(self.main_app, "translator"):
-                    translator = self.main_app.translator
-                    print(f"Found translator from main_app: {translator}")
-
-            if not translator:
-                print("Warning: No translator instance found - will use fallback")
-
-            # สร้างและแสดง Dialogue Simulator
-            if not hasattr(self, "dialogue_simulator"):
-                self.dialogue_simulator = DialogueSimulator(self.window, translator)
-
-            # ส่งชื่อตัวละครแทน object เพื่อให้ dialogue_simulator โหลดจาก npc.json โดยตรง
-            # ใน main_characters ใช้ firstName
-            character_name = (
-                selected_character.get("firstName", selected_character.get("name"))
-                if selected_character
-                else None
-            )
-            if character_name:
-                print(f"Sending character name to dialogue simulator: {character_name}")
-                self.logging_manager.log_info(
-                    f"Sending character name to dialogue simulator: {character_name}"
-                )
-            else:
-                self.logging_manager.log_info(
-                    "No character name to send to dialogue simulator"
-                )
-            self.dialogue_simulator.show(character_name, translator)
-
-        except Exception as e:
-            print(f"Error showing dialogue simulator: {e}")
-            messagebox.showerror(
-                "ข้อผิดพลาด", f"ไม่สามารถเปิด Dialogue Simulator ได้: {str(e)}"
-            )
 
     def _show_more_menu(self):
         """แสดงเมนู dropdown สำหรับปุ่ม More"""
@@ -3036,19 +2481,19 @@ class NPCManagerCard:
         # สร้างเมนู dropdown
         self.more_menu = tk.Toplevel(self.window)
         self.more_menu.wm_overrideredirect(True)  # ไม่มี title bar
-        self.more_menu.configure(bg="#2D2D2D", relief="solid", bd=1)
+        self.more_menu.configure(bg="#222222", relief="solid", bd=1)
 
         # กำหนดตำแหน่งเมนูให้อยู่ใต้ปุ่ม More
         x = self.more_btn.winfo_rootx()
         y = self.more_btn.winfo_rooty() + self.more_btn.winfo_height()
-        self.more_menu.geometry(f"120x40+{x}+{y}")
+        self.more_menu.geometry(f"150x76+{x}+{y}")
 
-        # เพิ่มปุ่ม Backup
+        # --- ปุ่ม Backup ---
         backup_btn = tk.Button(
             self.more_menu,
             text="💾 สำรองข้อมูล",
             font=(self.font, self.font_size_small),
-            bg="#2D2D2D",
+            bg="#222222",
             fg="white",
             bd=0,
             relief="flat",
@@ -3058,11 +2503,28 @@ class NPCManagerCard:
             command=self._backup_action_from_menu,
             cursor="hand2",
         )
-        backup_btn.pack(fill="x", padx=2, pady=2)
+        backup_btn.pack(fill="x", padx=2, pady=(2, 0))
+        backup_btn.bind("<Enter>", lambda e: backup_btn.configure(bg="#2a2a2a"))
+        backup_btn.bind("<Leave>", lambda e: backup_btn.configure(bg="#222222"))
 
-        # hover effect สำหรับปุ่ม backup
-        backup_btn.bind("<Enter>", lambda e: backup_btn.configure(bg="#3D3D3D"))
-        backup_btn.bind("<Leave>", lambda e: backup_btn.configure(bg="#2D2D2D"))
+        # --- ปุ่ม Reset UI ---
+        reset_btn = tk.Button(
+            self.more_menu,
+            text="⟳ รีเซ็ต UI",
+            font=(self.font, self.font_size_small),
+            bg="#222222",
+            fg="white",
+            bd=0,
+            relief="flat",
+            anchor="w",
+            padx=10,
+            pady=5,
+            command=self._reset_ui_from_menu,
+            cursor="hand2",
+        )
+        reset_btn.pack(fill="x", padx=2, pady=(0, 2))
+        reset_btn.bind("<Enter>", lambda e: reset_btn.configure(bg="#2a2a2a"))
+        reset_btn.bind("<Leave>", lambda e: reset_btn.configure(bg="#222222"))
 
         # ปิดเมนูเมื่อคลิกข้างนอก
         self.more_menu.bind("<FocusOut>", lambda e: self._hide_more_menu())
@@ -3083,15 +2545,20 @@ class NPCManagerCard:
 
     def _backup_action_from_menu(self):
         """การกระทำสำรองจากเมนู dropdown"""
-        self._hide_more_menu()  # ซ่อนเมนูก่อน
-        self._manual_backup_action()  # เรียก function เดิม
+        self._hide_more_menu()
+        self._manual_backup_action()
+
+    def _reset_ui_from_menu(self):
+        """รีเซ็ต UI จากเมนู dropdown"""
+        self._hide_more_menu()
+        self.reset_ui_state()
 
     def _manual_backup_action(self):
         """การกระทำเมื่อกดปุ่มสำรองแมนนวล"""
         try:
             self._update_status("กำลังสร้างไฟล์สำรอง...")
 
-            if self._create_backup_if_needed():
+            if self._create_backup():
                 self.flash_success_message("สร้างไฟล์สำรองสำเร็จ!")
                 self._update_status("สร้างไฟล์สำรองเรียบร้อยแล้ว")
             else:
@@ -3177,9 +2644,6 @@ class NPCManagerCard:
                     bg=self.style["bg_tertiary"], fg=self.style["text_primary"]
                 )
 
-        # อัพเดตสถานะปุ่ม dialogue เมื่อเปลี่ยน section
-        self._update_dialogue_button_state(False)  # รีเซ็ตเป็น disabled เมื่อเปลี่ยน section
-
         # เพิ่ม: อัปเดต UI ก่อนดำเนินการต่อ
         self.window.update_idletasks()
 
@@ -3204,6 +2668,9 @@ class NPCManagerCard:
         # อัพเดทหัวเรื่อและสถานะ
         section_title = section.replace("_", " ").title()
         self.detail_title.configure(text=f"{section_title} Details")
+
+        # ล้างพื้นที่ detail content ก่อนสร้างฟอร์มใหม่ (ป้องกัน pack/grid conflict)
+        self._clear_detail_content_frame()
 
         # สร้างฟอร์มรายละเอียดสำหรับส่วนที่เลือก
         self._create_detail_form_for_section()
@@ -3314,7 +2781,7 @@ class NPCManagerCard:
 
         else:
 
-            button.configure(bg="#3D3D3D")
+            button.configure(bg="#2a2a2a")
 
     def _on_section_button_leave(self, button):
         """จัดการ leave effect สำหรับปุ่ม section"""
@@ -3686,7 +3153,7 @@ class NPCManagerCard:
 
         # กำหนดค่าสีสำหรับปุ่ม Edit
 
-        edit_hover_color = "#3D3D3D"
+        edit_hover_color = "#2a2a2a"
 
         edit_normal_color = self.style["bg_tertiary"]
 
@@ -3805,12 +3272,15 @@ class NPCManagerCard:
                 cardview_args["copy_name"] = copy_name
                 cardview_args["copy_callback"] = self._copy_to_search
 
-            # สร้าง CardView ด้วยพารามิเตอร์ที่เหมาะสม
-            card = CardView(**cardview_args)
-
-            # แสดง CardView frame ใน content area
-            card_frame = card.get_frame()
-            card_frame.grid(row=0, column=0, sticky="nsew")
+            # word_fixes ใช้ layout พิเศษ (จัดกลาง, แสดง ก่อน/หลัง)
+            if self.current_section == "word_fixes" and not is_preview:
+                self._create_word_fixes_detail_view(data)
+            else:
+                # สร้าง CardView ด้วยพารามิเตอร์ที่เหมาะสม
+                card = CardView(**cardview_args)
+                card_frame = card.get_frame()
+                card_frame.grid(row=0, column=0, sticky="nsew")
+                self.current_detail_widget = card_frame
 
             # ⭐ แสดงปุ่ม "EDIT" สำหรับการแก้ไขข้อมูล
             if hasattr(self, "save_edit_btn") and self.save_edit_btn.winfo_exists():
@@ -3819,8 +3289,6 @@ class NPCManagerCard:
                 )
                 if not self.save_edit_btn.winfo_ismapped():
                     self.save_edit_btn.pack(fill="x")
-
-            self.current_detail_widget = card_frame
 
             self.window.update_idletasks()
 
@@ -4118,7 +3586,8 @@ class NPCManagerCard:
         elif self.current_section == "lore":
             fields = ["term", "description"]
         elif self.current_section == "character_roles":
-            fields = ["character", "style"]
+            self._create_roles_layout()
+            return
         elif self.current_section == "word_fixes":
             # ⭐ สำหรับ word_fixes ใช้ layout พิเศษแบบ 2 ฝั่ง
             self._create_word_fixes_layout()
@@ -4464,7 +3933,7 @@ class NPCManagerCard:
                 gender_container,
                 text=gender,
                 font=(self.font, self.font_size_small),  # ใช้ฟอนต์เล็กลง
-                bg="#2D2D2D",
+                bg="#222222",
                 fg=color,
                 bd=0,
                 relief="flat",
@@ -4545,6 +4014,147 @@ class NPCManagerCard:
                 "<KeyRelease>", lambda e: setattr(self, "has_actual_changes", True)
             )
 
+        # Pack ฟอร์มหลังสร้างฟิลด์เสร็จแล้ว
+        self.detail_form_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=10)
+
+    def _create_roles_layout(self):
+        """สร้าง layout สำหรับ ROLES tab — dropdown เลือกตัวละครจาก MAIN เท่านั้น"""
+
+        # ตรวจสอบและสร้าง detail_form_frame
+        form_frame_exists = (
+            hasattr(self, "detail_form_frame") and self.detail_form_frame is not None
+        )
+        if form_frame_exists:
+            try:
+                self.detail_form_frame.winfo_exists()
+                for widget in self.detail_form_frame.winfo_children():
+                    widget.destroy()
+            except (AttributeError, tk.TclError):
+                form_frame_exists = False
+
+        if not form_frame_exists:
+            if hasattr(self, "detail_content_frame") and self.detail_content_frame.winfo_exists():
+                self.detail_form_frame = tk.Frame(
+                    self.detail_content_frame, bg=self.style["bg_secondary"]
+                )
+            else:
+                return
+
+        self.detail_form_elements = {}
+
+        # ดึงชื่อจาก main_characters
+        all_main_names = []
+        for char in self.data.get("main_characters", []):
+            name = char.get("firstName", "")
+            if name:
+                all_main_names.append(name)
+
+        # ดึงชื่อที่มี roles แล้ว
+        existing_roles = set(self.data.get("character_roles", {}).keys())
+
+        # กรองเฉพาะที่ยังไม่มี roles (case-insensitive)
+        existing_lower = {n.lower() for n in existing_roles}
+        available_names = [n for n in all_main_names if n.lower() not in existing_lower]
+        available_names.sort()
+
+        # === Character field (Dropdown) ===
+        char_frame = tk.Frame(self.detail_form_frame, bg=self.style["bg_secondary"], pady=4)
+        char_frame.pack(fill="x", pady=4)
+
+        char_label = tk.Label(
+            char_frame, text="Character:",
+            font=(self.font, self.font_size_medium),
+            bg=self.style["bg_secondary"], fg=self.style["text_secondary"],
+        )
+        char_label.pack(anchor="w")
+
+        char_var = tk.StringVar()
+        self.detail_form_elements["character"] = char_var
+
+        if available_names:
+            # สร้าง ttk style สำหรับ Combobox dark theme
+            combo_style = ttk.Style()
+            combo_style.configure(
+                "Dark.TCombobox",
+                fieldbackground=self.style["bg_primary"],
+                background=self.style["bg_tertiary"],
+                foreground=self.style["text_primary"],
+                arrowcolor=self.style["text_secondary"],
+                selectbackground=self.style["accent"],
+                selectforeground="white",
+            )
+            combo_style.map("Dark.TCombobox",
+                fieldbackground=[("readonly", self.style["bg_primary"])],
+                foreground=[("readonly", self.style["text_primary"])],
+            )
+
+            combo = ttk.Combobox(
+                char_frame, textvariable=char_var,
+                values=available_names, state="readonly",
+                font=(self.font, self.font_size_medium),
+                style="Dark.TCombobox",
+            )
+            combo.pack(fill="x", pady=(4, 0))
+            # เลือกตัวแรกเป็นค่าเริ่มต้น
+            combo.current(0)
+        else:
+            # ไม่มีตัวละครที่ยังไม่มี roles
+            no_char_label = tk.Label(
+                char_frame,
+                text="✅ ตัวละครหลักทุกตัวมีน้ำเสียงแล้ว",
+                font=(self.font, self.font_size_small),
+                bg=self.style["bg_secondary"], fg=self.style["success"],
+            )
+            no_char_label.pack(anchor="w", pady=(4, 0))
+
+            # ซ่อนปุ่ม ADD ENTRY
+            if hasattr(self, "save_edit_btn") and self.save_edit_btn.winfo_exists():
+                self.save_edit_btn.pack_forget()
+
+            self.detail_form_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=10)
+            return
+
+        # === Style field (Text widget) ===
+        style_frame = tk.Frame(self.detail_form_frame, bg=self.style["bg_secondary"], pady=4)
+        style_frame.pack(fill="x", pady=4)
+
+        style_label = tk.Label(
+            style_frame, text="Style / น้ำเสียง:",
+            font=(self.font, self.font_size_medium),
+            bg=self.style["bg_secondary"], fg=self.style["text_secondary"],
+        )
+        style_label.pack(anchor="w")
+
+        style_container = tk.Frame(
+            style_frame, bg=self.style["bg_primary"],
+            highlightthickness=1,
+            highlightbackground=self.style["bg_tertiary"],
+            highlightcolor=self.style["accent"],
+        )
+        style_container.pack(fill="x", pady=(4, 0))
+
+        style_text = tk.Text(
+            style_container, bg=self.style["bg_primary"],
+            fg=self.style["text_primary"],
+            insertbackground=self.style["text_primary"],
+            font=(self.font, self.font_size_medium),
+            bd=0, relief="flat", height=6, wrap="word",
+        )
+        style_text.pack(fill="x", padx=8, pady=4)
+        self.detail_form_elements["style"] = style_text
+
+        # Hint
+        hint_label = tk.Label(
+            style_frame,
+            text="เช่น: พูดจาสุภาพ ใช้คำราชาศัพท์ / Speaks casually, uses slang",
+            font=(self.font, self.font_size_xsmall),
+            bg=self.style["bg_secondary"], fg=self.style["text_secondary"],
+            wraplength=380,
+        )
+        hint_label.pack(anchor="w", pady=(2, 0))
+
+        self.detail_form_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=10)
+
     def _set_gender(self, selected_gender):
         """ตั้งค่าเพศและอัปเดตปุ่ม - เวอร์ชันแก้ไข hover conflict"""
         try:
@@ -4581,7 +4191,7 @@ class NPCManagerCard:
                             else:
                                 # ปุ่มอื่น: สีจาง + hover effects ปกติ
                                 btn.configure(
-                                    bg="#2D2D2D",
+                                    bg="#222222",
                                     fg=color,
                                     font=(self.font, self.font_size_small),
                                 )
@@ -4592,7 +4202,7 @@ class NPCManagerCard:
                                 btn.bind(
                                     "<Enter>",
                                     lambda e, b=btn: (
-                                        b.configure(bg="#3D3D3D")
+                                        b.configure(bg="#2a2a2a")
                                         if b.winfo_exists()
                                         else None
                                     ),
@@ -4600,7 +4210,7 @@ class NPCManagerCard:
                                 btn.bind(
                                     "<Leave>",
                                     lambda e, b=btn: (
-                                        b.configure(bg="#2D2D2D")
+                                        b.configure(bg="#222222")
                                         if b.winfo_exists()
                                         else None
                                     ),
@@ -4672,6 +4282,7 @@ class NPCManagerCard:
             font=(self.font, self.font_size_medium_bold),
             bg=self.style["bg_tertiary"],
             fg="#FF6B6B",
+            anchor="center",
             pady=8,
         )
         top_title.grid(row=0, column=0, sticky="ew")
@@ -4686,6 +4297,7 @@ class NPCManagerCard:
             fg=self.style["text_primary"],
             relief="flat",
             bd=0,
+            justify="center",
             insertbackground=self.style["text_primary"],
         )
         incorrect_entry.grid(row=1, column=0, sticky="ew", padx=8, pady=(5, 15))
@@ -4705,6 +4317,7 @@ class NPCManagerCard:
             font=(self.font, self.font_size_medium_bold),
             bg=self.style["bg_tertiary"],
             fg="#4ECDC4",
+            anchor="center",
             pady=8,
         )
         bottom_title.grid(row=0, column=0, sticky="ew")
@@ -4719,6 +4332,7 @@ class NPCManagerCard:
             fg=self.style["text_primary"],
             relief="flat",
             bd=0,
+            justify="center",
             insertbackground=self.style["text_primary"],
         )
         correct_entry.grid(row=1, column=0, sticky="ew", padx=8, pady=(5, 15))
@@ -4727,11 +4341,8 @@ class NPCManagerCard:
         self.detail_form_elements["incorrect"] = incorrect_var
         self.detail_form_elements["correct"] = correct_var
 
-        # 🔥 ลบระบบ unsaved changes - ไม่ต้องตรวจสอบการเปลี่ยนแปลง
-        # incorrect_var.trace(
-        #     "w", lambda *args: setattr(self, "has_actual_changes", True)
-        # )
-        # correct_var.trace("w", lambda *args: setattr(self, "has_actual_changes", True))
+        # แสดง detail_form_frame (ใช้ grid ให้ตรงกับ detail_content_frame)
+        self.detail_form_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=10)
 
     def _create_word_fixes_detail_view(self, data):
         """สร้าง detail view พิเศษสำหรับ word_fixes แบบแนวตั้ง (แสดงรายละเอียด)"""
@@ -4849,7 +4460,7 @@ class NPCManagerCard:
                                 else "#FF69B4" if g == "Female" else "#34C759"
                             )
                             btn.configure(
-                                bg="#2D2D2D",
+                                bg="#222222",
                                 fg=color,
                                 font=(self.font, self.font_size_small),
                             )
@@ -6245,14 +5856,24 @@ class NPCManagerCard:
         # แสดงหน้าต่าง
         self.window.deiconify()
 
-        # 🐛 DEBUG: Log state after deiconify
-        after_deiconify = self.window.state() if hasattr(self, 'window') and self.window.winfo_exists() else "no_window"
-        self.logging_manager.log_info(f"🔍 [SHOW WINDOW] After deiconify: '{after_deiconify}'")
+        # Position relative to MBB main window (right side, aligned top)
+        try:
+            if hasattr(self, "parent_app") and self.parent_app and hasattr(self.parent_app, "_get_mbb_geometry"):
+                mx, my, mw, mh = self.parent_app._get_mbb_geometry()
+                x = mx + mw + 10
+                y = my
+                self.window.geometry(f"+{x}+{y}")
+        except Exception:
+            pass  # keep current position if fails
 
         # ✅ ปรับปรุง: แสดงหน้าต่างตามสถานะ
         if self.is_topmost:
             self.window.attributes("-topmost", True)  # บังคับ topmost ถ้า pin อยู่
         self.window.lift()  # ยกขึ้นบนสุด
+
+        # มุมโค้ง (ต้องรอ geometry update ก่อน)
+        self.window.update_idletasks()
+        self._apply_rounded_corners()
 
         # ✅ แก้ไข: Focus ที่ search entry แทน window เพื่อให้ผู้ใช้พิมพ์ได้ทันที
         if hasattr(self, "search_entry") and self.search_entry.winfo_exists():
@@ -6462,11 +6083,7 @@ class NPCManagerCard:
     # 🔧 ระบบจัดการ Timer และ Focus อย่างครอบคลุม
     def _safe_after(self, delay, callback):
         """สร้าง timer อย่างปลอดภัยและติดตาม พร้อมป้องกัน recursion"""
-        if (
-            self._is_destroyed
-            or not hasattr(self, "window")
-            or not self.window.winfo_exists()
-        ):
+        if self._is_destroyed or not hasattr(self, "window"):
             return None
 
         # ✅ ทำความสะอาด timers ที่เสร็จสิ้นแล้วก่อนสร้างใหม่
@@ -6502,10 +6119,10 @@ class NPCManagerCard:
             return
 
         try:
-            if hasattr(self, "window") and self.window.winfo_exists():
+            if hasattr(self, "window") and not self._is_destroyed:
                 self.window.after_cancel(
                     timer_id
-                )  # 🔥 แก้ไข: ใช้ self.window.after_cancel แทน self._safe_after_cancel
+                )
             # ลบออกจากรายการ timer ที่ active
             if timer_id in self._all_timers:
                 self._all_timers.remove(timer_id)
@@ -7080,44 +6697,8 @@ class NPCManagerCard:
         except Exception as e:
             self.logging_manager.log_error(f"Error during comprehensive cleanup: {e}")
 
-    def _safe_after(self, delay, callback):
-        """
-        ใช้ after อย่างปลอดภัยพร้อมเก็บ timer ID
-
-        Args:
-            delay: เวลาหน่วง (ms)
-            callback: ฟังก์ชันที่จะเรียก
-
-        Returns:
-            timer_id หรือ None ถ้าล้มเหลว
-        """
-        try:
-            if self._is_destroyed or not self.window.winfo_exists():
-                return None
-
-            timer_id = self.window.after(delay, callback)
-            self._all_timers.append(timer_id)
-            return timer_id
-
-        except Exception as e:
-            self.logging_manager.log_error(f"Error in safe_after: {e}")
-            return None
-
-    def _safe_after_cancel(self, timer_id):
-        """
-        ยกเลิก timer อย่างปลอดภัย
-
-        Args:
-            timer_id: ID ของ timer ที่จะยกเลิก
-        """
-        try:
-            if timer_id and self.window.winfo_exists():
-                self.window.after_cancel(timer_id)
-                if timer_id in self._all_timers:
-                    self._all_timers.remove(timer_id)
-        except Exception as e:
-            # ไม่ต้อง log error เพราะอาจเป็นกรณีปกติที่ timer ถูกยกเลิกไปแล้ว
-            pass
+    # NOTE: _safe_after และ _safe_after_cancel ถูกกำหนดไว้แล้วที่บรรทัด ~6307
+    # ไม่ต้องกำหนดซ้ำ เพราะจะ override ตัวเดิมที่มี safety checks ดีกว่า
 
     def _force_ui_unlock(self):
         """บังคับปลดล็อค UI ในกรณีที่ค้างอยู่"""
@@ -7313,6 +6894,18 @@ class NPCManagerCard:
 
                     # เพิ่ม: อัพเดท UI เพื่อให้แน่ใจว่าไม่ค้าง
                     self.window.update_idletasks()
+
+                    # แสดงคำเตือนเรื่อง roles สำหรับตัวละครหลักที่เพิ่มใหม่
+                    if self.current_section == "main_characters":
+                        char_name = new_entry.get("firstName", "")
+                        roles_data = self.data.get("character_roles", {})
+                        has_role = any(
+                            k.lower() == char_name.lower() for k in roles_data.keys()
+                        ) if char_name else False
+                        if char_name and not has_role:
+                            self.window.after(
+                                400, lambda n=char_name: self._show_role_warning_popup(n)
+                            )
                 else:
                     # แสดงข้อความเตือนหากบันทึกไม่สำเร็จ
                     self.flash_error_message("เพิ่มรายการในโปรแกรมแล้ว แต่บันทึกลงไฟล์ไม่สำเร็จ")
@@ -7325,6 +6918,68 @@ class NPCManagerCard:
 
             self.logging_manager.log_error(traceback.format_exc())
             messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการเพิ่มรายการ: {e}")
+
+    def _show_role_warning_popup(self, character_name):
+        """แสดง popup เตือนให้เพิ่มน้ำเสียงตัวละคร"""
+        try:
+            popup = tk.Toplevel(self.window)
+            popup.overrideredirect(True)
+            popup.configure(bg=self.style["bg_tertiary"])
+            popup.attributes("-topmost", True)
+
+            # จัดตำแหน่งกลางหน้าต่าง NPC Manager
+            popup.update_idletasks()
+            pw, ph = 380, 180
+            wx = self.window.winfo_x() + (self.window.winfo_width() - pw) // 2
+            wy = self.window.winfo_y() + (self.window.winfo_height() - ph) // 2
+            popup.geometry(f"{pw}x{ph}+{wx}+{wy}")
+
+            # ขอบ
+            border = tk.Frame(popup, bg=self.style["warning"], padx=1, pady=1)
+            border.pack(fill="both", expand=True)
+            inner = tk.Frame(border, bg=self.style["bg_secondary"])
+            inner.pack(fill="both", expand=True)
+
+            # Icon + ข้อความ
+            tk.Label(
+                inner, text="⚠️", font=(self.font, 20),
+                bg=self.style["bg_secondary"], fg=self.style["warning"],
+            ).pack(pady=(12, 0))
+
+            tk.Label(
+                inner,
+                text=f"'{character_name}' ยังไม่มีข้อมูลน้ำเสียง\nการแปลอาจไม่ได้อรรถรสเพียงพอ",
+                font=(self.font, self.font_size_small),
+                bg=self.style["bg_secondary"], fg=self.style["text_primary"],
+                justify="center", wraplength=340,
+            ).pack(pady=(4, 10))
+
+            # ปุ่ม
+            btn_frame = tk.Frame(inner, bg=self.style["bg_secondary"])
+            btn_frame.pack(pady=(0, 12))
+
+            def on_add_role():
+                popup.destroy()
+                self._navigate_and_prepare_role(character_name, "add")
+
+            tk.Button(
+                btn_frame, text="เพิ่มน้ำเสียง", font=(self.font, self.font_size_small),
+                bg=self.style["accent"], fg="white", bd=0, relief="flat",
+                padx=16, pady=6, cursor="hand2", command=on_add_role,
+            ).pack(side="left", padx=(0, 8))
+
+            tk.Button(
+                btn_frame, text="ข้าม", font=(self.font, self.font_size_small),
+                bg=self.style["bg_tertiary"], fg=self.style["text_secondary"],
+                bd=0, relief="flat", padx=16, pady=6, cursor="hand2",
+                command=popup.destroy,
+            ).pack(side="left")
+
+            # คลิกนอก popup ปิด
+            popup.bind("<FocusOut>", lambda e: None)
+
+        except Exception as e:
+            self.logging_manager.log_error(f"Role warning popup error: {e}")
 
     def _navigate_and_prepare_role(self, character_name, mode):
         """
@@ -8080,7 +7735,9 @@ if __name__ == "__main__":
     mock_logger = MockLoggingManager()
 
     # สร้างไฟล์ NPC.json ตัวอย่าง (ถ้ายังไม่มี)
-    if not os.path.exists("NPC.json"):
+    from npc_file_utils import get_npc_file_path
+    npc_test_path = get_npc_file_path()
+    if not os.path.exists(npc_test_path):
         sample_data = {
             "main_characters": [
                 {
@@ -8113,9 +7770,9 @@ if __name__ == "__main__":
             "word_fixes": {"teh": "the", "wierd": "weird"},
         }
         try:
-            with open("NPC.json", "w", encoding="utf-8") as f:
+            with open(npc_test_path, "w", encoding="utf-8") as f:
                 json.dump(sample_data, f, indent=4, ensure_ascii=False)
-            print("Created sample NPC.json")
+            print(f"Created sample NPC.json at {npc_test_path}")
         except Exception as e:
             print(f"Error creating sample NPC.json: {e}")
 

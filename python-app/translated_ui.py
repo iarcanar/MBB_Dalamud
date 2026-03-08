@@ -3,7 +3,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import ttk, colorchooser, messagebox
-from PIL import ImageTk, Image, ImageDraw, ImageFilter
+from PIL import ImageTk, Image, ImageDraw, ImageFilter, ImageFont
 import logging
 import os
 import math
@@ -93,9 +93,6 @@ class BlurShadowEngine:
                 return self._shadow_cache[cache_key]
 
             self.cache_misses += 1
-
-            # Import PIL modules locally to avoid import issues
-            from PIL import ImageFont
 
             # Load font
             try:
@@ -220,6 +217,9 @@ class BlurShadowEngine:
             if not hasattr(canvas, "_shadow_images"):
                 canvas._shadow_images = []
             canvas._shadow_images.append(shadow_photo)
+            # Prevent unbounded growth
+            if len(canvas._shadow_images) > 50:
+                canvas._shadow_images = canvas._shadow_images[-20:]
 
             return shadow_item
 
@@ -380,6 +380,7 @@ class ImprovedColorAlphaPickerWindow(tk.Toplevel):
         settings_ref,
         apply_callback,
         lock_mode,
+        main_ui=None  # NEW: Reference to main TranslatedUI for mode detection
     ):
         super().__init__(parent)
 
@@ -397,6 +398,8 @@ class ImprovedColorAlphaPickerWindow(tk.Toplevel):
         self.apply_callback = apply_callback
         self.is_alpha_disabled = lock_mode == 1
         self._choosing_color = False
+        self._is_closing = False  # Guard flag to prevent double-close
+        self.main_ui = main_ui  # NEW: Store main_ui reference
 
         # สร้าง UI
         self.setup_ui()
@@ -472,12 +475,12 @@ class ImprovedColorAlphaPickerWindow(tk.Toplevel):
             font=("Bai Jamjuree Light", 10),
         ).pack(side=tk.LEFT)
 
-        # Clamp alpha to 40-100% range
-        alpha_percentage = max(40, min(100, int(self.current_alpha * 100)))
+        # Clamp alpha to 80-100% range (keep background nearly solid for readability)
+        alpha_percentage = max(80, min(100, int(self.current_alpha * 100)))
         self.alpha_var = tk.IntVar(value=alpha_percentage)
         self.alpha_slider = tk.Scale(
             alpha_frame,
-            from_=40,  # Minimum 40%
+            from_=80,  # Minimum 80%
             to=100,    # Maximum 100%
             orient=tk.HORIZONTAL,
             variable=self.alpha_var,
@@ -552,7 +555,25 @@ class ImprovedColorAlphaPickerWindow(tk.Toplevel):
                 else self.current_alpha
             )
 
-            # บันทึกลง settings
+            # Save to mode-specific storage
+            if self.main_ui:
+                mode = self.main_ui._get_current_mode_name()
+
+                # Save color per mode
+                tui_colors = self.settings.get("tui_colors", {})
+                tui_colors[mode] = self.selected_color
+                self.settings.set("tui_colors", tui_colors)
+
+                # Save alpha per mode
+                tui_alphas = self.settings.get("tui_alphas", {})
+                tui_alphas[mode] = final_alpha
+                self.settings.set("tui_alphas", tui_alphas)
+
+                logging.info(
+                    f"💾 Saved {mode} mode: Color={self.selected_color}, Alpha={final_alpha:.2f}"
+                )
+
+            # Also save to legacy keys (backward compatibility)
             self.settings.set("bg_color", self.selected_color)
             self.settings.set("bg_alpha", final_alpha)
             self.settings.save_settings()
@@ -560,10 +581,6 @@ class ImprovedColorAlphaPickerWindow(tk.Toplevel):
             # เรียก callback เพื่อใช้งานทันที
             if self.apply_callback:
                 self.apply_callback(self.selected_color, final_alpha)
-
-            logging.info(
-                f"Auto-saved: Color={self.selected_color}, Alpha={final_alpha:.2f}"
-            )
 
         except Exception as e:
             logging.error(f"Error in save_immediately: {e}")
@@ -613,13 +630,27 @@ class ImprovedColorAlphaPickerWindow(tk.Toplevel):
             logging.debug(f"Could not apply rounded corners to color picker: {e}")
 
     def close_window(self):
-        """ปิดหน้าต่าง"""
+        """ปิดหน้าต่าง (with race condition protection)"""
+        if self._is_closing:
+            return  # Already closing, prevent double-close
+
+        self._is_closing = True
+
+        # Schedule actual destruction after current event finishes
+        # This prevents race condition with event callbacks
+        self.after_idle(self._perform_destroy)
+
+    def _perform_destroy(self):
+        """Actually destroy the window (deferred to avoid race condition)"""
         try:
-            self.unbind_all("<Button-1>")
-            self.grab_release()
-            self.destroy()
-        except:
-            pass
+            if self.winfo_exists():  # Check window still exists
+                self.unbind_all("<Button-1>")
+                self.grab_release()
+                self.destroy()
+        except tk.TclError as e:
+            logging.debug(f"TclError during Color Picker window close: {e}")
+        except Exception as e:
+            logging.error(f"Error destroying Color Picker window: {e}")
 
     def position_window(self, parent_widget):
         """จัดตำแหน่งหน้าต่าง - แสดงด้านบนของ parent window"""
@@ -808,39 +839,81 @@ class RichTextFormatter:
 
         Args:
             base_font_tuple: Tuple like ("Anuphan", 20)
-            font_style: 'normal', 'italic', or 'bold'
+            font_style: 'normal', 'italic', 'bold', or 'name'
 
         Returns:
             Font tuple for tkinter
         """
         font_family, font_size = base_font_tuple
-        logging.info(f"🔍 GET_FONT_TUPLE: Input = {base_font_tuple}, style = '{font_style}'")
 
         if font_style == 'italic':
-            # 🎨 FIXED: Always use FC Minimal Medium for italic text regardless of base font
-            result = ("FC Minimal Medium", font_size, "italic")
-            logging.info(f"🔍 GET_FONT_TUPLE: Using fixed italic font = {result}")
-            return result
+            return ("FC Minimal Medium", font_size, "italic")
         elif font_style == 'bold':
-            # ใช้ฟอนต์เดิมแต่เป็น bold สำหรับข้อความ **bold**
-            result = (font_family, font_size, "bold")
-            logging.info(f"🔍 GET_FONT_TUPLE: Using bold font = {result}")
-            return result
+            return (font_family, font_size, "bold")
+        elif font_style == 'name':
+            return base_font_tuple  # Names use base font (normal weight)
         else:
-            logging.info(f"🔍 GET_FONT_TUPLE: Returning normal font = {base_font_tuple}")
             return base_font_tuple
 
     def has_rich_text_markers(self, text: str) -> bool:
-        """
-        Check if text contains rich text formatting markers (*italic* or **bold**)
-
-        Args:
-            text: Text to check for formatting markers
-
-        Returns:
-            True if text contains rich text markers, False otherwise
-        """
+        """Check if text contains rich text formatting markers (*italic* or **bold**)"""
         return '*' in text
+
+    def parse_rich_text_with_names(self, text: str, names=None) -> list:
+        """Parse text for *italic*, **bold**, and character names.
+        Returns segments with font_style: 'normal', 'bold', 'italic', 'name'."""
+        segments = self.parse_rich_text(text)
+        if not names:
+            return segments
+
+        sorted_names = sorted([n for n in names if len(n) >= 2], key=len, reverse=True)
+        if not sorted_names:
+            return segments
+
+        result = []
+        for segment in segments:
+            style = segment['font_style']
+            if style in ('normal', 'italic'):
+                sub_segs = self._split_text_by_names(segment['text'], sorted_names)
+                for sub_type, sub_text in sub_segs:
+                    if sub_type == 'name':
+                        result.append({'text': sub_text, 'font_style': 'name'})
+                    else:
+                        result.append({'text': sub_text, 'font_style': style})
+            else:
+                result.append(segment)
+
+        return result
+
+    def _split_text_by_names(self, text: str, sorted_names: list) -> list:
+        """Split text by character names with word boundary check."""
+        if not sorted_names:
+            return [('normal', text)]
+        result = []
+        remaining = text
+        while remaining:
+            earliest_pos = len(remaining)
+            earliest_name = None
+            for name in sorted_names:
+                pos = remaining.find(name)
+                if pos != -1 and pos < earliest_pos:
+                    is_word = True
+                    if pos > 0 and (remaining[pos - 1].isalnum() or remaining[pos - 1] == "'"):
+                        is_word = False
+                    end_pos = pos + len(name)
+                    if end_pos < len(remaining) and (remaining[end_pos].isalnum() or remaining[end_pos] == "'"):
+                        is_word = False
+                    if is_word:
+                        earliest_pos = pos
+                        earliest_name = name
+            if earliest_name is None:
+                result.append(('normal', remaining))
+                break
+            if earliest_pos > 0:
+                result.append(('normal', remaining[:earliest_pos]))
+            result.append(('name', earliest_name))
+            remaining = remaining[earliest_pos + len(earliest_name):]
+        return result
 
 
 class Translated_UI(FontObserver):
@@ -913,6 +986,7 @@ class Translated_UI(FontObserver):
         # *** BLUR SHADOW ENGINE ***
         # Initialize advanced blur shadow system
         self.shadow_engine = BlurShadowEngine()
+
         self._last_safe_width = None  # Cache width to avoid unnecessary updates
         self._last_text = None  # Track text changes for differential updates
 
@@ -962,6 +1036,8 @@ class Translated_UI(FontObserver):
         self.default_height = None   # Store default height from settings
         self.cutscene_mode_active = False
         self.battle_mode_active = False  # Flag สำหรับ Battle Chat Mode
+        self.choice_mode_active = False  # Flag สำหรับ Choice Dialog Mode
+        self._deferred_render_id = None  # Timer ID for deferred text rendering after mode switch
 
         # Position tracking for dialogue mode
         self.dialogue_position_x = None  # Store X position before switching to cutscene
@@ -1281,7 +1357,7 @@ class Translated_UI(FontObserver):
 
     def get_user_transparency(self):
         """Get user's transparency setting from color picker"""
-        return self.settings.get("bg_alpha", 0.96)  # Default 96%
+        return self.settings.get("bg_alpha", 0.97)  # Default 97%
 
     def restore_user_transparency(self):
         """Restore TUI transparency to user's setting"""
@@ -1357,8 +1433,10 @@ class Translated_UI(FontObserver):
         self.root.after(50, self.apply_rounded_corners_to_ui)
 
     def _get_current_mode_name(self):
-        """Return current mode name: 'dialog', 'battle', or 'cutscene'"""
-        if self.battle_mode_active:
+        """Return current mode name: 'dialog', 'battle', 'cutscene', or 'choice'"""
+        if getattr(self, 'choice_mode_active', False):
+            return "choice"
+        elif self.battle_mode_active:
             return "battle"
         elif self.cutscene_mode_active:
             return "cutscene"
@@ -1385,6 +1463,28 @@ class Translated_UI(FontObserver):
         except Exception as e:
             logging.error(f"Error saving position: {e}")
 
+    def _load_mode_settings(self, mode):
+        """Load color and alpha for specified mode (size is auto-calculated per mode)"""
+        try:
+            logging.info(f"📂 Loading settings for {mode} mode")
+
+            # Load color & alpha only (NOT size - each mode uses auto-calculated size)
+            tui_colors = self.settings.get("tui_colors", {})
+            tui_alphas = self.settings.get("tui_alphas", {})
+
+            color = tui_colors.get(mode, "#0a0a0f")
+            alpha = tui_alphas.get(mode, 0.97)
+
+            self._apply_background_color_and_alpha(color, alpha)
+
+            # Update instance variables
+            self.current_bg_color = color
+            self.current_bg_alpha = alpha
+
+            logging.info(f"  Color: {color}, Alpha: {alpha}")
+        except Exception as e:
+            logging.error(f"Error loading mode settings: {e}")
+
     def set_display_mode_for_chat_type(self, chat_type: int):
         """
         Adjust TUI display based on chat type with full customization
@@ -1394,11 +1494,19 @@ class Translated_UI(FontObserver):
             chat_type: The ChatType from text hook
                 61 = Dialogue (default settings)
                 71 = Cutscene (80% width, optional background changes)
+
+        Returns:
+            bool: True if geometry changed, False if mode was already correct
         """
         try:
             # Skip if already in correct mode
             if self.current_chat_type == chat_type:
-                return
+                return False
+
+            # 🔧 FIX: Clear canvas when leaving choice mode to prevent ghost visuals
+            # Choice text stays visible during the 50ms defer window before new text renders
+            was_choice_mode = getattr(self, 'choice_mode_active', False)
+            prev_chat_type = self.current_chat_type
 
             # 💾 Save current mode position BEFORE switching
             if self.root.winfo_exists():
@@ -1442,6 +1550,11 @@ class Translated_UI(FontObserver):
 
                 self.battle_mode_active = True
                 self.cutscene_mode_active = False
+                self.choice_mode_active = False
+
+                # Load battle mode settings (color, alpha)
+                self._load_mode_settings("battle")
+
                 logging.info(f"⚔️ Switched to BATTLE CHAT mode: {new_width}x{new_height} at ({x}, {y})")
 
             elif chat_type == 71:  # Cutscene mode
@@ -1479,6 +1592,9 @@ class Translated_UI(FontObserver):
                 self.root.geometry(f"{new_width}x{new_height}+{x}+{y}")
                 self.root.resizable(False, False)  # Lock back after resize
 
+                # Load cutscene mode settings (color, alpha)
+                self._load_mode_settings("cutscene")
+
                 # ========== BACKGROUND CHANGES (OPTIONAL) ==========
                 # Option 1: Keep user settings (recommended for v1)
                 # No background changes - use existing settings
@@ -1498,7 +1614,38 @@ class Translated_UI(FontObserver):
 
                 self.cutscene_mode_active = True
                 self.battle_mode_active = False
+                self.choice_mode_active = False
                 logging.info(f"🎬 Switched to CUTSCENE mode: {new_width}x{new_height} at ({x}, {y})")
+
+            elif chat_type == 70:  # Choice mode (0x0046)
+                # ========== CHOICE MODE ==========
+                # Same size as dialog but positioned ABOVE current dialog position
+                # so it doesn't block the in-game choice buttons
+
+                # Get current dialog position as reference
+                current_y = self.root.winfo_y()
+                current_x = self.root.winfo_x()
+                current_height = self.root.winfo_height()
+
+                # Calculate height for choice display (needs more lines)
+                font_size = self.settings.get("font_size", 24) + 2
+                line_height = font_size * 1.4
+                # Header + up to 4 choices + padding
+                choice_height = int(line_height * 5 + 60)
+
+                # Position above the current dialog position
+                choice_y = current_y - choice_height - 10  # 10px gap above dialog
+                if choice_y < 0:
+                    choice_y = 10  # Don't go off screen
+
+                self.root.resizable(True, True)
+                self.root.geometry(f"{self.default_width}x{choice_height}+{current_x}+{choice_y}")
+                self.root.resizable(False, False)
+
+                self.choice_mode_active = True
+                self.cutscene_mode_active = False
+                self.battle_mode_active = False
+                logging.info(f"🎯 Switched to CHOICE mode: {self.default_width}x{choice_height} at ({current_x}, {choice_y})")
 
             else:  # Dialogue mode (61) or default
                 # ========== RESTORE DEFAULT SETTINGS ==========
@@ -1520,6 +1667,9 @@ class Translated_UI(FontObserver):
                 self.root.geometry(f"{self.default_width}x{self.default_height}+{restore_x}+{restore_y}")
                 self.root.resizable(False, False)  # Lock back after resize
 
+                # Load dialog mode settings (color, alpha)
+                self._load_mode_settings("dialog")
+
                 # Restore background settings (if they were changed in cutscene mode)
                 # If cutscene mode changed background, restore here:
                 # default_bg = self.settings.get("bg_color", appearance_manager.bg_color)
@@ -1529,11 +1679,23 @@ class Translated_UI(FontObserver):
 
                 self.cutscene_mode_active = False
                 self.battle_mode_active = False
+                self.choice_mode_active = False
                 logging.info(f"💬 Switched to DIALOGUE mode: {self.default_width}x{self.default_height} at ({restore_x}, {restore_y})")
 
-            # Force UI update and reconfigure text wrapping
+            # 🔧 FIX: Clear canvas when switching away from choice mode
+            # This prevents stale choice text from being visible during the
+            # 50ms defer window before new text renders
+            if was_choice_mode and chat_type != 70:
+                if hasattr(self.components, 'canvas') and self.components.canvas:
+                    self.components.canvas.delete("all")
+                    self.components.outline_container = []
+                    self.components.text_container = None
+                    logging.info("🧹 Cleared canvas on exit from choice mode")
+
+            # CRITICAL: Force Tk to process geometry change immediately
+            # Without this, winfo_width() returns stale values and text
+            # centering in battle/cutscene mode uses the OLD window width
             self.root.update_idletasks()
-            self.root.update()  # Force immediate geometry update
 
             # CRITICAL: Reconfigure text width to match new window size
             if hasattr(self.components, 'text_container') and self.components.text_container:
@@ -1541,17 +1703,16 @@ class Translated_UI(FontObserver):
                 self.components.canvas.itemconfig(self.components.text_container, width=new_text_width)
                 logging.info(f"🔧 Reconfigured text width to: {new_text_width}px")
 
-            # Force canvas to recalculate scrollregion
-            if hasattr(self.components, 'canvas'):
-                self.components.canvas.update_idletasks()
-
             # 🎨 CRITICAL: Reapply rounded corners after geometry change
             # Without this, corners become square after mode switching
             self.root.after(100, self.apply_rounded_corners_to_ui)
             logging.info(f"🎨 Scheduled rounded corners reapplication after mode switch")
 
+            return True  # Geometry changed
+
         except Exception as e:
             logging.error(f"Error setting display mode for ChatType {chat_type}: {e}")
+            return False
 
     def _get_text_color(self):
         """Return text color based on current mode"""
@@ -1572,6 +1733,71 @@ class Translated_UI(FontObserver):
         else:
             return "nw"  # Northwest = left-aligned
 
+    def _needs_rich_text(self, text: str) -> bool:
+        """Check if text needs rich text processing (has markers OR character names)"""
+        if '*' in text:
+            return True
+        if hasattr(self, 'names') and self.names:
+            for name in self.names:
+                if len(name) >= 2 and name in text:
+                    return True
+        return False
+
+    def _create_text_shadows(self, x, y, anchor, font, text="",
+                             width=None, tags=None):
+        """Create text shadow using canvas multi-ring outlines.
+
+        Returns list of canvas item IDs.
+        """
+        return self._create_text_shadows_canvas(x, y, anchor, font, text, width, tags)
+
+    def _create_text_shadows_canvas(self, x, y, anchor, font, text="",
+                                    width=None, tags=None):
+        """FALLBACK: Canvas multi-ring text outlines (revert target).
+
+        Lock mode 1: circular 3-ring graduated shadow.
+        Other modes: standard 8-point thin outline.
+        """
+        canvas = self.components.canvas
+        ids = []
+
+        if getattr(self, 'lock_mode', 0) == 1:
+            layers = [
+                ([(-3, 0), (3, 0), (0, -3), (0, 3),
+                  (-2, -2), (2, -2), (-2, 2), (2, 2),
+                  (-3, -1), (3, -1), (-3, 1), (3, 1),
+                  (-1, -3), (1, -3), (-1, 3), (1, 3)],
+                 "#111111"),
+                ([(-2, 0), (2, 0), (0, -2), (0, 2),
+                  (-2, -1), (2, -1), (-2, 1), (2, 1),
+                  (-1, -2), (1, -2), (-1, 2), (1, 2)],
+                 "#080808"),
+                ([(-1, -1), (-1, 0), (-1, 1),
+                  (0, -1),           (0, 1),
+                  (1, -1),  (1, 0),  (1, 1)],
+                 "#000000"),
+            ]
+        else:
+            layers = [
+                ([(-1, -1), (-1, 0), (-1, 1),
+                  (0, -1),           (0, 1),
+                  (1, -1),  (1, 0),  (1, 1)],
+                 "#000000"),
+            ]
+
+        kwargs = {"anchor": anchor, "font": font, "text": text}
+        if width is not None:
+            kwargs["width"] = width
+        if tags is not None:
+            kwargs["tags"] = tags
+
+        for positions, color in layers:
+            for dx, dy in positions:
+                item = canvas.create_text(
+                    x + dx, y + dy, fill=color, **kwargs)
+                ids.append(item)
+        return ids
+
     def setup_canvas_and_text(self) -> None:
         """Setup canvas and text display area with fonts and styling"""
 
@@ -1587,7 +1813,7 @@ class Translated_UI(FontObserver):
         )
 
         # Initialize text properties (เหมือนเดิม)
-        font_name = self.settings.get("font", "IBM Plex Sans Thai Medium")
+        font_name = self.settings.get("font", "Anuphan")
         font_size = self.settings.get("font_size", 24)
         text_width = int(self.root.winfo_width() * 0.95)
 
@@ -1723,6 +1949,7 @@ class Translated_UI(FontObserver):
                 canvas_height = self.components.scrollbar_canvas.winfo_height()
                 # คำนวณตำแหน่งคลิกเทียบกับความสูงทั้งหมด
                 click_ratio = event.y / canvas_height
+
                 # เลื่อนไปยังตำแหน่งที่คลิก
                 self.components.canvas.yview_moveto(click_ratio)
 
@@ -1759,7 +1986,7 @@ class Translated_UI(FontObserver):
             # ดำเนินการต่อเมื่อไม่ได้กำลังปรับแถบเลื่อนอยู่
             if not self.scrollbar_updating:
                 self.components.scrollbar_canvas.itemconfig(
-                    self.components.scrollbar_thumb, fill="#444444"  # สว่างขึ้นเล็กน้อย
+                    self.components.scrollbar_thumb, fill="#444444"  # สว่างขึ้นเมื่อ hover
                 )
                 self.expand_scrollbar(True)  # ขยายแถบเลื่อนเมื่อเมาส์อยู่เหนือแถบ
 
@@ -1964,15 +2191,15 @@ class Translated_UI(FontObserver):
 
             # อัปเดตสีของ thumb ตามความคืบหน้าของ animation
             if expand:
-                # ค่อยๆ เปลี่ยนสีเมื่อขยาย
-                r = int(51 + progress * 34)  # 51 -> 85
-                g = int(51 + progress * 34)  # 51 -> 85
-                b = int(51 + progress * 34)  # 51 -> 85
+                # ค่อยๆ เปลี่ยนสีเมื่อขยาย: #333333 (51) -> #555555 (85)
+                r = int(51 + progress * 34)
+                g = int(51 + progress * 34)
+                b = int(51 + progress * 34)
             else:
-                # ค่อยๆ เปลี่ยนสีเมื่อหด
-                r = int(85 - progress * 34)  # 85 -> 51
-                g = int(85 - progress * 34)  # 85 -> 51
-                b = int(85 - progress * 34)  # 85 -> 51
+                # ค่อยๆ เปลี่ยนสีเมื่อหด: #555555 (85) -> #333333 (51)
+                r = int(85 - progress * 34)
+                g = int(85 - progress * 34)
+                b = int(85 - progress * 34)
 
             thumb_color = f"#{r:02x}{g:02x}{b:02x}"
             self.components.scrollbar_canvas.itemconfig(
@@ -2378,7 +2605,6 @@ class Translated_UI(FontObserver):
                 try:
                     # Check if there's history available first
                     if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'dialog_history') and self.main_app.dialog_history:
-                        self.show_feedback_message("Previous Dialog!", bg_color="#4CAF50")
                         self.previous_dialog_callback()
                     else:
                         self.show_feedback_message("No previous dialog available", bg_color="#FF8C00")
@@ -2420,6 +2646,15 @@ class Translated_UI(FontObserver):
             font_size: ขนาดตัวอักษร (default: 10)
         """
         try:
+            # ทำลาย feedback ตัวเก่าถ้ามี
+            if hasattr(self, '_active_feedback') and self._active_feedback:
+                try:
+                    if self._active_feedback.winfo_exists():
+                        self._active_feedback.destroy()
+                except tk.TclError:
+                    pass
+                self._active_feedback = None
+
             # ตำแหน่งของหน้าต่าง
             x_pos = self.root.winfo_pointerx() + x_offset
             y_pos = self.root.winfo_pointery() + y_offset
@@ -2430,6 +2665,7 @@ class Translated_UI(FontObserver):
             feedback.attributes("-topmost", True)
             feedback.attributes("-alpha", 0.8)
             feedback.configure(bg=bg_color)
+            self._active_feedback = feedback
 
             # สร้าง label แสดงผล
             label = tk.Label(
@@ -2437,7 +2673,7 @@ class Translated_UI(FontObserver):
                 text=message,
                 fg="white",
                 bg=bg_color,
-                font=("IBM Plex Sans Thai Medium", font_size, "bold"),
+                font=("Anuphan", font_size, "bold"),
                 padx=15,
                 pady=8,
             )
@@ -2446,19 +2682,22 @@ class Translated_UI(FontObserver):
             # จัดตำแหน่งให้อยู่ใกล้ตำแหน่งที่คลิก
             feedback.geometry(f"+{x_pos}+{y_pos}")
 
-            # ทำ fade effect ก่อนปิด feedback
-            def fade_out():
-                for i in range(10, -1, -1):
-                    alpha = i / 10.0
-                    feedback.attributes("-alpha", alpha)
-                    feedback.update()
-                    time.sleep(0.03)
-                feedback.destroy()
+            # Fade effect ผ่าน root.after() (ไม่ใช้ thread — ป้องกัน Tk threading error)
+            def fade_step(step=10):
+                try:
+                    if not feedback.winfo_exists():
+                        return
+                    if step < 0:
+                        feedback.destroy()
+                        if self._active_feedback is feedback:
+                            self._active_feedback = None
+                        return
+                    feedback.attributes("-alpha", step / 10.0)
+                    self.root.after(30, lambda: fade_step(step - 1))
+                except tk.TclError:
+                    pass
 
-            # ใช้ thread แยกสำหรับ fade effect
-            self.root.after(
-                duration, lambda: threading.Thread(target=fade_out, daemon=True).start()
-            )
+            self.root.after(duration, fade_step)
 
         except Exception as e:
             logging.error(f"Error in show_feedback_message: {e}")
@@ -2569,20 +2808,40 @@ class Translated_UI(FontObserver):
             # Reset text cleared flag when new text arrives
             self._text_cleared = False
 
+            # Save chat_type for choice detection in _original_update_text
+            self._current_chat_type = chat_type
+
             # Set display mode based on chat type BEFORE showing text
-            self.set_display_mode_for_chat_type(chat_type)
+            geometry_changed = self.set_display_mode_for_chat_type(chat_type)
 
             # Phase 6: Auto-show TUI เมื่อมีข้อความใหม่
             if text and text.strip():  # ตรวจสอบว่ามีข้อความจริง
-                # Force geometry update BEFORE showing (prevents flash at wrong position)
-                if self.state.is_window_hidden:
-                    self.root.update_idletasks()
-                # logging.info(f"🔄 [AUTO-HIDE DEBUG] New text received, calling show_tui_on_new_translation()")
                 self.show_tui_on_new_translation()
 
-            # *** SIMPLIFIED: Always use normal flow with Rich Text integrated ***
+            # Cancel any pending deferred render
+            if hasattr(self, '_deferred_render_id') and self._deferred_render_id:
+                self.root.after_cancel(self._deferred_render_id)
+                self._deferred_render_id = None
+
             logging.info(f"📝 Processing text through normal flow (ChatType {chat_type}): {text}")
-            self._original_update_text(text, is_lore_text)
+
+            if geometry_changed:
+                # 🔧 FIX GHOST RE-RENDER: Immediately update stored text BEFORE deferring render.
+                # Without this, self.dialogue_text and self.state.full_text still hold OLD text
+                # (e.g., choice text) during the 50ms defer window. Any code path that reads
+                # these variables (lock mode redraw, text_container recovery, name update)
+                # would re-render the stale text as a "ghost".
+                self.state.full_text = text
+                self.dialogue_text = text
+
+                # Defer rendering so Tk processes geometry change first
+                # Without this, canvas.winfo_width() returns stale (old) values
+                # causing wrong text centering and wrapping in battle/cutscene modes
+                self._deferred_render_id = self.root.after(
+                    50, lambda: self._original_update_text(text, is_lore_text)
+                )
+            else:
+                self._original_update_text(text, is_lore_text)
         except Exception as e:
             logging.error(f"Error in text update: {e}")
             # Fallback to original method
@@ -2637,7 +2896,11 @@ class Translated_UI(FontObserver):
                 )
 
             for outline in self.components.outline_container:
-                self.components.canvas.itemconfig(outline, fill="#000000")
+                try:
+                    if self.components.canvas.type(outline) == "text":
+                        self.components.canvas.itemconfig(outline, fill="#000000")
+                except tk.TclError:
+                    pass
 
             # Handle newlines
             processed_text = self.preprocess_thai_text(text)
@@ -2666,7 +2929,7 @@ class Translated_UI(FontObserver):
 
             # Apply background
             current_bg_color = getattr(self, 'current_bg_color', '#0d0d0b')
-            current_bg_alpha = getattr(self, 'current_bg_alpha', 0.96)
+            current_bg_alpha = getattr(self, 'current_bg_alpha', 0.97)
             self._apply_background_color_and_alpha(current_bg_color, current_bg_alpha)
 
             # Get UI settings
@@ -2686,10 +2949,6 @@ class Translated_UI(FontObserver):
             else:
                 # Display direct text with Rich Text
                 self._update_rich_text_dialogue(extracted_dialogue, dialogue_font, 10, available_width)
-
-            # Force UI update
-            logging.info("[UI FORCED] Tkinter update forced after text update")
-            self.root.update_idletasks()
 
             # Start fade timer
             if self.state.fadeout_enabled:
@@ -2918,54 +3177,38 @@ class Translated_UI(FontObserver):
             if ": " in text:
                 parts = text.split(": ", 1)
                 speaker = parts[0].strip()
+                # Safety: strip rich text markers and zero-width chars from speaker name
+                speaker = speaker.replace("**", "").replace("*", "").replace("\u200b", "").replace("\u200c", "").strip()
                 dialogue = parts[1].strip() if len(parts) > 1 else ""
 
                 # Display speaker name
                 if speaker:
-                    # Create name shadows (8-point system)
-                    outline_offset = 1
-                    outline_color = "#000000"
-                    outline_positions = [
-                        (-1, -1),
-                        (-1, 0),
-                        (-1, 1),
-                        (0, -1),
-                        (0, 1),
-                        (1, -1),
-                        (1, 0),
-                        (1, 1),
-                    ]
-
-                    for dx, dy in outline_positions:
-                        outline = self.components.canvas.create_text(
-                            text_x + dx * outline_offset,
-                            10 + dy * outline_offset,
-                            anchor=text_anchor,
-                            font=dialogue_font,
-                            fill=outline_color,
-                            text=speaker,
-                            tags=("name_outline",),
-                        )
-                        self.components.outline_container.append(outline)
-
-                    # Create main speaker text
-                    # Get base color
-                    base_color = "#a855f7" if "?" in speaker else "#38bdf8"
-                    # Override for battle/cutscene modes
-                    if self.battle_mode_active:
-                        name_color = "#FF6B00"  # ส้มสด (Vibrant Orange)
-                        logging.info(f"⚔️ Battle mode - speaker color: {name_color}")
-                    elif self.cutscene_mode_active:
-                        name_color = "#FFD700"  # ทอง (Gold)
-                        logging.info(f"🎬 Cutscene mode - speaker color: {name_color}")
+                    # Speaker color: battle/cutscene = mono-color, dialogue = cyan/purple
+                    # All speakers use normal weight (no bold) for compatibility
+                    mode_color = self._get_text_color()
+                    if mode_color != "white":
+                        # Battle/Cutscene: mono-color
+                        name_color = mode_color
+                        speaker_font = dialogue_font
+                    elif "?" in speaker:
+                        name_color = "#a855f7"
+                        speaker_font = dialogue_font
                     else:
-                        name_color = base_color
+                        name_color = "#38bdf8"
+                        speaker_font = dialogue_font
+
+                    # Create name shadows (lock-mode aware)
+                    shadows = self._create_text_shadows(
+                        text_x, 10, text_anchor, speaker_font,
+                        text=speaker, tags=("name_outline",),
+                    )
+                    self.components.outline_container.extend(shadows)
 
                     self.components.canvas.create_text(
                         text_x,
                         10,
                         anchor=text_anchor,
-                        font=dialogue_font,
+                        font=speaker_font,
                         fill=name_color,
                         text=speaker,
                         tags=("name",),
@@ -2975,19 +3218,12 @@ class Translated_UI(FontObserver):
                 if dialogue:
                     dialogue_y = 35
 
-                    # Create dialogue shadows
-                    for dx, dy in outline_positions:
-                        outline = self.components.canvas.create_text(
-                            text_x + dx * outline_offset,
-                            dialogue_y + dy * outline_offset,
-                            anchor=text_anchor,
-                            font=dialogue_font,
-                            fill=outline_color,
-                            text="",
-                            width=available_width,
-                            tags=("text_outline",),
-                        )
-                        self.components.outline_container.append(outline)
+                    # Create dialogue shadows (lock-mode aware)
+                    shadows = self._create_text_shadows(
+                        text_x, dialogue_y, text_anchor, dialogue_font,
+                        text="", width=available_width, tags=("text_outline",),
+                    )
+                    self.components.outline_container.extend(shadows)
 
                     # Create main dialogue text with Rich Text support
                     # Use single text object as placeholder for text_container compatibility
@@ -3006,32 +3242,12 @@ class Translated_UI(FontObserver):
                     self._update_rich_text_dialogue(dialogue, dialogue_font, dialogue_y, available_width)
             else:
                 # No speaker - direct dialogue
-                # Create text shadows
-                outline_offset = 1
-                outline_color = "#000000"
-                outline_positions = [
-                    (-1, -1),
-                    (-1, 0),
-                    (-1, 1),
-                    (0, -1),
-                    (0, 1),
-                    (1, -1),
-                    (1, 0),
-                    (1, 1),
-                ]
-
-                for dx, dy in outline_positions:
-                    outline = self.components.canvas.create_text(
-                        text_x + dx * outline_offset,
-                        10 + dy * outline_offset,
-                        anchor=text_anchor,
-                        font=dialogue_font,
-                        fill=outline_color,
-                        text="",
-                        width=available_width,
-                        tags=("text_outline",),
-                    )
-                    self.components.outline_container.append(outline)
+                # Create text shadows (lock-mode aware)
+                shadows = self._create_text_shadows(
+                    text_x, 10, text_anchor, dialogue_font,
+                    text="", width=available_width, tags=("text_outline",),
+                )
+                self.components.outline_container.extend(shadows)
 
                 # Create main text
                 self.components.text_container = self.components.canvas.create_text(
@@ -3046,8 +3262,8 @@ class Translated_UI(FontObserver):
                 )
 
                 # For speed: Show text immediately instead of typewriter effect
-                # 🔧 FIXED: Check for Rich Text before updating
-                if hasattr(self, 'rich_text_formatter') and self.rich_text_formatter.has_rich_text_markers(text):
+                # 🔧 FIXED: Check for Rich Text / names before updating
+                if hasattr(self, 'rich_text_formatter') and self._needs_rich_text(text):
                     # Rich Text case: Store text and apply Rich Text formatting
                     logging.info(f"🎨 FAST_UPDATE: Applying Rich Text to: {text}")
                     self.dialogue_text = text
@@ -3128,9 +3344,10 @@ class Translated_UI(FontObserver):
                 )
 
             for outline in self.components.outline_container:
-                self.components.canvas.itemconfig(
-                    outline, fill="#000000"
-                )  # รีเซ็ตสีเงาเป็นสีดำ
+                if self.components.canvas.type(outline) == "text":
+                    self.components.canvas.itemconfig(
+                        outline, fill="#000000"
+                    )  # รีเซ็ตสีเงาเป็นสีดำ
 
             # รีเซ็ตสีของชื่อตัวละครที่อาจกำลัง fade out
             for name_item in self.components.canvas.find_withtag("name"):
@@ -3156,9 +3373,10 @@ class Translated_UI(FontObserver):
                 self.components.canvas.itemconfig(confirm_icon, state="normal")
 
             for outline in self.components.outline_container:
-                self.components.canvas.itemconfig(
-                    outline, fill="#000000"
-                )  # รีเซ็ตสีเงาเป็นสีดำ
+                if self.components.canvas.type(outline) == "text":
+                    self.components.canvas.itemconfig(
+                        outline, fill="#000000"
+                    )  # รีเซ็ตสีเงาเป็นสีดำ
 
             # ประมวลผลข้อความภาษาไทยก่อนแสดงผล
             text = self.preprocess_thai_text(text)
@@ -3213,9 +3431,11 @@ class Translated_UI(FontObserver):
             self.state.full_text = text
             available_width = self.components.canvas.winfo_width() - 40
 
-            # 🎯 CHOICE DETECTION ENABLED - Detect pipe-separated format from C#
-            # Format: "What will you say? | Choice1 | Choice2 | ..."
+            # 🎯 CHOICE DETECTION — pipe format OR chat_type 70 from C# choice addon
             is_choice_dialogue = self._is_choice_dialogue(text)
+            if not is_choice_dialogue and getattr(self, '_current_chat_type', 0) == 70:
+                is_choice_dialogue = True
+                logging.info("[CHOICE] Detected via chat_type=70 (translated text, no pipes)")
 
             # 💬 COMMENTED: Choice dialog detection patterns - ปิดการใช้งานเพื่อความเรียบง่าย
             """
@@ -3307,7 +3527,8 @@ class Translated_UI(FontObserver):
         # รีเฟรชการแสดงผลข้อความปัจจุบัน
         if hasattr(self, "state") and self.state.full_text:
             current_text = self.state.full_text
-            self.update_text(current_text)
+            current_type = getattr(self, 'current_chat_type', 61)
+            self.update_text(current_text, chat_type=current_type)
 
     def _is_choice_dialogue(self, text: str) -> bool:
         """Detect if text is a choice dialogue based on pipe-separated format from C#
@@ -3696,7 +3917,7 @@ class Translated_UI(FontObserver):
                 anchor="nw",
                 font=dialogue_font,
                 fill=outline_color,
-                text="",
+                text=choices_display,
                 width=available_width,
                 tags=("choices_outline",),
             )
@@ -3752,6 +3973,8 @@ class Translated_UI(FontObserver):
             if not is_lore_text and ":" in text:
                 name, dialogue = text.split(":", 1)
                 name = name.strip()
+                # Safety: strip rich text markers and zero-width chars from speaker name
+                name = name.replace("**", "").replace("*", "").replace("\u200b", "").replace("\u200c", "").strip()
                 dialogue = dialogue.strip()
 
                 # ฟังก์ชันช่วยปรับข้อความภาษาไทยให้แสดงผลได้ดีขึ้น - แก้ไขการเว้นวรรคผิดปกติ
@@ -3832,51 +4055,33 @@ class Translated_UI(FontObserver):
                     name_anchor = "nw"  # Northwest = left-aligned
                     text_anchor = "nw"
 
-                # สร้างเงาสำหรับชื่อตัวละครด้วย 8-point shadow system (reverted)
-                outline_offset = (
-                    ShadowConfig.get_scaled_params(small_font[1])["offset_x"] or 1
-                )
-                outline_color = ShadowConfig.SHADOW_COLOR
-
-                # 8-point outline positions
-                outline_positions = [
-                    (-1, -1),
-                    (-1, 0),
-                    (-1, 1),
-                    (0, -1),
-                    (0, 1),
-                    (1, -1),
-                    (1, 0),
-                    (1, 1),
-                ]
-
-                for dx, dy in outline_positions:
-                    outline = self.components.canvas.create_text(
-                        name_x + dx * outline_offset,
-                        name_y + dy * outline_offset,
-                        anchor=name_anchor,
-                        font=small_font,
-                        fill=outline_color,
-                        text=name,
-                        tags=("name_outline",),
-                    )
-                    self.components.outline_container.append(outline)
-
-                # Determine name color with battle/cutscene override
-                base_color = "#a855f7" if "?" in name else "#38bdf8"
-                if self.battle_mode_active:
-                    name_color = "#FF6B00"  # ส้มสด (Vibrant Orange)
-                elif self.cutscene_mode_active:
-                    name_color = "#FFD700"  # ทอง (Gold)
+                # Speaker color: battle/cutscene = mono-color, dialogue = cyan/purple
+                # All speakers use normal weight (no bold) for compatibility
+                mode_color = self._get_text_color()
+                if mode_color != "white":
+                    # Battle/Cutscene: mono-color
+                    name_color = mode_color
+                    speaker_font = small_font
+                elif "?" in name:
+                    name_color = "#a855f7"
+                    speaker_font = small_font
                 else:
-                    name_color = base_color
+                    name_color = "#38bdf8"
+                    speaker_font = small_font
+
+                # สร้างเงาสำหรับชื่อตัวละคร (lock-mode aware)
+                shadows = self._create_text_shadows(
+                    name_x, name_y, name_anchor, speaker_font,
+                    text=name, tags=("name_outline",),
+                )
+                self.components.outline_container.extend(shadows)
 
                 # Create name text
                 name_text = self.components.canvas.create_text(
                     name_x,
                     name_y,
                     anchor=name_anchor,
-                    font=small_font,
+                    font=speaker_font,
                     fill=name_color,
                     text=name,
                     tags=("name",),
@@ -3914,36 +4119,12 @@ class Translated_UI(FontObserver):
                 # รีเซ็ต outline_container เพื่อเตรียมสร้างเงาใหม่
                 self.components.outline_container = []
 
-                # สร้างเงาสำหรับข้อความบทสนทนาด้วย 8-point shadow system (reverted)
-                outline_offset = (
-                    ShadowConfig.get_scaled_params(dialogue_font[1])["offset_x"] or 1
+                # สร้างเงาสำหรับข้อความบทสนทนา (lock-mode aware)
+                shadows = self._create_text_shadows(
+                    dialogue_x, dialogue_y, text_anchor, dialogue_font,
+                    text="", width=thai_text_width, tags=("dialogue_outline",),
                 )
-                outline_color = ShadowConfig.SHADOW_COLOR
-
-                # 8-point outline positions
-                outline_positions = [
-                    (-1, -1),
-                    (-1, 0),
-                    (-1, 1),
-                    (0, -1),
-                    (0, 1),
-                    (1, -1),
-                    (1, 0),
-                    (1, 1),
-                ]
-
-                for dx, dy in outline_positions:
-                    outline = self.components.canvas.create_text(
-                        dialogue_x + dx * outline_offset,
-                        dialogue_y + dy * outline_offset,
-                        anchor=text_anchor,
-                        font=dialogue_font,
-                        fill=outline_color,
-                        text="",
-                        width=thai_text_width,
-                        tags=("dialogue_outline",),
-                    )
-                    self.components.outline_container.append(outline)
+                self.components.outline_container.extend(shadows)
 
                 # Create dialogue text container
                 self.components.text_container = self.components.canvas.create_text(
@@ -4031,45 +4212,22 @@ class Translated_UI(FontObserver):
                 # ตำแหน่งเริ่มต้นสำหรับข้อความที่ไม่มีชื่อคนพูด
                 dialogue_y = 10
 
-                # 🎬 CUTSCENE MODE: Center-align text for cutscene mode
-                if self.cutscene_mode_active:
-                    dialogue_x = available_width // 2  # Center for cutscene
+                # 🎬 CENTER ALIGNMENT: Battle Chat & Cutscene modes (no speaker)
+                if self.battle_mode_active or self.cutscene_mode_active:
+                    dialogue_x = available_width // 2  # Center for battle/cutscene
                     text_anchor = "n"  # North = center-aligned
-                    logging.info(f"🎬 Cutscene mode (no speaker): Using center alignment (x={dialogue_x})")
+                    mode_name = "Battle" if self.battle_mode_active else "Cutscene"
+                    logging.info(f"⚔️🎬 {mode_name} mode (no speaker): Using center alignment (x={dialogue_x})")
                 else:
                     dialogue_x = 10  # Left-aligned for dialogue
                     text_anchor = "nw"  # Northwest = left-aligned
 
-                # สร้างเงาสำหรับข้อความทั้งหมดด้วย 8-point shadow system (reverted)
-                outline_offset = (
-                    ShadowConfig.get_scaled_params(dialogue_font[1])["offset_x"] or 1
+                # สร้างเงาสำหรับข้อความทั้งหมด (lock-mode aware)
+                shadows = self._create_text_shadows(
+                    dialogue_x, dialogue_y, text_anchor, dialogue_font,
+                    text="", width=thai_text_width, tags=("text_outline",),
                 )
-                outline_color = ShadowConfig.SHADOW_COLOR
-
-                # 8-point outline positions
-                outline_positions = [
-                    (-1, -1),
-                    (-1, 0),
-                    (-1, 1),
-                    (0, -1),
-                    (0, 1),
-                    (1, -1),
-                    (1, 0),
-                    (1, 1),
-                ]
-
-                for dx, dy in outline_positions:
-                    outline = self.components.canvas.create_text(
-                        dialogue_x + dx * outline_offset,
-                        dialogue_y + dy * outline_offset,
-                        anchor=text_anchor,
-                        font=dialogue_font,
-                        fill=outline_color,
-                        text="",
-                        width=thai_text_width,
-                        tags=("text_outline",),
-                    )
-                    self.components.outline_container.append(outline)
+                self.components.outline_container.extend(shadows)
 
                 # สร้างข้อความหลัก
                 self.components.text_container = self.components.canvas.create_text(
@@ -4085,8 +4243,9 @@ class Translated_UI(FontObserver):
 
             # Start typewriter effect with dialogue text
             self.dialogue_text = dialogue
-            if hasattr(self, "type_writer_timer"):
+            if hasattr(self, "type_writer_timer") and self.type_writer_timer:
                 self.root.after_cancel(self.type_writer_timer)
+                self.type_writer_timer = None
 
             # ENABLE TYPEWRITER EFFECT for Dalamud mode
             # User requested typewriter effect to work with text hook integration
@@ -4154,8 +4313,8 @@ class Translated_UI(FontObserver):
                         item_type = self.components.canvas.type(outline)
                         if item_type == "text":
                             self.components.canvas.itemconfig(outline, text=next_text)
-                        if i == 0:  # tag_lower เฉพาะครั้งแรก
-                            self.components.canvas.tag_lower(outline)
+                            if i == 0:  # tag_lower เฉพาะครั้งแรก
+                                self.components.canvas.tag_lower(outline)
 
                 # อัพเดตข้อความหลัก
                 self.components.canvas.itemconfig(
@@ -4175,9 +4334,9 @@ class Translated_UI(FontObserver):
                 # การพิมพ์ข้อความเสร็จสิ้น
                 self.state.is_typing = False
 
-                # *** INTEGRATED: Check for Rich Text after typewriter completes ***
+                # *** INTEGRATED: Check for Rich Text / names after typewriter completes ***
                 if hasattr(self, 'rich_text_formatter') and hasattr(self, 'dialogue_text'):
-                    if self.rich_text_formatter.has_rich_text_markers(self.dialogue_text):
+                    if self._needs_rich_text(self.dialogue_text):
                         logging.info(f"🎨 POST-TYPEWRITER: Applying Rich Text to completed text: {self.dialogue_text}")
                         self._apply_rich_text_to_completed_dialogue()
 
@@ -4230,8 +4389,9 @@ class Translated_UI(FontObserver):
             return
 
         # ยกเลิก timer ที่กำลังทำงานอยู่
-        if hasattr(self, "type_writer_timer"):
+        if hasattr(self, "type_writer_timer") and self.type_writer_timer:
             self.root.after_cancel(self.type_writer_timer)
+            self.type_writer_timer = None
 
         # ยกเลิกสถานะ typing
         self.state.is_typing = False
@@ -4290,8 +4450,9 @@ class Translated_UI(FontObserver):
         if self.components.text_container is None:
             if hasattr(self, "dialogue_text") and self.dialogue_text:
                 # ถ้า text_container ถูกลบไปแล้ว แต่ยังมี dialogue_text อยู่
-                # ให้สร้าง text_container ใหม่
-                self.update_text(self.dialogue_text)
+                # ให้สร้าง text_container ใหม่ — ส่ง chat_type เพื่อรักษา mode
+                current_type = getattr(self, 'current_chat_type', 61)
+                self.update_text(self.dialogue_text, chat_type=current_type)
             return
 
         # Handle choice text
@@ -4327,9 +4488,9 @@ class Translated_UI(FontObserver):
             else:
                 display_text = self.dialogue_text
 
-            # 🔧 ENHANCED: Better Rich Text reapplication detection
+            # 🔧 ENHANCED: Better Rich Text / names reapplication detection
             if (hasattr(self, 'rich_text_formatter') and
-                self.rich_text_formatter.has_rich_text_markers(display_text) and
+                self._needs_rich_text(display_text) and
                 not self.is_already_rich_text_processed(display_text)):
                 # Rich Text case: Apply formatting only if not already formatted
                 logging.info(f"🎨 SHOW_FULL_TEXT: Applying Rich Text to: {display_text[:50]}...")
@@ -4803,7 +4964,11 @@ class Translated_UI(FontObserver):
                 "header_outline",
             ]:
                 for outline in self.components.canvas.find_withtag(tag):
-                    self.components.canvas.itemconfig(outline, font=font)
+                    try:
+                        if self.components.canvas.type(outline) == "text":
+                            self.components.canvas.itemconfig(outline, font=font)
+                    except tk.TclError:
+                        pass
 
             self.check_text_overflow()
             logging.info(f"Font size adjusted to: {size}")
@@ -4837,12 +5002,16 @@ class Translated_UI(FontObserver):
             "header_outline",
         ]:
             for outline in self.components.canvas.find_withtag(tag):
-                self.components.canvas.itemconfig(outline, font=font)
+                try:
+                    if self.components.canvas.type(outline) == "text":
+                        self.components.canvas.itemconfig(outline, font=font)
+                except tk.TclError:
+                    pass
 
-        # 🎨 FONT CHANGE: Re-apply Rich Text if current text has Rich Text markers
+        # 🎨 FONT CHANGE: Re-apply Rich Text if current text has markers or names
         if (hasattr(self, 'dialogue_text') and self.dialogue_text and
             hasattr(self, 'rich_text_formatter') and
-            self.rich_text_formatter.has_rich_text_markers(self.dialogue_text)):
+            self._needs_rich_text(self.dialogue_text)):
             logging.info(f"🎨 FONT CHANGE: Re-applying Rich Text after font change to {font_name}")
             self._apply_rich_text_to_completed_dialogue()
 
@@ -4958,12 +5127,13 @@ class Translated_UI(FontObserver):
             # ใช้ after เพื่อให้ UI มีเวลาปรับปรุงพื้นหลังก่อนวาดข้อความ
             # ป้องกันการเรียก old text ที่อาจทำให้เกิด error และข้อความสีแดง
             current_text = self.state.full_text
+            current_type = getattr(self, 'current_chat_type', 61)
 
             def redraw_text():
                 try:
                     # ตรวจสอบว่าข้อความยังใหม่อยู่ก่อนวาด
                     if hasattr(self, "state") and self.state.full_text == current_text:
-                        self.update_text(current_text)
+                        self.update_text(current_text, chat_type=current_type)
                 except Exception as e:
                     logging.warning(
                         f"Failed to redraw text after lock mode change: {e}"
@@ -4988,6 +5158,7 @@ class Translated_UI(FontObserver):
             self.settings,
             self._apply_background_color_and_alpha,
             current_lock_mode,
+            self  # Pass main_ui reference for per-mode saving
         )
 
         # ปรับตำแหน่งให้แสดงเหนือปุ่มสี
@@ -5077,9 +5248,13 @@ class Translated_UI(FontObserver):
                             self.components.canvas.itemconfig(
                                 name_item, fill=name_color
                             )
-                        # ทำให้เส้นขอบข้อความเข้มขึ้น
+                        # ทำให้เส้นขอบข้อความเข้มขึ้น (skip image items)
                         for outline in self.components.outline_container:
-                            self.components.canvas.itemconfig(outline, width=2)
+                            try:
+                                if self.components.canvas.type(outline) == "text":
+                                    self.components.canvas.itemconfig(outline, width=2)
+                            except tk.TclError:
+                                pass
                 except tk.TclError as e:
                     logging.error(f"Failed to set alpha in normal mode: {e}")
 
@@ -5167,12 +5342,9 @@ class Translated_UI(FontObserver):
 
         self.resize_handle.place(relx=1, rely=1, anchor="se")
 
-        # Bind events (เหมือนเดิม)
-        self.resize_handle.bind("<Button-1>", self.start_resize)
-        self.resize_handle.bind("<B1-Motion>", self.on_resize)
-        self.resize_handle.bind("<ButtonRelease-1>", self.stop_resize)
+        # Bindings อยู่ใน setup_bindings() แล้ว — ไม่ bind ซ้ำที่นี่
 
-        # Initialize resize state (เหมือนเดิม)
+        # Initialize resize state
         self.is_resizing = False
         self.last_resize_time = 0
         self.resize_throttle = 0.016
@@ -5189,6 +5361,10 @@ class Translated_UI(FontObserver):
         self.resize_y = event.y_root
         self.resize_w = self.root.winfo_width()
         self.resize_h = self.root.winfo_height()
+
+        # บันทึกตำแหน่ง window เพื่อ lock ไว้ระหว่าง resize
+        self.resize_anchor_x = self.root.winfo_x()
+        self.resize_anchor_y = self.root.winfo_y()
 
         # บันทึกขนาดหน้าต่างก่อนเริ่มปรับขนาด เพื่อใช้เป็นจุดอ้างอิง
         self.original_geometry = self.root.geometry()
@@ -5230,30 +5406,10 @@ class Translated_UI(FontObserver):
             new_width = max(300, self.resize_w + dx)
             new_height = max(120, self.resize_h + dy)  # ปรับลดค่าความสูงต่ำสุด
 
-            # กำหนดขนาดใหม่โดยไม่ต้องอัพเดตเนื้อหาภายใน
-            self.root.geometry(f"{int(new_width)}x{int(new_height)}")
+            # กำหนดขนาดใหม่ พร้อม lock ตำแหน่ง
+            self.root.geometry(f"{int(new_width)}x{int(new_height)}+{self.resize_anchor_x}+{self.resize_anchor_y}")
 
-            # 🎨 เพิ่ม: อัพเดตขอบโค้งมนแบบ realtime (throttled)
             current_time = time.time()
-
-            # Initialize last_rounded_update_time if not exists
-            if not hasattr(self, "last_rounded_update_time"):
-                self.last_rounded_update_time = 0
-
-            # อัพเดตขอบโค้งมนทุก 50ms เพื่อประสิทธิภาพ
-            if current_time - self.last_rounded_update_time > 0.05:  # 50ms
-                try:
-                    # ตรวจสอบว่าเป็นการหดขนาดหรือไม่
-                    is_shrinking = (
-                        new_width < self.resize_w or new_height < self.resize_h
-                    )
-
-                    # เรียกใช้พร้อม clear_first=True สำหรับการหดขนาด
-                    self.apply_rounded_corners_to_ui(clear_first=is_shrinking)
-
-                    self.last_rounded_update_time = current_time
-                except Exception as e:
-                    pass  # ไม่ให้ error ขัดจังหวะการ resize
 
             # *** PROFESSIONAL UI: Remove intrusive resize messages ***
             # Silent resize - no overlay text that interferes with content
@@ -5264,6 +5420,9 @@ class Translated_UI(FontObserver):
                 # Optional: Minimal console logging (can be disabled in production)
                 # print(f"\rResize: {int(new_width)}x{int(new_height)}px", end="", flush=True)
                 self.last_resize_time = current_time
+
+                # ไม่อัพเดตขอบโค้งมนระหว่าง drag — จะใส่กลับตอน stop_resize
+                # (SetWindowRgn + update_idletasks หนักเกินไปสำหรับทุก frame)
 
                 # *** REMOVED: Intrusive resize message overlay ***
                 # Professional UI should not show "กำลังปรับขนาด" text
@@ -5301,24 +5460,21 @@ class Translated_UI(FontObserver):
             # ตั้งเวลาสำหรับการอัพเดตเนื้อหาหลังจากขนาดหน้าต่างคงที่แล้ว
             def update_content_after_resize():
                 try:
-                    # *** PROFESSIONAL UI: No resize message cleanup needed ***
-                    # Since we removed the intrusive resize messages,
-                    # no need to restore or clean up any temporary text
-                    # Content remains stable during resize operations
-
                     # อัพเดต canvas กับ scroll region
                     self.on_canvas_configure({"width": final_w - 40})
+
+                    # Re-render ข้อความตามขนาดใหม่
+                    if hasattr(self, 'dialogue_text') and self.dialogue_text:
+                        current_type = getattr(self, 'current_chat_type', 61)
+                        self.update_text(self.dialogue_text, chat_type=current_type)
 
                     # ตรวจสอบข้อความเกินขอบเขต
                     try:
                         self.check_text_overflow()
-                        # เพิ่มบรรทัดนี้: ปรับตำแหน่ง scrollbar
                         self.update_scrollbar_position()
                     except Exception as e:
                         logging.error(f"Error checking text overflow after resize: {e}")
 
-                    # Optional: Silent completion (professional UI)
-                    # print(f"\rResize completed: {final_w}x{final_h}px")  # Can be enabled for debugging
                 except Exception as e:
                     logging.error(f"Error updating content after resize: {e}")
 
@@ -5394,8 +5550,12 @@ class Translated_UI(FontObserver):
                     and self.components.outline_container
                 ):
                     for outline in self.components.outline_container:
-                        if outline:  # Check if outline still exists
-                            self.components.canvas.itemconfig(outline, width=safe_width)
+                        if outline:
+                            try:
+                                if self.components.canvas.type(outline) == "text":
+                                    self.components.canvas.itemconfig(outline, width=safe_width)
+                            except tk.TclError:
+                                pass
 
                 # Optimized scroll region update
                 self.root.after_idle(self._update_scroll_region_optimized)
@@ -5450,8 +5610,12 @@ class Translated_UI(FontObserver):
                     and self.components.outline_container
                 ):
                     for outline in self.components.outline_container:
-                        if outline:  # ตรวจสอบว่า outline ยังใช้งานได้
-                            self.components.canvas.itemconfig(outline, width=safe_width)
+                        if outline:
+                            try:
+                                if self.components.canvas.type(outline) == "text":
+                                    self.components.canvas.itemconfig(outline, width=safe_width)
+                            except tk.TclError:
+                                pass
 
                 # อัพเดต scroll region ให้มีพื้นที่เหลือน้อยลง
                 self.components.canvas.update_idletasks()
@@ -5504,6 +5668,8 @@ class Translated_UI(FontObserver):
         Args:
             event: Mouse click event
         """
+        if self._is_click_on_resize_handle(event):
+            return
         if self.state.is_locked and not self._is_click_on_button(event):
             if self.lock_mode == 2:  # Lock with visible bg
                 self.show_full_text()
@@ -5533,10 +5699,23 @@ class Translated_UI(FontObserver):
         Returns:
             bool: True if click was on scrollbar
         """
-        return (
-            self.components.scrollbar.winfo_containing(event.x_root, event.y_root)
-            == self.components.scrollbar
-        )
+        if not hasattr(self.components, 'scrollbar') or not self.components.scrollbar:
+            return False
+        try:
+            widget = self.components.scrollbar.winfo_containing(event.x_root, event.y_root)
+            return widget == self.components.scrollbar
+        except Exception:
+            return False
+
+    def _is_click_on_resize_handle(self, event: tk.Event) -> bool:
+        """Check if click was on resize handle"""
+        if not hasattr(self, 'resize_handle') or not self.resize_handle:
+            return False
+        try:
+            widget = self.resize_handle.winfo_containing(event.x_root, event.y_root)
+            return widget == self.resize_handle
+        except Exception:
+            return False
 
     def _start_move(self, event: tk.Event) -> None:
         """
@@ -5554,7 +5733,7 @@ class Translated_UI(FontObserver):
         Args:
             event: Mouse drag event
         """
-        if not self.state.is_locked:
+        if not self.state.is_locked and not getattr(self, 'is_resizing', False):
             self._do_move(event)
 
     def stop_move(self, event: Optional[tk.Event] = None) -> None:
@@ -5622,8 +5801,9 @@ class Translated_UI(FontObserver):
         """Cleanup resources before closing"""
         try:
             # Cancel any pending typewriter effects
-            if hasattr(self, "type_writer_timer"):
+            if hasattr(self, "type_writer_timer") and self.type_writer_timer:
                 self.root.after_cancel(self.type_writer_timer)
+                self.type_writer_timer = None
 
             # ยกเลิก fade timer ด้วย
             if hasattr(self, "state") and self.state.fade_timer_id:
@@ -5898,75 +6078,9 @@ class Translated_UI(FontObserver):
             self.logging_manager.log_error(f"Error in hover leave effect: {e}")
 
     def highlight_special_names(self, text, names_set):
-        """
-        ค้นหาและครอบชื่อเฉพาะในข้อความด้วยเครื่องหมาย 『』
-
-        Args:
-            text: ข้อความที่ต้องการค้นหา
-            names_set: set ของชื่อเฉพาะที่ต้องการค้นหา
-
-        Returns:
-            str: ข้อความที่มีการเพิ่มเครื่องหมาย 『』 ครอบชื่อเฉพาะ
-        """
-        # ถ้าไม่มีข้อความหรือไม่มีชื่อเฉพาะที่ต้องตรวจสอบ ให้คืนค่าข้อความเดิม
-        if not text or not names_set:
-            return text
-
-        # เรียงลำดับชื่อจากยาวไปสั้น เพื่อให้ชื่อที่ยาวกว่าถูกแทนที่ก่อน
-        names_list = sorted(names_set, key=len, reverse=True)
-
-        # ลูปผ่านแต่ละชื่อเฉพาะ
-        processed_text = text
-        for name in names_list:
-            # หลีกเลี่ยงชื่อที่สั้นเกินไป (น้อยกว่า 2 ตัวอักษร)
-            if len(name) < 2:
-                continue
-
-            # ค้นหาตำแหน่งทั้งหมดของชื่อในข้อความ
-            start_idx = 0
-            while True:
-                # ค้นหาชื่อในข้อความตั้งแต่ตำแหน่ง start_idx
-                idx = processed_text.find(name, start_idx)
-                if idx == -1:
-                    break  # ไม่พบชื่ออีกแล้ว
-
-                # ตรวจสอบว่าเป็นคำเต็มๆ ไม่ใช่ส่วนหนึ่งของคำอื่น
-                is_complete_word = True
-
-                # ตรวจสอบอักขระก่อนหน้า (ถ้ามี)
-                if idx > 0:
-                    prev_char = processed_text[idx - 1]
-                    if (
-                        prev_char.isalnum() or prev_char == "'"
-                    ):  # รวม ' เพราะอาจเป็นส่วนของชื่อ
-                        is_complete_word = False
-
-                # ตรวจสอบอักขระถัดไป (ถ้ามี)
-                next_idx = idx + len(name)
-                if next_idx < len(processed_text):
-                    next_char = processed_text[next_idx]
-                    if next_char.isalnum() or next_char == "'":
-                        is_complete_word = False
-
-                # ถ้าเป็นคำเต็มๆ ให้ทำการไฮไลท์
-                if is_complete_word:
-                    # สร้างชื่อที่มีเครื่องหมาย
-                    highlighted_name = f"『{name}』"
-
-                    # แทนที่ชื่อในข้อความ
-                    processed_text = (
-                        processed_text[:idx]
-                        + highlighted_name
-                        + processed_text[idx + len(name) :]
-                    )
-
-                    # อัพเดต start_idx สำหรับการค้นหาครั้งต่อไป
-                    start_idx = idx + len(highlighted_name)
-                else:
-                    # ถ้าไม่ใช่คำเต็มๆ ให้เลื่อน start_idx ไป 1 ตำแหน่ง
-                    start_idx = idx + 1
-
-        return processed_text
+        """No-op — name highlighting now handled by create_rich_text_with_outlines().
+        Brackets 『』 removed per v4 style rules."""
+        return text
 
     def apply_highlights_to_text(self):
         """
@@ -6626,23 +6740,15 @@ class Translated_UI(FontObserver):
     def show_tui_on_new_translation(self):
         """แสดง TUI เมื่อมีการแปลใหม่"""
         try:
-            # logging.info(f"🔄 [AUTO-HIDE DEBUG] show_tui_on_new_translation called, is_window_hidden: {self.state.is_window_hidden}")
             if self.state.is_window_hidden:
-                # Force geometry update BEFORE showing (prevents flash at wrong position)
-                self.root.update_idletasks()
                 self.root.deiconify()  # แสดงหน้าต่าง
                 self.state.is_window_hidden = False
 
-                # คืนค่าความโปร่งใสของ TUI ที่ผู้ใช้ตั้งไว้
-                try:
-                    self.restore_user_transparency()
-                except Exception as e:
-                    logging.error(f"Error restoring TUI transparency on show: {e}")
-
-                # logging.info("✅ [AUTO-HIDE DEBUG] TUI auto-shown on new translation")
-            else:
-                # logging.info("ℹ️ [AUTO-HIDE DEBUG] TUI already visible, no action needed")
-                pass  # TUI already visible, no action needed
+            # คืนค่าความโปร่งใสของ TUI ทุกครั้ง (fix: opacity ผิดหลัง fade)
+            try:
+                self.restore_user_transparency()
+            except Exception as e:
+                logging.error(f"Error restoring TUI transparency on show: {e}")
         except Exception as e:
             logging.error(f"Error showing TUI: {e}")
 
@@ -7233,9 +7339,10 @@ class Translated_UI(FontObserver):
     def create_rich_text_with_outlines(self, x: int, y: int, text: str, base_font_tuple,
                                      fill: str = "white", outline_color: str = "#000000",
                                      outline_offset: int = 1, width: int = None,
-                                     anchor: str = "nw", tags: tuple = None) -> dict:
+                                     anchor: str = "nw", tags: tuple = None,
+                                     names: list = None) -> dict:
         """
-        Create rich text with outline shadows supporting *italic* formatting
+        Create rich text with outline shadows supporting *italic*, **highlight**, and name coloring
 
         Returns:
             dict with 'main' and 'outlines' keys containing lists of text object IDs
@@ -7246,8 +7353,8 @@ class Translated_UI(FontObserver):
             logging.info(f"🔍 CREATE_RICH_TEXT: Starting with text = '{text}'")
             logging.info(f"🔍 CREATE_RICH_TEXT: Base font = {base_font_tuple}")
 
-            # Parse text into segments
-            segments = self.rich_text_formatter.parse_rich_text(text)
+            # Parse text into segments (with name detection if names provided)
+            segments = self.rich_text_formatter.parse_rich_text_with_names(text, names)
             logging.info(f"🔍 CREATE_RICH_TEXT: Parsed {len(segments)} segments")
 
             if not segments:
@@ -7275,6 +7382,9 @@ class Translated_UI(FontObserver):
                 font_style = segment['font_style']
                 logging.info(f"🔍 SEGMENT {i+1}: text='{segment_text}', style='{font_style}'")
                 font_tuple = self.rich_text_formatter.get_font_tuple(base_font_tuple, font_style)
+                # Names in cutscene/battle → bold font
+                if font_style == 'name' and self._get_text_color() != "white":
+                    font_tuple = (base_font_tuple[0], base_font_tuple[1], "bold")
                 logging.info(f"🔍 SEGMENT {i+1}: font_tuple={font_tuple}")
 
                 # Split long segments into words and process word by word
@@ -7331,11 +7441,19 @@ class Translated_UI(FontObserver):
 
             # Third pass: create main text for all segments
             for segment_pos in segment_positions:
-                # Determine text color based on font style
-                if segment_pos['font_style'] == 'bold':
-                    text_color = "#FF8C00"  # Orange color for bold text
+                # Determine text color based on font style and mode
+                style = segment_pos['font_style']
+                if style == 'bold':
+                    text_color = "#FFB366"  # Light orange highlight word
+                elif style == 'name':
+                    # Names: cyan in dialogue, mono-color in cutscene/battle
+                    mode_color = self._get_text_color()
+                    if mode_color == "white":
+                        text_color = "#38bdf8"  # Cyan for dialogue mode
+                    else:
+                        text_color = fill  # Yellow/orange mono-color for cutscene/battle
                 else:
-                    text_color = fill  # Use default color for normal and italic text
+                    text_color = fill  # Default color for normal and italic text
 
                 main_id = self.components.canvas.create_text(
                     segment_pos['x'],
@@ -7402,7 +7520,8 @@ class Translated_UI(FontObserver):
                 outline_offset=1,
                 width=available_width,
                 anchor="nw",
-                tags=("text", "rich_text_dialogue")
+                tags=("text", "rich_text_dialogue"),
+                names=getattr(self, 'names', None)
             )
 
             # Store current dialogue text for future reference
@@ -7454,28 +7573,38 @@ class Translated_UI(FontObserver):
                 (1, 1),
             ]
 
+            # Speaker color: battle/cutscene = mono-color, dialogue = cyan/purple
+            # All speakers use normal weight (no bold) for compatibility
+            mode_color = self._get_text_color()
+            if mode_color != "white":
+                # Battle/Cutscene: mono-color
+                name_color = mode_color
+                speaker_font = font_tuple
+            elif "?" in speaker_name:
+                name_color = "#a855f7"
+                speaker_font = font_tuple
+            else:
+                name_color = "#38bdf8"
+                speaker_font = font_tuple
+
             # Create outlines/shadows for the speaker name
             for dx, dy in outline_positions:
                 outline = self.components.canvas.create_text(
                     10 + dx * outline_offset,
                     10 + dy * outline_offset,
                     anchor="nw",
-                    font=font_tuple,
+                    font=speaker_font,
                     fill=outline_color,
                     text=speaker_name,
                     tags=("name_outline",),
                 )
                 self.components.outline_container.append(outline)
 
-            # Create main speaker text with color based on character type
-            # Use purple for unknown characters (?) and blue for known characters
-            name_color = "#a855f7" if "?" in speaker_name else "#38bdf8"
-
             speaker_text_id = self.components.canvas.create_text(
                 10,
                 10,
                 anchor="nw",
-                font=font_tuple,
+                font=speaker_font,
                 fill=name_color,
                 text=speaker_name,
                 tags=("name",),

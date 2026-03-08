@@ -1,6 +1,8 @@
 # translator_gemini.py
 import os
 from dotenv import load_dotenv
+from resource_utils import resource_path
+from npc_file_utils import get_npc_file_path
 import re
 import tkinter as tk
 from tkinter import messagebox
@@ -22,19 +24,82 @@ try:
 except ImportError:
     HAS_ENHANCED_DETECTOR = False
 
-load_dotenv()
+# Note: load_dotenv() removed - handled by api_key_manager
+
+
+def _translate_api_error(error) -> str:
+    """
+    แปลข้อความ error จาก Gemini API เป็นภาษาไทยที่ชัดเจน
+    คืนค่าข้อความที่พร้อมแสดงใน TUI โดยตรง
+    """
+    e = str(error).lower()
+
+    # API Key errors
+    if any(k in e for k in ("api_key_invalid", "api key not valid", "invalid api key",
+                             "api key not found", "provide an api key")):
+        return "⚠ API Key ไม่ถูกต้อง — กรุณาตรวจสอบ API Key ในการตั้งค่า"
+
+    if any(k in e for k in ("permission_denied", "not authorized", "unauthorized", "403")):
+        return "⚠ API Key ไม่ได้รับอนุญาต — กรุณาสร้าง API Key ใหม่ที่ Google AI Studio"
+
+    # Quota / Rate limit
+    if any(k in e for k in ("resource_exhausted", "quota", "429", "rate limit",
+                             "too many requests", "daily limit")):
+        return "⚠ เกินโควต้า API รายวัน (1,500 ครั้ง/วัน) — รอถึงเที่ยงคืน UTC หรืออัปเกรดแผน"
+
+    # Safety filter
+    if any(k in e for k in ("safety", "blocked", "harm_category", "finish_reason: safety",
+                             "recitation", "stop_reason: safety")):
+        return "⚠ ข้อความถูก AI Safety Filter บล็อก — ข้อความอาจมีเนื้อหาที่ไม่เหมาะสม"
+
+    # Timeout / Network
+    if any(k in e for k in ("timeout", "deadline exceeded", "timed out",
+                             "connection", "network", "socket")):
+        return "⚠ หมดเวลารอ API — ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"
+
+    # Service unavailable
+    if any(k in e for k in ("503", "service unavailable", "unavailable", "overloaded")):
+        return "⚠ Gemini API ไม่พร้อมใช้งานชั่วคราว — กรุณาลองใหม่สักครู่"
+
+    # Server error
+    if any(k in e for k in ("500", "internal server error", "internal error")):
+        return "⚠ Gemini API เกิดข้อผิดพลาดภายใน — กรุณาลองใหม่"
+
+    # Model not found
+    if "model" in e and any(k in e for k in ("not found", "not exist", "does not exist",
+                                              "invalid model")):
+        return "⚠ ไม่พบโมเดล AI — ตรวจสอบการตั้งค่าโมเดลในการตั้งค่า"
+
+    # Empty response
+    if any(k in e for k in ("no response text", "no text", "empty response", "no content")):
+        return "⚠ AI ไม่ส่งผลลัพธ์กลับมา — กรุณาลองใหม่"
+
+    # Generic fallback (keep original for debugging but in Thai wrapper)
+    short = str(error)[:120]
+    return f"⚠ ข้อผิดพลาด API: {short}"
 
 
 class TranslatorGemini:
     def __init__(self, settings=None):
+        # Load .env from multiple locations for PyInstaller compatibility
+        from resource_utils import get_app_dir
+
+        env_paths = [
+            os.path.join(get_app_dir(), ".env"),        # Preferred - project directory
+            os.path.join(os.getcwd(), ".env"),          # Fallback - current directory
+        ]
+
+        # Try loading from each path
+        for env_path in env_paths:
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+                break
+
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
-            # เพิ่มการแจ้งเตือนที่ชัดเจนเมื่อไม่พบ API Key
-            error_msg = "GEMINI_API_KEY not found in .env file"
+            # This should not happen if api_key_manager ran first
+            error_msg = "GEMINI_API_KEY not found. Please restart MBB Dalamud."
             logging.error(error_msg)
-            messagebox.showerror(
-                "API Key Error", f"{error_msg}\nPlease add your API key to .env file"
-            )
             raise ValueError(error_msg)
 
         # Initialize Gemini API
@@ -113,6 +178,8 @@ class TranslatorGemini:
         self.cache = DialogueCache()
         self.last_translations = {}
         self.character_names_cache = set()
+        self._character_lookup = {}  # O(1) lookup for get_character_info()
+        self.use_verbose_prompt = False  # True = v1 (verbose), False = v2 (optimized)
         self.text_corrector = TextCorrector()
         self.load_npc_data()
         self.load_example_translations()
@@ -156,7 +223,7 @@ class TranslatorGemini:
     def load_npc_data(self):
         """Load character data, lore, styles, and specific H-game terms from NPC.json."""
         try:
-            with open("NPC.json", "r", encoding="utf-8") as file:
+            with open(get_npc_file_path(), "r", encoding="utf-8") as file:
                 npc_data = json.load(file)
                 self.character_data = npc_data["main_characters"]
                 self.context_data = npc_data["lore"]
@@ -171,21 +238,32 @@ class TranslatorGemini:
                 else:
                     self.word_fixes = {}
 
-                # Update character_names_cache
+                # Update character_names_cache + O(1) lookup dict
+                _zws = "\u200b\u200c\u200d\ufeff"
+                _zws_table = str.maketrans("", "", _zws)
                 self.character_names_cache = set()
                 self.character_names_cache.add("???")
+                self._character_lookup = {}
 
-                # Load main characters
+                # Load main characters (strip ZWS — game text hook sometimes injects them)
                 for char in self.character_data:
-                    self.character_names_cache.add(char["firstName"])
-                    if char["lastName"]:
-                        self.character_names_cache.add(
-                            f"{char['firstName']} {char['lastName']}"
-                        )
+                    first = char["firstName"].strip().translate(_zws_table)
+                    if not first:
+                        continue
+                    self.character_names_cache.add(first)
+                    self._character_lookup[first] = char
+                    last = char.get("lastName", "")
+                    if last:
+                        last = last.strip().translate(_zws_table)
+                        full = f"{first} {last}".strip()
+                        self.character_names_cache.add(full)
+                        self._character_lookup[full] = char
 
-                # Load NPCs
+                # Load NPCs (strip ZWS, no info dict needed for lookup)
                 for npc in npc_data["npcs"]:
-                    self.character_names_cache.add(npc["name"])
+                    name = npc["name"].strip().translate(_zws_table)
+                    if name:
+                        self.character_names_cache.add(name)
 
                 logging.info("TranslatorGemini: Loaded NPC.json successfully")
 
@@ -228,14 +306,15 @@ class TranslatorGemini:
             changes = []
 
             if model is not None:
-                # --- แก้ไขตรงนี้: เพิ่ม gemini-2.0-flash เข้าไปในลิสต์ ---
                 valid_models = [
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite",
+                    "gemini-2.5-pro",
+                    "gemini-2.0-flash",
+                    "gemini-2.0-flash-lite",
                     "gemini-1.5-pro",
                     "gemini-1.5-flash",
-                    "gemini-2.0-flash-lite",
-                    "gemini-2.0-flash",  # เพิ่มชื่อโมเดลใหม่ของคุณที่นี่
                 ]
-                # -----------------------------------------------------------
                 if model not in valid_models:
                     raise ValueError(
                         f"Invalid model for Gemini translator. Must be one of: {', '.join(valid_models)}"
@@ -339,6 +418,35 @@ class TranslatorGemini:
         prioritized_names = essential_in_relevant + other_names
         return prioritized_names[:20]
 
+    def _mark_names_in_text(self, text, names):
+        """Wrap known character names in source text with [brackets] to prevent translation.
+        Sorts by length descending to avoid partial matches (e.g., 'Bol' inside 'Bol Noq')."""
+        sorted_names = sorted(names, key=len, reverse=True)
+        for name in sorted_names:
+            if name != "???":
+                text = text.replace(name, f"[{name}]")  # no-op if name absent
+        return text
+
+    def _restore_names_in_translation(self, translation, names_in_source):
+        """Post-processing: strip ALL bracket/quote wrapping around known names.
+        Handles any combination: [name], 「name」, [「name」], 『name』, «name», etc.
+        Preserves ** markers (rich text bold/italic) — only strips brackets/quotes."""
+        for name in names_in_source:
+            if name == "???" or len(name) < 2:
+                continue
+            # Regex: any combo of bracket-like chars before/after the name
+            escaped = re.escape(name)
+            pattern = rf'[\[「『【«"\'\(]*{escaped}[\]」』】»"\'\)]*'
+            new_translation = re.sub(pattern, name, translation)
+            if new_translation == translation:
+                # Name completely missing — likely transliterated to Thai
+                logging.debug(
+                    f"⚠️ Name '{name}' from source not found in translation"
+                )
+            else:
+                translation = new_translation
+        return translation
+
     def get_relevant_lore_terms(self, text, speaker=None):
         """Extract only lore terms that might be relevant to current text (OPTIMIZATION)"""
         relevant_terms = {}
@@ -373,18 +481,81 @@ class TranslatorGemini:
         # Rough estimate: 1 token ≈ 4 characters for mixed EN/TH
         return len(text) // 4
 
+    # Pre-compiled regex patterns — ป้องกันการ compile ซ้ำทุก translation call
+    _RE_BRACKET_CLEANUP = re.compile(r'\[([^\[\]]{1,30})\]')
+
+    # Compiled regex สำหรับ forbidden particles — เรียงยาว→สั้น, ต้องอยู่ท้ายคำ/ประโยค
+    # ตัด "คะ" standalone ออก เพราะปรากฏในคำอื่น (คะแนน, คะเน)
+    _forbidden_pattern = re.compile(
+        r"(นะครับ|นะค่ะ|นะคะ|ครับผม|ค่ะ/ครับ|คะ/ครับ|ครับ|ค่ะ|ดิฉัน|ข้าพเจ้า)"
+        r"(?=\s|$|[!?.,。、])"
+    )
+    _forbidden_check_list = ["ครับ", "ค่ะ", "คะ", "นะครับ", "นะคะ", "นะค่ะ", "ดิฉัน", "ข้าพเจ้า"]
+
+    def _clean_forbidden_particles(self, text, character_name=None, label=""):
+        """ลบ forbidden particles จากข้อความแปล พร้อมบันทึก log
+
+        Args:
+            text: ข้อความที่แปลแล้ว
+            character_name: ชื่อตัวละคร (สำหรับ log)
+            label: ป้ายกำกับ เช่น "retry", "fallback" (สำหรับ log)
+
+        Returns:
+            ข้อความที่ลบ forbidden particles แล้ว
+        """
+        cleaned = self._forbidden_pattern.sub("", text).strip()
+
+        # Log ถ้าพบ forbidden particles
+        found = [p for p in self._forbidden_check_list if p in text]
+        if found:
+            self.forbidden_particle_count += 1
+            char_display = character_name or "N/A"
+            tag = f" ({label})" if label else ""
+            logging.warning(
+                f"⚠️ Forbidden{tag}: {', '.join(found)} | Char: {char_display} | Mode: {self.current_role_mode}"
+            )
+        self.translation_count += 1
+        if self.translation_count % 100 == 0:
+            rate = (self.forbidden_particle_count / self.translation_count) * 100
+            logging.info(
+                f"📊 Stats: {self.translation_count} total, {self.forbidden_particle_count} violations ({rate:.2f}%)"
+            )
+
+        return cleaned
+
     def get_system_prompt(self, role_mode=None):
-        """Get system prompt based on current role mode"""
+        """Get system prompt based on current role mode and prompt version"""
         if role_mode is None:
             role_mode = self.current_role_mode
 
         if role_mode == "adult_enhanced":
             return self.get_adult_enhanced_prompt()
+        elif self.use_verbose_prompt:
+            return self.get_rpg_general_prompt_v1()
         else:
             return self.get_rpg_general_prompt()
 
     def get_rpg_general_prompt(self):
-        """Text Hook optimized RPG translation prompt for Final Fantasy XIV"""
+        """Optimized RPG translation prompt for FFXIV — v2 (token-efficient)"""
+        return (
+            "You are a professional FFXIV English-to-Thai translator. "
+            "Translate accurately following these rules:\n\n"
+            "1. **Complete Translation**: Translate ALL content fully and naturally.\n"
+            "2. **Character Fidelity** (HIGHEST PRIORITY): Match the speaker's tone/personality from 'Character's style' section.\n"
+            "3. **Name Preservation**: Names in [brackets] and the Preserve names list must NEVER be translated or transliterated. Output them in English exactly as written, without brackets.\n"
+            "4. **Modern Tone**: Default to modern, natural Thai game dialogue. Change ONLY if Character's style demands archaic/unique tone.\n"
+            "5. **FORBIDDEN PARTICLES**: ❌ NEVER use: ครับ, ค่ะ, คะ, ดิฉัน, นะคะ, นะครับ, ข้าพเจ้า (or any variant). These destroy fantasy RPG immersion.\n"
+            "   ✅ Pronouns: ชั้น/ฉัน/ข้า/เรา (subject), คุณ/เจ้า/ท่าน (object). Convey politeness through word choice, not particles.\n"
+            "6. **\"แก\" Pronoun**: Inherently rude — use ONLY when dialogue conveys anger/hostility OR Context shows Relationship: Enemy. "
+            "Default: คุณ/เจ้า/ท่าน. Gentle characters (สุภาพ/นุ่มนวล/อ่อนโยน) → NEVER use แก. Target: <5% of translations.\n"
+            "7. **Profanity**: ❌ Never use กู/มึง. ✅ Mild expressions (แม่ง/เชี่ย!/บ้าเอ๊ย!) ONLY if English conveys frustration/anger/shock. Anime-style expressive.\n"
+            "8. **Lore Context**: Use lore references ONLY for understanding — NEVER include explanations in output.\n"
+            "9. **Output**: Return ONLY the Thai translation. No English, no explanations, no formatting.\n"
+            "10. **Context Consistency**: When [Recent dialogue] is provided, maintain the SAME pronouns (สรรพนาม), honorifics, and name formats used in previous lines. If a character used \"ข้า\" before, continue using \"ข้า\". If a name was kept in English, keep it in English.\n\n"
+        )
+
+    def get_rpg_general_prompt_v1(self):
+        """BACKUP — Original verbose prompt (for revert if quality drops)"""
         return (
             "You are a professional translator specializing in Final Fantasy XIV text hook localization. "
             "You receive precise, complete game text directly from the game engine with perfect accuracy. "
@@ -550,9 +721,9 @@ class TranslatorGemini:
         # สัดส่วนความยาวตัวอักษรที่เหมาะสมสำหรับการแปลอังกฤษเป็นไทยประมาณ 1:0.6
         char_ratio = translated_char_length / max(1, original_char_length)
 
-        # ถ้าสัดส่วนตัวอักษรต่ำกว่า 0.3 (30%) ของต้นฉบับ อาจจะไม่สมบูรณ์
-        # แต่ตรวจสอบเฉพาะข้อความที่มีความยาวมากกว่า 50 ตัวอักษรเท่านั้น
-        if original_char_length > 50 and char_ratio < 0.3:
+        # ถ้าสัดส่วนตัวอักษรต่ำกว่า 0.45 (45%) ของต้นฉบับ อาจจะไม่สมบูรณ์
+        # EN→TH โดยทั่วไปได้ ratio ~0.6-0.8 — threshold 0.45 มี margin กว้างพอ
+        if original_char_length > 50 and char_ratio < 0.45:
             return False
 
         # ข้อความสั้นไม่จำเป็นต้องตรวจสอบวรรคตอน
@@ -565,14 +736,15 @@ class TranslatorGemini:
             if translated_content.strip().endswith("-"):
                 return False
             # ถ้าจบด้วย ... แต่ต้นฉบับไม่ได้จบด้วย ... ให้ตรวจสอบความยาวเพิ่มเติม
-            if not original_content.strip().endswith("...") and char_ratio < 0.5:
+            if not original_content.strip().endswith("...") and char_ratio < 0.55:
                 return False
 
         # ผ่านทุกเงื่อนไข ถือว่าสมบูรณ์
         return True
 
     def translate(
-        self, text, source_lang="English", target_lang="Thai", is_choice_option=False
+        self, text, source_lang="English", target_lang="Thai", is_choice_option=False, chat_type=61,
+        conversation_context=""
     ):
         """
         แปลข้อความพร้อมจัดการบริบทของตัวละคร
@@ -581,6 +753,7 @@ class TranslatorGemini:
             source_lang: ภาษาต้นฉบับ (default: English)
             target_lang: ภาษาเป้าหมาย (default: Thai)
             is_choice_option: เป็นข้อความตัวเลือกหรือไม่ (default: False)
+            conversation_context: บทสนทนาล่าสุดสำหรับรักษาความสม่ำเสมอ (default: "")
         Returns:
             str: ข้อความที่แปลแล้ว
         """
@@ -630,24 +803,9 @@ class TranslatorGemini:
                 except Exception as e:
                     logging.warning(f"Error using EnhancedNameDetector: {e}")
 
-            # ตรวจสอบว่าเป็นข้อความตัวเลือกหรือไม่
-            if is_choice_option:
-                # ถ้า MBB บอกว่าเป็น choice ให้เรียก translate_choice ทันที
-                logging.info(f"Choice option flag is True, calling translate_choice")
-                return self.translate_choice(text)
-            else:
-                # ถ้า MBB ไม่บอกว่าเป็น choice ให้ตรวจสอบเองอีกครั้ง
-                try:
-                    is_choice, prompt_part, choices = self.is_similar_to_choice_prompt(
-                        text
-                    )
-                    if is_choice:
-                        logging.info(
-                            f"Internal choice detection found choice, calling translate_choice"
-                        )
-                        return self.translate_choice(text)
-                except Exception as choice_err:
-                    logging.warning(f"Error checking choice prompt: {choice_err}")
+            # Choice detection: ใช้ chat_type จาก C# text hook เป็นหลัก
+            # Handler เรียก translate_choice() โดยตรงเมื่อ Type=="choice"
+            # ไม่ต้อง auto-detect ที่นี่ — ลดโอกาส false positive
 
             # กรณีมีชื่อผู้พูด
             if dialogue_type == DialogueType.CHARACTER and speaker:
@@ -719,29 +877,43 @@ class TranslatorGemini:
             # OPTIMIZATION: Use smart lore filtering instead of all terms
             relevant_lore_terms = self.get_relevant_lore_terms(dialogue, character_name)
 
-            prompt = (
-                base_prompt + f"Context: {context}\n"
+            # Detect names in dialogue for marking and post-processing
+            relevant_names = self.get_relevant_names(dialogue)
+            names_in_dialogue = [n for n in relevant_names if n in dialogue and n != "???"]
+
+            # Mark names in dialogue with [brackets] to prevent translation
+            dialogue_marked = self._mark_names_in_text(dialogue, names_in_dialogue)
+
+            prompt = base_prompt
+
+            # Wide-context: inject recent dialogue for consistency
+            if conversation_context:
+                prompt += (
+                    "[Recent dialogue for context — maintain consistent pronouns, "
+                    "terms, and tone with previous lines]\n"
+                    f"{conversation_context}\n\n"
+                )
+
+            prompt += (
+                f"Context: {context}\n"
                 f"Character's style: {character_style}\n"
-                f"Preserve names: {', '.join(self.get_relevant_names(dialogue))}\n\n"
-                "**🔍 LORE CONTEXT REFERENCE (INTERNAL USE ONLY):**\n"
-                "⚠️ IMPORTANT: These are reference notes to help you understand the game world.\n"
-                "✅ DO: Use this knowledge to translate more accurately and naturally\n"
-                "❌ DON'T: Include these explanations or definitions in your translation output\n"
-                "When you see these terms, translate them naturally without explaining what they mean:\n"
+                f"Preserve names: {', '.join(relevant_names)}\n"
             )
 
-            for term, explanation in relevant_lore_terms.items():
-                prompt += f"• {term} = {explanation} (Use this understanding to translate naturally, don't explain it)\n"
+            if relevant_lore_terms:
+                prompt += "Lore (for context only, do NOT include in output):\n"
+                for term, explanation in relevant_lore_terms.items():
+                    prompt += f"• {term} = {explanation}\n"
 
-            prompt += f"\n\nText to translate: {dialogue}"
+            prompt += f"\nText to translate: {dialogue_marked}"
 
             # OPTIMIZATION: Monitor token usage
             estimated_tokens = self.count_tokens_estimate(prompt)
             logging.info(
-                f"🔍 Estimated prompt tokens: {estimated_tokens} (Target: <600)"
+                f"🔍 Estimated prompt tokens: {estimated_tokens} (Target: <1200 with context)"
             )
 
-            if estimated_tokens > 800:
+            if estimated_tokens > 1500:
                 logging.warning(
                     f"⚠️ High token usage detected: {estimated_tokens} tokens"
                 )
@@ -767,9 +939,10 @@ class TranslatorGemini:
 
                 # แก้ไขวิธีการเรียก API - ส่งเฉพาะ prompt (ไม่ส่ง dialogue แยก)
                 response = self.model.generate_content(
-                    prompt,  # ส่งเฉพาะ prompt เต็มๆ ไม่ต้องส่ง dialogue แยก
+                    prompt,
                     generation_config=generation_config,
                     safety_settings=self.safety_settings,
+                    request_options={"timeout": 30},
                 )
 
                 # คำนวณเวลาที่ใช้
@@ -804,22 +977,10 @@ class TranslatorGemini:
                 else:
                     raise ValueError("No response text from Gemini API")
 
-                # ทำความสะอาดข้อความแปล
-                translated_dialogue_before_clean = translated_dialogue
-                translated_dialogue = re.sub(
-                    r"(ครับ|ค่ะ|คะ|นะครับ|นะคะ|นะค่ะ|ครับผม|ค่ะ/ครับ|คะ/ครับ|ดิฉัน|ข้าพเจ้า)", "", translated_dialogue
-                ).strip()
-                # Log forbidden particles if found
-                forbidden_particles = ["ครับ", "ค่ะ", "คะ", "นะครับ", "นะคะ", "ดิฉัน", "ข้าพเจ้า"]
-                found_particles = [p for p in forbidden_particles if p in translated_dialogue_before_clean]
-                if found_particles:
-                    self.forbidden_particle_count += 1
-                    char_name = character_name if "character_name" in locals() else "N/A"
-                    logging.warning(f"⚠️ Forbidden: {', '.join(found_particles)} | Char: {char_name} | Mode: {self.current_role_mode}")
-                self.translation_count += 1
-                if self.translation_count % 100 == 0:
-                    rate = (self.forbidden_particle_count / self.translation_count) * 100
-                    logging.info(f"📊 Stats: {self.translation_count} total, {self.forbidden_particle_count} violations ({rate:.2f}%)")
+                # ทำความสะอาด forbidden particles
+                translated_dialogue = self._clean_forbidden_particles(
+                    translated_dialogue, character_name
+                )
                 for term in relevant_lore_terms:
                     translated_dialogue = re.sub(
                         r"\b" + re.escape(term) + r"\b",
@@ -827,6 +988,16 @@ class TranslatorGemini:
                         translated_dialogue,
                         flags=re.IGNORECASE,
                     )
+
+                # Post-processing: restore character names that were translated
+                if names_in_dialogue:
+                    translated_dialogue = self._restore_names_in_translation(
+                        translated_dialogue, names_in_dialogue
+                    )
+
+                # Strip remaining [brackets] that Gemini added on its own
+                # (e.g., [adventurer], [WoL]) — only single-word/short phrases
+                translated_dialogue = self._RE_BRACKET_CLEANUP.sub(r'\1', translated_dialogue)
 
                 # ตรวจสอบและแทนที่กรณีพิเศษสำหรับเลข 2 และ ???
                 if re.match(r"^2+\??$", dialogue.strip()) or dialogue.strip() == "???":
@@ -883,30 +1054,19 @@ class TranslatorGemini:
                             enhanced_prompt,
                             generation_config=generation_config,
                             safety_settings=self.safety_settings,
+                            request_options={"timeout": 30},
                         )
 
                         if hasattr(retry_response, "text") and retry_response.text:
                             retry_translation = retry_response.text.strip()
 
-                            # ทำความสะอาดข้อความแปล
-                            retry_translation_before_clean = retry_translation
-                            retry_translation = re.sub(
-                                r"(ครับ|ค่ะ|คะ|นะครับ|นะคะ|นะค่ะ|ครับผม|ค่ะ/ครับ|คะ/ครับ|ดิฉัน|ข้าพเจ้า)", "", retry_translation
-                            ).strip()
-                            # Log forbidden particles if found
-                            forbidden_particles_retry = ["ครับ", "ค่ะ", "คะ", "นะครับ", "นะคะ", "ดิฉัน", "ข้าพเจ้า"]
-                            found_particles_retry = [p for p in forbidden_particles_retry if p in retry_translation_before_clean]
-                            if found_particles_retry:
-                                self.forbidden_particle_count += 1
-                                char_name_retry = character_name if "character_name" in locals() else "N/A"
-                                logging.warning(f"⚠️ Forbidden (retry): {', '.join(found_particles_retry)} | Char: {char_name_retry} | Mode: {self.current_role_mode}")
-                            self.translation_count += 1
-                            if self.translation_count % 100 == 0:
-                                rate_retry = (self.forbidden_particle_count / self.translation_count) * 100
-                                logging.info(f"📊 Stats: {self.translation_count} total, {self.forbidden_particle_count} violations ({rate_retry:.2f}%)")
+                            # ทำความสะอาด forbidden particles
+                            retry_translation = self._clean_forbidden_particles(
+                                retry_translation, character_name, label="retry"
+                            )
 
-                            # เปรียบเทียบความยาวและคุณภาพ - ถ้าแปลใหม่ยาวกว่ามากๆ ถึงจะเอามาใช้
-                            if len(retry_translation) > len(translated_dialogue) * 1.3:
+                            # เปรียบเทียบความยาว — ถ้าแปลใหม่ยาวกว่า 15% ขึ้นไป ใช้ retry
+                            if len(retry_translation) > len(translated_dialogue) * 1.15:
                                 translated_dialogue = retry_translation
 
                                 if character_name:
@@ -957,27 +1117,16 @@ class TranslatorGemini:
                         [{"role": "user", "parts": [prompt]}],
                         generation_config=generation_config,
                         safety_settings=self.safety_settings,
+                        request_options={"timeout": 30},
                     )
 
                     if hasattr(response, "text") and response.text:
                         translated_dialogue = response.text.strip()
 
-                        # ทำความสะอาดข้อความแปล
-                        translated_dialogue_before_clean_fallback = translated_dialogue
-                        translated_dialogue = re.sub(
-                            r"(ครับ|ค่ะ|คะ|นะครับ|นะคะ|นะค่ะ|ครับผม|ค่ะ/ครับ|คะ/ครับ|ดิฉัน|ข้าพเจ้า)", "", translated_dialogue
-                        ).strip()
-                        # Log forbidden particles if found
-                        forbidden_particles_fallback = ["ครับ", "ค่ะ", "คะ", "นะครับ", "นะคะ", "ดิฉัน", "ข้าพเจ้า"]
-                        found_particles_fallback = [p for p in forbidden_particles_fallback if p in translated_dialogue_before_clean_fallback]
-                        if found_particles_fallback:
-                            self.forbidden_particle_count += 1
-                            char_name_fallback = character_name if "character_name" in locals() else "N/A"
-                            logging.warning(f"⚠️ Forbidden (fallback): {', '.join(found_particles_fallback)} | Char: {char_name_fallback} | Mode: {self.current_role_mode}")
-                        self.translation_count += 1
-                        if self.translation_count % 100 == 0:
-                            rate_fallback = (self.forbidden_particle_count / self.translation_count) * 100
-                            logging.info(f"📊 Stats: {self.translation_count} total, {self.forbidden_particle_count} violations ({rate_fallback:.2f}%)")
+                        # ทำความสะอาด forbidden particles
+                        translated_dialogue = self._clean_forbidden_particles(
+                            translated_dialogue, character_name, label="fallback"
+                        )
 
                         if character_name:
                             return f"{character_name}: {translated_dialogue}"
@@ -986,11 +1135,11 @@ class TranslatorGemini:
                         raise ValueError("No response text from alternative API call")
                 except Exception as alt_error:
                     logging.error(f"Alternative API call also failed: {str(alt_error)}")
-                    return f"[Error: {str(api_error)}]"
+                    return _translate_api_error(api_error)
 
         except Exception as e:
             logging.error(f"Unexpected error in translation: {str(e)}")
-            return f"[Error: {str(e)}]"
+            return _translate_api_error(e)
 
     def is_similar_to_choice_prompt(self, text, threshold=0.7):
         """ตรวจสอบและแยกส่วนประกอบของ choice dialogue
@@ -1074,8 +1223,6 @@ class TranslatorGemini:
                         if not choices and any(
                             mark in choices_part for mark in [".", "!", "?"]
                         ):
-                            import re
-
                             split_by_punct = re.split(r"(?<=[.!?])\s+", choices_part)
                             if len(split_by_punct) > 1:
                                 choices = [
@@ -1297,7 +1444,7 @@ class TranslatorGemini:
             # แยกตัวเลือกถ้าไม่มี newlines (เผื่อ OCR รวมประโยคเป็นบรรทัดเดียว)
             if "\n" not in choices_text:
                 # ลองแยกประโยคตาม punctuation
-                import re
+                # (re already imported globally at line 6)
 
                 # แยกตาม ! ? . ที่ตามด้วยช่องว่างและตัวอักษรใหญ่
                 sentence_splits = re.split(r"([.!?])\s+(?=[A-Z])", choices_text)
@@ -1461,15 +1608,14 @@ class TranslatorGemini:
                 logging.error(
                     f"Error translating choices block: {translate_block_error}"
                 )
-                # ถ้าการแปลทั้งก้อนล้มเหลว อาจคืนค่า Error หรือลอง Fallback แปลทีละอัน
-                return f"[Error translating choices: {translate_block_error}]"
+                return _translate_api_error(translate_block_error)
 
         except Exception as e:
             logging.error(f"General error in translate_choice: {str(e)}")
             import traceback
 
             logging.error(traceback.format_exc())
-            return f"[Error: {str(e)}]"
+            return _translate_api_error(e)
 
     def get_character_info(self, character_name):
         # จัดการกับกรณีพิเศษสำหรับ ??? และ เลข 2
@@ -1503,14 +1649,8 @@ class TranslatorGemini:
             except Exception as e:
                 logging.warning(f"Error in enhanced checking for character name: {e}")
 
-        # ค้นหาข้อมูลตัวละครตามปกติ
-        for char in self.character_data:
-            if (
-                character_name == char["firstName"]
-                or character_name == f"{char['firstName']} {char['lastName']}".strip()
-            ):
-                return char
-        return None
+        # O(1) lookup via pre-built dict (built in load_npc_data)
+        return self._character_lookup.get(character_name)
 
     def batch_translate(self, texts, batch_size=10):
         """แปลข้อความเป็นชุด"""

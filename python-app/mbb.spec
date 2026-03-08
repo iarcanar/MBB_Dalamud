@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # MBB Dalamud Bridge - PyInstaller Specification
-# Version: 1.0.0
-# Build: 01232026-01
+# Version: 1.7.5
+# Build: 01232026-09
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import os
@@ -28,6 +28,9 @@ added_files = [
 
     # UI components
     ('ui_components', 'ui_components'),
+
+    # PyQt6 UI components
+    ('pyqt_ui', 'pyqt_ui'),
 ]
 
 # Combine all data files
@@ -73,6 +76,7 @@ hiddenimports = [
 
     # System
     'psutil',
+    'GPUtil',
     'keyboard',
     'dotenv',
     'json',
@@ -80,6 +84,7 @@ hiddenimports = [
     'threading',
     'queue',
     'subprocess',
+    'webbrowser',
 
     # Theme
     'sv_ttk',
@@ -87,6 +92,7 @@ hiddenimports = [
     # All Python app modules
     'advance_ui',
     'api_manager',
+    'api_key_manager',
     'appearance',
     'asset_manager',
     'button_factory',
@@ -95,20 +101,34 @@ hiddenimports = [
     'dalamud_immediate_handler',
     'dalamud_improvements',
     'dialogue_cache',
-    'dialogue_simulator',
     'enhanced_name_detector',
     'font_manager',
     'loggings',
     'Manager',
+    'npc_file_utils',
     'npc_manager_card',
     'resource_utils',
     'settings',
     'text_corrector',
     'translated_ui',
     'translation_logger',
+    'translator_gemini',
     'ui_components.bottom_bar',
     'ui_components.control_panel',
     'ui_components.header_bar',
+
+    # PyQt6
+    'PyQt6',
+    'PyQt6.QtCore',
+    'PyQt6.QtGui',
+    'PyQt6.QtWidgets',
+    'pyqt_ui',
+    'pyqt_ui.main_window',
+    'pyqt_ui.header_bar',
+    'pyqt_ui.control_panel',
+    'pyqt_ui.bottom_bar',
+    'pyqt_ui.styles',
+    'pyqt_ui.signals',
 ]
 
 # Analysis configuration
@@ -155,7 +175,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # No console window (GUI only)
+    console=True,  # Console enabled for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

@@ -1,5 +1,7 @@
 import json
 import os
+from resource_utils import resource_path
+from npc_file_utils import get_npc_file_path
 
 
 class EnhancedNameDetector:
@@ -22,7 +24,7 @@ class EnhancedNameDetector:
     def load_word_fixes_from_npc_data(self):
         """โหลดข้อมูลการแก้ไขคำจาก NPC.json"""
         try:
-            with open("NPC.json", "r", encoding="utf-8") as file:
+            with open(get_npc_file_path(), "r", encoding="utf-8") as file:
                 npc_data = json.load(file)
                 if "word_fixes" in npc_data:
                     self.word_fixes = npc_data["word_fixes"]
@@ -40,6 +42,29 @@ class EnhancedNameDetector:
                 self.logging_manager.error(f"Error loading word fixes: {str(e)}")
             else:
                 print(f"Error loading word fixes: {str(e)}")
+
+    def reload_data(self):
+        """Reload word_fixes and re-initialize embeddings"""
+        try:
+            # 1. Reload word_fixes from NPC.json
+            self.load_word_fixes_from_npc_data()
+
+            # 2. Re-initialize embeddings (character_db auto-updates via reference)
+            self.initialize_embeddings()
+
+            # 3. Clear recent_names cache
+            self.recent_names.clear()
+
+            if self.logging_manager:
+                self.logging_manager.info("EnhancedNameDetector: Data reloaded")
+            else:
+                print("EnhancedNameDetector: Data reloaded")
+        except Exception as e:
+            error_msg = f"EnhancedNameDetector reload error: {str(e)}"
+            if self.logging_manager:
+                self.logging_manager.error(error_msg)
+            else:
+                print(error_msg)
 
     def build_correction_patterns(self):
         """สร้างรูปแบบการแก้ไขทั่วไปสำหรับข้อผิดพลาด OCR"""

@@ -12,7 +12,7 @@ namespace DalamudMBBBridge
         private string currentMbbPath = "";
         private bool showPathNotFoundWarning = false;
 
-        public MBBConfigWindow(DalamudMBBBridge plugin) : base("Magicite Babel Bridge v1.5.22###MBBBridge")
+        public MBBConfigWindow(DalamudMBBBridge plugin) : base("Magicite Babel Bridge v1.7.5###MBBBridge")
         {
             this.SizeConstraints = new WindowSizeConstraints
             {
@@ -182,6 +182,20 @@ namespace DalamudMBBBridge
             if (ImGui.Button("Refresh Status", new Vector2(-1, 30)))
             {
                 plugin.RefreshMBBStatus();
+            }
+
+            ImGui.Spacing();
+
+            // Show Console Option
+            var showConsole = plugin.ShowConsole;
+            if (ImGui.Checkbox("Show Console Window (Debug)", ref showConsole))
+            {
+                plugin.ShowConsole = showConsole;
+                plugin.SaveShowConsole();
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable to show MBB console window for debugging.\nDefault: Hidden for cleaner experience.");
             }
 
             ImGui.Spacing();

@@ -72,7 +72,7 @@ class FontSettings:
         self.settings_manager = settings_manager
 
         # ค่าเริ่มต้น
-        self.font_name = "IBM Plex Sans Thai Medium"
+        self.font_name = "Anuphan"
         self.font_size = 24
 
         # โหลดการตั้งค่าจาก settings_manager ถ้ามี

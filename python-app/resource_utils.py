@@ -50,14 +50,19 @@ def resource_path(relative_path):
         # PyInstaller: Check _MEIPASS first (for --onefile mode)
         if hasattr(sys, '_MEIPASS'):
             base_path = sys._MEIPASS
+            print(f"[ResourcePath] Using sys._MEIPASS: {base_path}")
         else:
             # --onedir mode
             base_path = get_app_dir()
+            print(f"[ResourcePath] Using app_dir: {base_path}")
     else:
         # Development mode
         base_path = get_app_dir()
+        print(f"[ResourcePath] Development mode, app_dir: {base_path}")
 
-    return os.path.join(base_path, relative_path)
+    final_path = os.path.join(base_path, relative_path)
+    print(f"[ResourcePath] {relative_path} -> {final_path}")
+    return final_path
 
 
 def resource_exists(relative_path):

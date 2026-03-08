@@ -511,7 +511,7 @@ class AppearanceManager:
         primary_frame = tk.Frame(main_frame, bg=self.bg_color)
         primary_frame.pack(fill=tk.X, pady=5)
 
-        primary_label = self.create_styled_label(primary_frame, "สีหลัก:")
+        primary_label = self.create_styled_label(primary_frame, "สีหลัก (พื้นหลัง):")
         primary_label.pack(side=tk.LEFT)
 
         # ปรับปรุงกล่องสีให้คลิกได้โดยตรง
@@ -540,7 +540,7 @@ class AppearanceManager:
         secondary_frame = tk.Frame(main_frame, bg=self.bg_color)
         secondary_frame.pack(fill=tk.X, pady=5)
 
-        secondary_label = self.create_styled_label(secondary_frame, "สีรอง:")
+        secondary_label = self.create_styled_label(secondary_frame, "สีรอง (ไฮไลท์):")
         secondary_label.pack(side=tk.LEFT)
 
         # ปรับปรุงกล่องสีให้คลิกได้โดยตรง
@@ -708,6 +708,8 @@ class AppearanceManager:
         # ตรวจสอบว่าเป็น ID ที่มีอยู่ในคลังธีม
         if theme_name in self.themes:
             self.current_theme = theme_name
+            # Sync bg_color จากสีหลักของธีม (ใช้เป็นพื้นหลังสำหรับ Tkinter widgets)
+            self.bg_color = self.themes[theme_name].get("accent", self.bg_color)
 
             # บันทึกการเปลี่ยนแปลงลง settings ถ้ามี
             if hasattr(self, "settings") and self.settings:
@@ -740,6 +742,8 @@ class AppearanceManager:
                 # โหลดธีมจาก settings เข้าคลังธีม
                 self.themes[theme_name] = custom_themes[theme_name]
                 self.current_theme = theme_name
+                # Sync bg_color จากสีหลักของธีม
+                self.bg_color = custom_themes[theme_name].get("accent", self.bg_color)
 
                 # บันทึกลง settings
                 self.settings.set("theme", theme_name)

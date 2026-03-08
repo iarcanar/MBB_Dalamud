@@ -25,7 +25,7 @@ namespace DalamudMBBBridge
 {
     public sealed class DalamudMBBBridge : IDalamudPlugin
     {
-        public string Name => "Mgicite Babel v1.5.23 Thai Version by iarcanar";
+        public string Name => "Magicite Babel Bridge v1.7.8 by iarcanar";
         private const string CommandName = "/mbb";
 
         [PluginService] public static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
@@ -34,6 +34,7 @@ namespace DalamudMBBBridge
         [PluginService] public static IPluginLog Log { get; private set; } = null!;
         [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
         [PluginService] public static IGameGui GameGui { get; private set; } = null!;
+        [PluginService] public static IClientState ClientState { get; private set; } = null!;
 
         private NamedPipeServerStream? pipeServer;
         private bool isConnected = false;
@@ -54,6 +55,10 @@ namespace DalamudMBBBridge
         private string? savedMbbPath;
         private const string MbbPathConfigKey = "MBBPath";
 
+        // MBB Console Option
+        public bool ShowConsole { get; set; } = false;  // Default: hide console
+        private const string ShowConsoleConfigKey = "ShowConsole";
+
         // ImGui UI
         private WindowSystem windowSystem;
         private MBBConfigWindow configWindow;
@@ -62,8 +67,9 @@ namespace DalamudMBBBridge
         {
             try
             {
-                // Load saved MBB path
+                // Load saved MBB path and console setting
                 LoadMbbPath();
+                LoadShowConsole();
 
                 // Initialize Window System
                 windowSystem = new WindowSystem("MBBBridge");
@@ -81,6 +87,7 @@ namespace DalamudMBBBridge
 
                 // FIXED: Focused approach to eliminate handler conflicts
                 ChatGui.ChatMessage += OnChatMessage; // For non-Talk chat types only
+                ClientState.TerritoryChanged += OnTerritoryChanged; // Zone change → system event
                 AddonLifecycle.RegisterListener(AddonEvent.PreRefresh, "Talk", OnTalkAddonPreReceive); // Single Talk handler
 
                 // Also register for BattleTalk
@@ -142,6 +149,21 @@ namespace DalamudMBBBridge
             {
                 Log.Error($"Failed to initialize MBB Bridge: {ex.Message}");
             }
+        }
+
+        // SYSTEM EVENT: Zone/Territory change → ส่งให้ Python เพื่อตัด conversation
+        private void OnTerritoryChanged(ushort territoryId)
+        {
+            var data = new TextHookData
+            {
+                Type = "system",
+                Speaker = "",
+                Message = $"zone_change:{territoryId}",
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                ChatType = 0
+            };
+            messageQueue.Enqueue(data);
+            Log.Info($"[SYSTEM] Territory changed to {territoryId}");
         }
 
         // ENHANCED DUPLICATE PREVENTION: Global message deduplication system
@@ -777,7 +799,7 @@ namespace DalamudMBBBridge
 
                 Log.Info($"[CHOICE-DEBUG] SelectString has {atkAddon->UldManager.NodeListCount} nodes");
 
-                // Extract dialog title (Node 2 - "What will you say?")
+                // ── TITLE: Direct Text node at NodeId=2 (SelectString has it at top level) ──
                 string dialogTitle = "";
                 var titleNode = atkAddon->GetNodeById(2);
                 if (titleNode != null && titleNode->Type == NodeType.Text)
@@ -786,38 +808,95 @@ namespace DalamudMBBBridge
                     if (textNode->NodeText.StringPtr != null)
                     {
                         dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
-                        if (!string.IsNullOrEmpty(dialogTitle))
-                        {
-                            Log.Info($"[CHOICE-TITLE] Node 2: {dialogTitle}");
-                        }
+                        Log.Info($"[CHOICE-TITLE] Node 2: {dialogTitle}");
                     }
                 }
-
-                // Extract choice options (Nodes 15-19)
-                var choices = new List<string>();
-                uint[] choiceNodeIds = { 15, 16, 17, 18, 19 };
-
-                foreach (var nodeId in choiceNodeIds)
+                // Fallback: try component node like CutSceneSelectString
+                if (string.IsNullOrEmpty(dialogTitle))
                 {
-                    var node = atkAddon->GetNodeById(nodeId);
-                    if (node == null || node->Type != NodeType.Text) continue;
-
-                    var textNode = (AtkTextNode*)node;
-                    if (!textNode->AtkResNode.IsVisible()) continue;
-
-                    if (textNode->NodeText.StringPtr != null)
+                    var titleContainer = atkAddon->GetNodeById(3);
+                    if (titleContainer != null && (int)titleContainer->Type > 1000)
                     {
-                        var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
-                        if (!string.IsNullOrEmpty(choiceText))
+                        var titleComp = (AtkComponentNode*)titleContainer;
+                        if (titleComp->Component != null)
                         {
-                            choices.Add(choiceText);
-                            Log.Info($"[CHOICE-OPTION] Node {nodeId}: {choiceText}");
+                            var tcCount = titleComp->Component->UldManager.NodeListCount;
+                            for (var i = 0; i < tcCount; i++)
+                            {
+                                var child = titleComp->Component->UldManager.NodeList[i];
+                                if (child != null && child->Type == NodeType.Text)
+                                {
+                                    var ct = (AtkTextNode*)child;
+                                    if (ct->NodeText.StringPtr != null)
+                                    {
+                                        dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)ct->NodeText.StringPtr.Value);
+                                        if (!string.IsNullOrEmpty(dialogTitle))
+                                        {
+                                            Log.Info($"[CHOICE-TITLE] Component fallback: {dialogTitle}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // Send choice data if we have both title and choices
-                if (!string.IsNullOrEmpty(dialogTitle) && choices.Count > 0)
+                // Skip system dialogs like "Skip cutscene?"
+                if (dialogTitle == "Skip cutscene?" || dialogTitle == "Nothing" || string.IsNullOrEmpty(dialogTitle))
+                {
+                    Log.Info($"[CHOICE] Skipping system dialog: '{dialogTitle}'");
+                    return;
+                }
+
+                // ── CHOICES: Traverse component nodes (same pattern as CutSceneSelectString) ──
+                var choices = new List<string>();
+
+                // Try component traversal first (NodeId=2 or NodeId=3 as list container)
+                uint[] possibleListIds = { 2, 3, 4 };
+                foreach (var listId in possibleListIds)
+                {
+                    var listNode = atkAddon->GetNodeById(listId);
+                    if (listNode == null || (int)listNode->Type <= 1000) continue;
+                    // Skip the title component (Type=1006 with "What will you say?")
+                    if ((int)listNode->Type == 1006) continue;
+
+                    var listComp = (AtkComponentNode*)listNode;
+                    if (listComp->Component == null) continue;
+
+                    var listChildCount = listComp->Component->UldManager.NodeListCount;
+                    for (var i = 0; i < listChildCount; i++)
+                    {
+                        var listItem = listComp->Component->UldManager.NodeList[i];
+                        if (listItem == null || (int)listItem->Type != 1005) continue;
+
+                        var itemComp = (AtkComponentNode*)listItem;
+                        if (itemComp->Component == null) continue;
+
+                        var itemChildCount = itemComp->Component->UldManager.NodeListCount;
+                        for (var j = 0; j < itemChildCount; j++)
+                        {
+                            var itemChild = itemComp->Component->UldManager.NodeList[j];
+                            if (itemChild == null || itemChild->Type != NodeType.Text || !itemChild->IsVisible()) continue;
+
+                            var choiceTextNode = (AtkTextNode*)itemChild;
+                            if (choiceTextNode->NodeText.StringPtr != null)
+                            {
+                                var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)choiceTextNode->NodeText.StringPtr.Value);
+                                if (!string.IsNullOrEmpty(choiceText))
+                                {
+                                    choices.Add(choiceText);
+                                    Log.Info($"  ✓ Choice {choices.Count}: {choiceText}");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (choices.Count > 0) break; // Found choices, stop searching
+                }
+
+                // Send choice data if we have choices
+                if (choices.Count > 0)
                 {
                     // Use global duplicate prevention system
                     var combinedText = $"{dialogTitle} | {string.Join(" | ", choices)}";
@@ -858,38 +937,76 @@ namespace DalamudMBBBridge
 
                 Log.Info($"🎯 [CHOICE] CutSceneSelectString triggered - extracting choices");
 
-                // Extract title/header (Node 2)
+                // ── TITLE: Top NodeId=3 (Type=1006 component) → child Text node ──
                 string dialogTitle = "";
-                var titleNode = atkAddon->GetNodeById(2);
-                if (titleNode != null && titleNode->Type == NodeType.Text)
+                var titleContainerNode = atkAddon->GetNodeById(3);
+                if (titleContainerNode != null && (int)titleContainerNode->Type > 1000)
                 {
-                    var textNode = (AtkTextNode*)titleNode;
-                    if (textNode->NodeText.StringPtr != null)
+                    var titleComp = (AtkComponentNode*)titleContainerNode;
+                    if (titleComp->Component != null)
                     {
-                        dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
-                        Log.Info($"📌 [CHOICE] Title: {dialogTitle}");
+                        var tcCount = titleComp->Component->UldManager.NodeListCount;
+                        for (var i = 0; i < tcCount; i++)
+                        {
+                            var child = titleComp->Component->UldManager.NodeList[i];
+                            if (child != null && child->Type == NodeType.Text)
+                            {
+                                var textNode = (AtkTextNode*)child;
+                                if (textNode->NodeText.StringPtr != null)
+                                {
+                                    dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
+                                    if (!string.IsNullOrEmpty(dialogTitle))
+                                    {
+                                        Log.Info($"📌 [CHOICE] Title: {dialogTitle}");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Extract choice options (Nodes 15-19)
+                // ── CHOICES: Top NodeId=2 (Type=1004 list component) → children Type=1005 (list items) ──
+                // Each list item has child NodeId=5 (Text, Visible) with the choice text
                 var choices = new List<string>();
-                uint[] choiceNodeIds = { 15, 16, 17, 18, 19 };
-
-                foreach (var nodeId in choiceNodeIds)
+                var listContainerNode = atkAddon->GetNodeById(2);
+                if (listContainerNode != null && (int)listContainerNode->Type > 1000)
                 {
-                    var node = atkAddon->GetNodeById(nodeId);
-                    if (node == null || node->Type != NodeType.Text) continue;
-
-                    var textNode = (AtkTextNode*)node;
-                    if (!textNode->AtkResNode.IsVisible()) continue;
-
-                    if (textNode->NodeText.StringPtr != null)
+                    var listComp = (AtkComponentNode*)listContainerNode;
+                    if (listComp->Component != null)
                     {
-                        var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
-                        if (!string.IsNullOrEmpty(choiceText))
+                        var listChildCount = listComp->Component->UldManager.NodeListCount;
+                        for (var i = 0; i < listChildCount; i++)
                         {
-                            choices.Add(choiceText);
-                            Log.Info($"  ✓ Choice {choices.Count}: {choiceText}");
+                            var listItem = listComp->Component->UldManager.NodeList[i];
+                            if (listItem == null) continue;
+                            // List items are Type=1005 (AtkComponentListItemRenderer)
+                            if ((int)listItem->Type != 1005) continue;
+
+                            var itemComp = (AtkComponentNode*)listItem;
+                            if (itemComp->Component == null) continue;
+
+                            // Find the visible text node (NodeId=5 is the visible one)
+                            var itemChildCount = itemComp->Component->UldManager.NodeListCount;
+                            for (var j = 0; j < itemChildCount; j++)
+                            {
+                                var itemChild = itemComp->Component->UldManager.NodeList[j];
+                                if (itemChild == null) continue;
+                                if (itemChild->Type != NodeType.Text) continue;
+                                if (!itemChild->IsVisible()) continue;
+
+                                var choiceTextNode = (AtkTextNode*)itemChild;
+                                if (choiceTextNode->NodeText.StringPtr != null)
+                                {
+                                    var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)choiceTextNode->NodeText.StringPtr.Value);
+                                    if (!string.IsNullOrEmpty(choiceText))
+                                    {
+                                        choices.Add(choiceText);
+                                        Log.Info($"  ✓ Choice {choices.Count}: {choiceText}");
+                                        break; // Only take the first visible text per list item
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1325,13 +1442,22 @@ namespace DalamudMBBBridge
 
                 lastMBBCheck = DateTime.Now;
 
-                var processes = Process.GetProcessesByName("python");
-                foreach (var process in processes)
+                // Check for MBB.exe (production build)
+                var mbbProcesses = Process.GetProcessesByName("MBB");
+                if (mbbProcesses.Length > 0)
+                {
+                    isMBBRunning = true;
+                    return true;
+                }
+
+                // Fallback: Check for python running MBB.py (development mode)
+                var pythonProcesses = Process.GetProcessesByName("python");
+                foreach (var process in pythonProcesses)
                 {
                     try
                     {
                         var cmdLine = GetCommandLine(process);
-                        if (cmdLine != null && cmdLine.Contains("MBB.py"))
+                        if (cmdLine != null && (cmdLine.Contains("MBB.py") || cmdLine.Contains("mbb.py")))
                         {
                             isMBBRunning = true;
                             return true;
@@ -1389,18 +1515,40 @@ namespace DalamudMBBBridge
 
                 if (File.Exists(mbbPath))
                 {
-                    var startInfo = new ProcessStartInfo
+                    ProcessStartInfo startInfo;
+
+                    // Check if it's an .exe or .py file
+                    if (mbbPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     {
-                        FileName = "python",
-                        Arguments = $"\"{mbbPath}\"",
-                        WorkingDirectory = Path.GetDirectoryName(mbbPath),
-                        UseShellExecute = false,
-                        CreateNoWindow = false
-                    };
+                        // Direct execution for .exe files
+                        startInfo = new ProcessStartInfo
+                        {
+                            FileName = mbbPath,
+                            WorkingDirectory = Path.GetDirectoryName(mbbPath),
+                            UseShellExecute = !ShowConsole,  // UseShellExecute=true hides console
+                            CreateNoWindow = !ShowConsole,   // Hide window if not showing console
+                        };
+                        if (ShowConsole)
+                        {
+                            startInfo.WindowStyle = ProcessWindowStyle.Normal;
+                        }
+                    }
+                    else
+                    {
+                        // Use python for .py files
+                        startInfo = new ProcessStartInfo
+                        {
+                            FileName = "python",
+                            Arguments = $"\"{mbbPath}\"",
+                            WorkingDirectory = Path.GetDirectoryName(mbbPath),
+                            UseShellExecute = false,
+                            CreateNoWindow = !ShowConsole
+                        };
+                    }
 
                     Process.Start(startInfo);
-                    ChatGui.Print("[MBB Bridge] Launching MBB application...");
-                    Log.Info($"[MBB Bridge] MBB launch initiated from: {mbbPath}");
+                    ChatGui.Print($"[MBB Bridge] Launching MBB application...{(ShowConsole ? " (with console)" : "")}");
+                    Log.Info($"[MBB Bridge] MBB launch initiated from: {mbbPath}, ShowConsole: {ShowConsole}");
                 }
                 else
                 {
@@ -1485,6 +1633,39 @@ namespace DalamudMBBBridge
 
         public string? GetSavedMbbPath() => savedMbbPath;
 
+        private void LoadShowConsole()
+        {
+            try
+            {
+                var configPath = PluginInterface.GetPluginConfigDirectory() + "\\show_console.txt";
+                if (File.Exists(configPath))
+                {
+                    var value = File.ReadAllText(configPath).Trim();
+                    ShowConsole = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                    Log.Info($"[MBB Config] Loaded ShowConsole: {ShowConsole}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[MBB Config] Error loading ShowConsole: {ex.Message}");
+                ShowConsole = false;
+            }
+        }
+
+        public void SaveShowConsole()
+        {
+            try
+            {
+                var configPath = PluginInterface.GetPluginConfigDirectory() + "\\show_console.txt";
+                Directory.CreateDirectory(Path.GetDirectoryName(configPath));
+                File.WriteAllText(configPath, ShowConsole.ToString().ToLower());
+                Log.Info($"[MBB Config] Saved ShowConsole: {ShowConsole}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[MBB Config] Error saving ShowConsole: {ex.Message}");
+            }
+        }
 
         private async Task StartPipeServer()
         {
@@ -1568,6 +1749,7 @@ namespace DalamudMBBBridge
 
             // Unregister addon events - updated for fixed handlers
             ChatGui.ChatMessage -= OnChatMessage;
+            ClientState.TerritoryChanged -= OnTerritoryChanged;
             AddonLifecycle.UnregisterListener(AddonEvent.PreRefresh, "Talk", OnTalkAddonPreReceive);
             AddonLifecycle.UnregisterListener(AddonEvent.PreSetup, "_BattleTalk", OnBattleTalkAddon);
             AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "_BattleTalk", OnBattleTalkAddon);

@@ -4,6 +4,7 @@ import json
 import os
 from enum import Enum
 import logging
+from resource_utils import resource_path
 
 
 # DialogueType Enum
@@ -305,33 +306,25 @@ class TextCorrector:
 
     def load_npc_data(self):
         try:
-            # ทำให้การค้นหาไฟล์ทนทานมากขึ้น โดยทดลองชื่อไฟล์ที่ต่างกัน
+            # Use resource_path for PyInstaller compatibility
             file_candidates = ["NPC.json", "npc.json"]
             file_path = None
 
-            # หาไดเรกทอรีปัจจุบัน
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-
-            # ลองหาไฟล์ในโฟลเดอร์ปัจจุบัน
+            # Try resource_path first (works in both dev and PyInstaller)
             for candidate in file_candidates:
-                temp_path = os.path.join(base_dir, candidate)
+                temp_path = resource_path(candidate)
                 if os.path.exists(temp_path):
                     file_path = temp_path
                     print(f"Found NPC data file at: {file_path}")
                     break
 
-            # ถ้าไม่พบ ลองหาในโฟลเดอร์ชั้นบน
+            # Fallback: try current directory
             if not file_path:
-                parent_dir = os.path.dirname(base_dir)
+                base_dir = os.path.dirname(os.path.abspath(__file__))
                 for candidate in file_candidates:
-                    temp_path = os.path.join(parent_dir, candidate)
+                    temp_path = os.path.join(base_dir, candidate)
                     if os.path.exists(temp_path):
                         file_path = temp_path
-                        print(f"Found NPC data file at: {file_path}")
-                        break
-
-            # ถ้ายังไม่พบ ไม่ต้องค้นหา hardcoded path
-            # NPC data should be in the same directory as the script
                         print(f"Found NPC data file at: {file_path}")
                         break
 
@@ -349,16 +342,23 @@ class TextCorrector:
                 # เพิ่ม "???" เป็นชื่อที่ยอมรับได้
                 self.names.add("???")
 
-                # Load main characters
+                # Load main characters (strip zero-width chars for clean matching)
+                _zws = "\u200b\u200c\u200d\ufeff"
                 for char in npc_data["main_characters"]:
                     if char["firstName"]:
-                        self.names.add(char["firstName"])
+                        clean = char["firstName"].strip().translate(str.maketrans("", "", _zws))
+                        if clean:
+                            self.names.add(clean)
                     if char["lastName"]:
-                        self.names.add(char["lastName"])
+                        clean = char["lastName"].strip().translate(str.maketrans("", "", _zws))
+                        if clean:
+                            self.names.add(clean)
 
                 # Load NPCs
                 for npc in npc_data["npcs"]:
-                    self.names.add(npc["name"])
+                    clean = npc["name"].strip().translate(str.maketrans("", "", _zws))
+                    if clean:
+                        self.names.add(clean)
 
                 print(f"Loaded {len(self.names)} character names successfully")
                 logging.info(

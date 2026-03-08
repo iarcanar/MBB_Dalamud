@@ -55,6 +55,7 @@ class DalamudImmediateHandler:
         self.main_app = main_app  # 🔧 Reference to main app for force translate
         self.main_app_ref = main_app  # 🔧 CRITICAL FIX: Also store as main_app_ref for compatibility
         self.translated_logs = None  # เพิ่มการเก็บ reference ไปที่ translated_logs
+        self.conversation_logger = None  # ConversationLogger สำหรับ wide-context dev
 
 
         # Control flags
@@ -131,6 +132,11 @@ class DalamudImmediateHandler:
         self.translated_logs = translated_logs
         self.logger.info("Translated logs instance set")
 
+    def set_conversation_logger(self, conv_logger):
+        """Set ConversationLogger for wide-context-translation development"""
+        self.conversation_logger = conv_logger
+        self.logger.info("ConversationLogger set")
+
     def process_message(self, message_data: Dict[str, Any]):
         """
         Process message with IMMEDIATE display
@@ -142,6 +148,22 @@ class DalamudImmediateHandler:
             return
 
         try:
+            # 🔔 SYSTEM EVENT: zone_change etc. → log แล้ว return ทันที (ไม่แปล)
+            if message_data.get('Type') == 'system':
+                if self.conversation_logger:
+                    msg = message_data.get('Message', '')
+                    self.conversation_logger.log_system_event('zone_change', msg)
+                return
+
+            # 📝 CONVERSATION LOGGER: บันทึกเฉพาะ NPC dialogue/cutscene
+            if self.conversation_logger:
+                try:
+                    log_chat_type = message_data.get('ChatType', 0)
+                    if log_chat_type in (61, 68, 71, 0x0045, 0x0046):
+                        self.conversation_logger.log_message(message_data)
+                except Exception:
+                    pass  # ห้ามให้ logger พัง translation pipeline
+
             # 🚫 TEXT HOOK FILTERING: Check if message should be translated
             chat_type = message_data.get('ChatType', 0)
             self.logger.info(f"[DEBUG FILTER] Checking ChatType {chat_type}")
@@ -240,14 +262,39 @@ class DalamudImmediateHandler:
                     # Update status to show TRANSLATING
                     if hasattr(self, 'main_app_ref') and self.main_app_ref:
                         try:
-                            # Set temporary translating state for UI
                             self.main_app_ref._translating_in_progress = True
-                            self.main_app_ref.root.after(0, self.main_app_ref.update_info_label_with_model_color)
+                            self.main_app_ref.safe_after(0, self.main_app_ref.update_info_label_with_model_color)
                         except Exception:
                             pass
 
-                    # Translate
-                    translated_text = self.translator.translate(message_text)
+                    # Translate — detect choice type and use dedicated method
+                    is_choice = (message_data.get('Type', '') == 'choice')
+                    if is_choice:
+                        # Convert pipe format to newline format for translate_choice()
+                        # C# sends: "What will you say? | Choice1 | Choice2"
+                        # translate_choice() expects: "What will you say?\nChoice1\nChoice2"
+                        choice_text = message_text.replace(" | ", "\n") if " | " in message_text else message_text
+                        self.logger.info(f"🎯 [CHOICE] Using translate_choice() for: {choice_text[:80]}")
+                        translated_text = self.translator.translate_choice(choice_text)
+                    else:
+                        # Wide-context: ดึง context จาก conversation logger
+                        # Opt1: ลด context size — cutscene=4, dialogue=3, battle=skip
+                        # Opt2: smart skip — battle ไม่ส่ง context (ประโยคสั้น standalone)
+                        conversation_context = ""
+                        if self.conversation_logger and chat_type != 68:
+                            try:
+                                ctx_messages = 4 if chat_type == 71 else 3
+                                conversation_context = self.conversation_logger.get_recent_context(
+                                    max_messages=ctx_messages, exclude_last=True
+                                )
+                            except Exception:
+                                conversation_context = ""
+
+                        translated_text = self.translator.translate(
+                            message_text,
+                            chat_type=chat_type,
+                            conversation_context=conversation_context
+                        )
 
                     translation_time = time.time() - start_time
 
@@ -255,6 +302,15 @@ class DalamudImmediateHandler:
                         self.logger.info(f"🔥 [WARMUP] First translation: {translation_time:.2f}s")
                     else:
                         self.logger.info(f"[แปลเสร็จ] ใช้เวลา {translation_time:.2f}s: {translated_text[:50]}...")
+
+                    # 📝 CONVERSATION LOGGER: เติมคำแปลที่ได้
+                    if self.conversation_logger:
+                        try:
+                            self.conversation_logger.update_translation(
+                                message, translated_text
+                            )
+                        except Exception:
+                            pass
 
                     # Cache result
                     self.translation_cache[cache_key] = translated_text
@@ -296,11 +352,10 @@ class DalamudImmediateHandler:
                         # 🔧 FORCE STATUS UPDATE: Update main UI status back to READY
                         if hasattr(self, 'main_app_ref') and self.main_app_ref:
                             try:
-                                # Clear translating state
                                 self.main_app_ref._translating_in_progress = False
-                                self.main_app_ref.root.after(0, self.main_app_ref.update_info_label_with_model_color)
+                                self.main_app_ref.safe_after(0, self.main_app_ref.update_info_label_with_model_color)
                             except:
-                                pass  # Fail silently if main app not available
+                                pass
                     else:
                         self.logger.warning(f"[ไม่แสดง] ระบบปิดแล้ว")
 
@@ -316,7 +371,7 @@ class DalamudImmediateHandler:
                         try:
                             if hasattr(self.main_app_ref, '_translating_in_progress'):
                                 self.main_app_ref._translating_in_progress = False
-                                self.main_app_ref.root.after(0, self.main_app_ref.update_info_label_with_model_color)
+                                self.main_app_ref.safe_after(0, self.main_app_ref.update_info_label_with_model_color)
                         except:
                             pass
 
@@ -333,12 +388,24 @@ class DalamudImmediateHandler:
             self.logger.error(f"Error processing message: {e}")
 
     def _show_immediately(self, text: str, chat_type: int = None):
-        """แสดงข้อความทันทีใน UI โดยไม่มีการหน่วงเวลา"""
+        """แสดงข้อความทันทีใน UI โดย schedule ลง main thread"""
         try:
             self.stats['immediate_displays'] += 1
             self.logger.info(f"[UI UPDATE] แสดงใน UI (ChatType {chat_type}): {text[:50]}...")
 
-            # Call UI updater directly - NO delays!
+            # Schedule UI update on main thread (Tkinter calls must be on main thread)
+            if hasattr(self, 'main_app_ref') and self.main_app_ref and hasattr(self.main_app_ref, 'safe_after'):
+                self.main_app_ref.safe_after(0, lambda: self._do_show_on_main_thread(text, chat_type))
+            else:
+                # Fallback: try direct call (will fail from bg thread with PyQt6)
+                self._do_show_on_main_thread(text, chat_type)
+
+        except Exception as e:
+            self.logger.error(f"[UI ERROR] ไม่สามารถแสดง UI: {e}")
+
+    def _do_show_on_main_thread(self, text: str, chat_type: int = None):
+        """Actual UI update logic - must run on main thread."""
+        try:
             if hasattr(self.ui_updater, '__call__'):
                 self.ui_updater(text, chat_type)
                 self.logger.info(f"[UI SUCCESS] เรียกฟังก์ชัน UI สำเร็จ (ChatType {chat_type})")
@@ -346,19 +413,13 @@ class DalamudImmediateHandler:
                 self.ui_updater.update_text(text, chat_type=chat_type)
                 self.logger.info(f"[UI SUCCESS] เรียกเมธอด update_text สำเร็จ (ChatType {chat_type})")
 
-            # *** TEXT HOOK INTEGRATION: ส่งข้อมูลไปที่ translated_logs ***
+            # ส่งข้อมูลไปที่ translated_logs
             if self.translated_logs and hasattr(self.translated_logs, 'add_message'):
                 try:
                     self.translated_logs.add_message(text)
                     self.logger.info(f"[LOGS SUCCESS] ส่งข้อมูลไป translated_logs สำเร็จ")
                 except Exception as logs_error:
                     self.logger.error(f"[LOGS ERROR] ไม่สามารถส่งไป translated_logs: {logs_error}")
-
-            # Force tkinter to update IMMEDIATELY
-            if hasattr(self.ui_updater, 'root'):
-                self.ui_updater.root.update_idletasks()
-                self.ui_updater.root.update()
-                self.logger.info(f"[UI FORCED] บังคับอัพเดท tkinter สำเร็จ")
 
         except Exception as e:
             self.logger.error(f"[UI ERROR] ไม่สามารถแสดง UI: {e}")

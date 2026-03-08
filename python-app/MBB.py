@@ -1,15 +1,13 @@
-__version__ = "1.5.28"  # MBB Dalamud Bridge - Test Hook buttons, TUI position fixes
+from version import __version__, __build__  # Single source of truth
 
 from enum import Enum
 import json
-from pydoc import text
 import random
 import subprocess
 import sys
 import os
 import atexit
 import psutil
-import tempfile
 
 # ตั้งค่า encoding สำหรับ Windows console เพื่อรองรับภาษาไทย
 if sys.platform == "win32":
@@ -35,16 +33,16 @@ from tkinter import (
 )  # เพิ่ม Checkbutton, BooleanVar
 from tkinter import Label  # เพิ่ม import Label
 import math  # เพิ่ม import math
-from PIL import ImageGrab, ImageEnhance, Image, ImageTk, ImageDraw, ImageFilter
+from PIL import Image, ImageTk
 import win32gui
 import win32con
-from ctypes import windll, wintypes
+from ctypes import windll
 import ctypes
-# OCR removed - project is 100% text hook now
 import time
 import threading
 import difflib
 import logging
+import queue
 import traceback
 from datetime import datetime
 from text_corrector import TextCorrector
@@ -52,7 +50,8 @@ import translated_ui
 from text_corrector import DialogueType
 from control_ui import Control_UI
 from translator_gemini import TranslatorGemini
-from settings import Settings, SettingsUI
+from settings import Settings
+from pyqt_ui.settings_panel import SettingsPanel
 from advance_ui import AdvanceUI
 from mini_ui import MiniUI
 from loggings import LoggingManager
@@ -67,8 +66,10 @@ import webbrowser
 from translated_logs import Translated_Logs
 from font_manager import FontSettings, initialize_font_manager
 from asset_manager import AssetManager
+from resource_utils import resource_path
 from dalamud_bridge import DalamudBridge
 from dalamud_immediate_handler import create_dalamud_immediate_handler
+from conversation_logger import ConversationLogger
 
 # UI Components for redesigned architecture
 from button_factory import ButtonFactory
@@ -76,25 +77,21 @@ from ui_components import HeaderBar, ControlPanel, BottomBar
 
 # --- TranslationPolicy removed ---
 
-# Tesseract OCR removed - using EasyOCR only
-
 warnings.filterwarnings("ignore", category=UserWarning)
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Import npc_manager silently
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
-npc_manager_path = os.path.join(current_dir, "npc_manager_card.py")  # เปลี่ยนเป็นไฟล์ใหม่
-
+# Import npc_manager_card - use normal import for PyInstaller compatibility
+print("[MBB] Attempting to import NPC Manager...")
 try:
-    spec = importlib.util.spec_from_file_location("npc_manager_card", npc_manager_path)
-    npc_manager_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(npc_manager_module)
-    NPCManagerCard = getattr(npc_manager_module, "NPCManagerCard", None)
+    from npc_manager_card import NPCManagerCard
+    print(f"[MBB] NPCManagerCard imported successfully: {NPCManagerCard}")
 except Exception as e:
+    print(f"[MBB] NPC Manager import failed: {e}")
+    import traceback
+    traceback.print_exc()
     NPCManagerCard = None
 
 
@@ -357,18 +354,30 @@ class ButtonStateManager:
             return False
 
     def update_button_visual(self, button_key, visual_state, custom_color=None):
-        """อัปเดตการแสดงผลปุ่ม"""
+        """อัปเดตการแสดงผลปุ่ม (supports Tkinter and PyQt6 buttons)"""
         try:
             button = self.button_states[button_key]["button_ref"]
             if not button:
                 logging.warning(f"Button {button_key} reference is None")
                 return
 
-            if not button.winfo_exists():
-                logging.warning(f"Button {button_key} widget no longer exists")
+            # Check if widget exists (handle both Tkinter and PyQt6)
+            if hasattr(button, 'winfo_exists'):
+                # Tkinter widget
+                if not button.winfo_exists():
+                    logging.warning(f"Button {button_key} widget no longer exists")
+                    return
+            elif hasattr(button, 'setProperty'):
+                # PyQt6 widget - use toggled property for QSS state
+                is_active = visual_state in ["toggle_on", "hover_light"]
+                button.setProperty("toggled", "true" if is_active else "false")
+                button.style().unpolish(button)
+                button.style().polish(button)
+                return  # PyQt6 styling handled by QSS
+            else:
                 return
 
-            # เลือกสี
+            # เลือกสี (Tkinter path)
             if custom_color:
                 color = custom_color
             else:
@@ -376,22 +385,16 @@ class ButtonStateManager:
 
             # เลือกสีตัวอักษรตามสถานะ
             if visual_state == "toggle_on":
-                # เมื่อ active: ใช้สีดำให้เห็นชัดบน background สว่าง (cyan)
-                # ความโปร่งแสงลดลง = ทำให้ทึบขึ้น = ใช้สีดำ
                 fg_color = "#000000"
             elif visual_state in ["hover", "hover_light"]:
-                # เมื่อ hover: ใช้สีเทาเข้มให้เห็นชัดแต่ไม่ดำสนิท
                 fg_color = "#1a1a1a"
             else:
-                # เมื่อ normal: ใช้สี text_dim
                 fg_color = self.appearance_manager.get_theme_color("text_dim", "#b2b2b2")
 
-            # อัปเดตปุ่ม
+            # อัปเดตปุ่ม (Tkinter)
             if hasattr(button, "update_button"):
-                # Canvas button
                 button.update_button(bg=color, fg=fg_color)
             else:
-                # Regular button
                 button.config(bg=color, fg=fg_color)
 
         except Exception as e:
@@ -502,7 +505,7 @@ class ButtonStateManager:
 
                     if time.time() - getattr(self, "_last_toggle_time", 0) < 1:
                         # ข้ามการตรวจสอบใน 1 วินาทีแรกหลัง toggle
-                        self.parent_app.root.after(
+                        self.parent_app.safe_after(
                             10, lambda: sync_one_button(button_index + 1)
                         )
                         return
@@ -514,7 +517,7 @@ class ButtonStateManager:
                     self.set_button_state(button_key, actual_state)
 
                 # ตรวจสอบปุ่มถัดไปใน 10ms
-                self.parent_app.root.after(
+                self.parent_app.safe_after(
                     10, lambda: sync_one_button(button_index + 1)
                 )
 
@@ -526,25 +529,21 @@ class ButtonStateManager:
 
 
 class MagicBabelApp:
-    def __init__(self, root):
+    def __init__(self, root, qt_app=None):
         # Show version info immediately
         print(f"=== MagicBabel System Started v{__version__} ===")
 
         # 1. การตั้งค่าพื้นฐาน (เหมือนเดิม)
         self.root = root
+        self.qt_app = qt_app  # PyQt6 QApplication instance
+        self.qt_main_window = None  # Will be set in create_main_ui
+        self._pending_callbacks = []  # Thread-safe callback queue
         self.root.withdraw()
         self.root.attributes("-topmost", True)
         self.translation_event = threading.Event()
-        self.ocr_cache = {}
-        self.ocr_speed = "normal"
-        self.cache_timeout = 1.0
         self.cpu_limit = 80
         self.cpu_check_interval = 1.0
         self.last_cpu_check = time.time()
-        self.ocr_interval = 0.3
-        self.last_ocr_time = time.time()
-        self.same_text_count = 0
-        self.last_signatures = {}
 
         # --- ส่วน Splash Screen (เหมือนเดิม) ---
         def show_splash():
@@ -552,7 +551,7 @@ class MagicBabelApp:
             splash.overrideredirect(True)
             splash.attributes("-topmost", True)
             try:
-                image = Image.open("assets/MBBvisual.png")
+                image = Image.open(resource_path("assets/MBBvisual.png"))
                 image = image.convert("RGBA")
                 SPLASH_WIDTH = 1280
                 SPLASH_HEIGHT = 720
@@ -588,8 +587,13 @@ class MagicBabelApp:
                     splash.destroy()
                 return None, None
 
-        self.splash, self.splash_photo = show_splash()
+        # DEV MODE: ปิด splash screen ชั่วคราวเพื่อลดเวลา startup ระหว่างพัฒนา
+        # self.splash, self.splash_photo = show_splash()
+        self.splash, self.splash_photo = None, None
         # --- จบส่วน Splash Screen ---
+
+        # Thread-safe callback queue for safe_after → _safe_tk_poll
+        self._tk_callback_queue = queue.Queue()
 
         # เพิ่มตัวแปรล็อคการเคลื่อนย้าย UI
         self._processing_intensive_task = False
@@ -773,82 +777,69 @@ class MagicBabelApp:
         self.npc_manager = None
 
         # 13. Translation Policy removed
+        # NPC Manager is imported at top-level (see line 90)
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        npc_manager_path = os.path.join(current_dir, "npc_manager_card.py")
-        try:
-            spec = importlib.util.spec_from_file_location(
-                "npc_manager_card", npc_manager_path
-            )
-            if spec and spec.loader:
-                npc_manager_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(npc_manager_module)
-                create_npc_manager = getattr(
-                    npc_manager_module, "create_npc_manager_card", None
-                )
-                if NPCManagerCard is None:
-                    self.logging_manager.log_warning(
-                        "Function 'create_npc_manager_card' not found in npc_manager_card.py"
-                    )
-            else:
-                create_npc_manager = None
-                self.logging_manager.log_warning(
-                    f"Could not load spec for npc_manager_card.py at {npc_manager_path}"
-                )
-        except FileNotFoundError:
-            create_npc_manager = None
-            self.logging_manager.log_warning(
-                f"npc_manager_card.py not found at {npc_manager_path}"
-            )
-        except Exception as e:
-            create_npc_manager = None
-            self.logging_manager.log_error(f"Error loading npc_manager_card: {e}")
-
-        # 13. จัดการการแสดง splash screen และ main window (เหมือนเดิม)
-        def finish_startup():
-            try:
-                self.root.after(2000, lambda: self._complete_startup())
-            except Exception as e:
-                self.logging_manager.log_error(f"Error in finish_startup: {e}")
-                if self.root and self.root.winfo_exists():
-                    self.root.deiconify()
-
-        startup_thread = threading.Thread(target=finish_startup, daemon=True)
-        startup_thread.start()
+        # 13. จัดการการแสดง splash screen และ main window
+        # Use QTimer directly from main thread (QTimer.singleShot from background thread won't fire)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(2000, self._complete_startup)
 
     def _complete_startup(self):
         """แยกฟังก์ชันสำหรับจัดการส่วนสุดท้ายของการเริ่มต้นโปรแกรม"""
         try:
-            # ปิด splash screen ด้วย fade effect
-            if hasattr(self, "splash") and self.splash and self.splash.winfo_exists():
+            # ปิด splash screen ด้วย non-blocking fade effect
+            if hasattr(self, "splash") and self.splash:
                 try:
-                    for i in range(10, -1, -1):
-                        alpha = i / 10
-                        self.splash.attributes("-alpha", alpha)
-                        self.splash.update()
-                        time.sleep(0.02)  # ลดเวลา delay
-                    self.splash.destroy()
+                    if self.splash.winfo_exists():
+                        self._splash_fade_step = 10
+                        self._fade_splash_step()
+                        return  # _fade_splash_step will call _finish_startup_tasks when done
                 except Exception as e:
                     self.logging_manager.log_error(f"Error closing splash: {e}")
-                    if self.splash.winfo_exists():
+                    try:
                         self.splash.destroy()
+                    except Exception:
+                        pass
 
-            # แสดง main window และตั้งค่าให้ไม่มีขอบ
-            self.root.deiconify()
-            self.root.overrideredirect(True)  # สำคัญ: ต้องตั้งค่าหลังจาก deiconify
-            self.root.update()  # บังคับให้ window อัพเดท
+            self._finish_startup_tasks()
+
+        except Exception as e:
+            self.logging_manager.log_error(f"Error in _complete_startup: {e}")
+
+    def _fade_splash_step(self):
+        """Non-blocking splash fade-out using QTimer steps."""
+        try:
+            if self._splash_fade_step >= 0:
+                alpha = self._splash_fade_step / 10
+                self.splash.attributes("-alpha", alpha)
+                self.splash.update()
+                self._splash_fade_step -= 1
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(20, self._fade_splash_step)
+            else:
+                self.splash.destroy()
+                self._finish_startup_tasks()
+        except Exception as e:
+            self.logging_manager.log_error(f"Error in splash fade: {e}")
+            try:
+                self.splash.destroy()
+            except Exception:
+                pass
+            self._finish_startup_tasks()
+
+    def _finish_startup_tasks(self):
+        """Run remaining startup tasks after splash is closed."""
+        try:
+            # PyQt6 main window is already shown from create_main_ui
+            # Root stays hidden - only used for Tkinter sub-windows
             self.logging_manager.log_info("MagicBabel application started and ready")
 
             # 🔧 FORCE STATUS UPDATE: Schedule update after startup completes
-            self.root.after(2000, self._delayed_status_update)
-
-            # หยุด rainbow animation ตอนเริ่มต้นโปรแกรม (ไม่ควรแสดงตอนยังไม่แปล)
+            self.safe_after(2000, self._delayed_status_update)
 
             # เพิ่มการโหลดข้อมูล NPC
             self.reload_npc_data()
             self.logging_manager.log_info("Reloaded NPC data during startup")
-
-            # Starter guide auto-show disabled - removed to prevent unwanted website opening
 
             # เริ่มระบบ monitoring สำหรับ button states
             self.start_window_state_monitor()
@@ -856,18 +847,14 @@ class MagicBabelApp:
             # 🚀 AUTO-START: ตรวจสอบและเริ่ม auto-start translation
             self.setup_auto_start()
 
-            # 🔥 WARMUP: Schedule translation warmup injection
-            # IMPORTANT: Schedule AFTER auto-start delay to ensure translation is active
-            auto_start_delay = self.settings.get('auto_start_delay', 3) * 1000  # milliseconds
-            warmup_additional_delay = int(self.settings.get('warmup_delay', 0.8) * 1000)
-            total_warmup_delay = auto_start_delay + warmup_additional_delay
-
-            self.logging_manager.log_info(f"🔥 [WARMUP] Scheduling warmup {total_warmup_delay}ms after ready state")
-            self.root.after(total_warmup_delay, self._inject_warmup_message)
+            # DEV MODE: ปิด warmup injection ชั่วคราว — ไม่ยิงบทสนทนาจำลองตอนเริ่มต้น
+            # auto_start_delay = self.settings.get('auto_start_delay', 3) * 1000
+            # warmup_additional_delay = int(self.settings.get('warmup_delay', 0.8) * 1000)
+            # total_warmup_delay = auto_start_delay + warmup_additional_delay
+            # self.safe_after(total_warmup_delay, self._inject_warmup_message)
 
         except Exception as e:
-            self.logging_manager.log_error(f"Error in _complete_startup: {e}")
-            # กรณีเกิดข้อผิดพลาด ให้แสดง main window
+            self.logging_manager.log_error(f"Error in _finish_startup_tasks: {e}")
 
     def _inject_warmup_message(self):
         """
@@ -919,7 +906,7 @@ class MagicBabelApp:
         """เริ่มระบบ monitoring สถานะหน้าต่างอย่างต่อเนื่อง"""
         self.check_window_states()
         # ตั้งเวลาให้ตรวจสอบทุก 5 วินาที (ประหยัดทรัพยากร)
-        self.root.after(5000, self.start_window_state_monitor)
+        self.safe_after(5000, self.start_window_state_monitor)
 
     def check_window_states(self):
         """ตรวจสอบสถานะหน้าต่างทั้งหมดและอัปเดตปุ่มตามสถานะจริง"""
@@ -929,8 +916,6 @@ class MagicBabelApp:
                 self.button_state_manager.sync_all_states_async()
         except Exception as e:
             self.logging_manager.log_warning(f"Error checking window states: {e}")
-            self.root.deiconify()
-            self.root.overrideredirect(True)
 
     def _clear_active_temp_areas(self):
         """ทำลายหน้าต่างและยกเลิก animation ของ temporary areas ที่กำลังแสดงผลอยู่"""
@@ -1414,58 +1399,40 @@ class MagicBabelApp:
             # Click Translate เป็นเพียงการควบคุมว่าจะให้ลูปทำงาน *อัตโนมัติ* หรือไม่
             # เมื่อ is_translating เป็น False ลูปจะไม่ทำงานอยู่แล้ว ไม่ว่า Click Translate จะเป็นอะไรก็ตาม
 
+    def _get_mbb_geometry(self):
+        """Get MBB main window position and size (PyQt6 window)."""
+        if self.qt_main_window:
+            return (
+                self.qt_main_window.x(),
+                self.qt_main_window.y(),
+                self.qt_main_window.width(),
+                self.qt_main_window.height(),
+            )
+        return (self.root.winfo_x(), self.root.winfo_y(),
+                self.root.winfo_width(), self.root.winfo_height())
+
     def toggle_theme(self):
-        """เปิดหน้าต่างจัดการธีม"""
-        # ตรวจสอบว่ามีหน้าต่างจัดการธีมเปิดอยู่หรือไม่
-        if (
-            hasattr(self, "theme_manager_window")
-            and self.theme_manager_window.winfo_exists()
-        ):
-            # ถ้ามีหน้าต่างเปิดอยู่แล้ว ให้ปิด
-            self.theme_manager_window.destroy()
-            # ไม่จำเป็นต้องจัดการสีปุ่ม theme ที่นี่ เพราะ _apply_theme_update จะจัดการเมื่อธีมเปลี่ยน
+        """เปิด/ปิดหน้าต่างจัดการธีม (PyQt6)"""
+        # ถ้ามีหน้าต่างเปิดอยู่แล้ว ให้ปิด
+        if hasattr(self, "_theme_panel") and self._theme_panel and self._theme_panel.isVisible():
+            self._theme_panel.close()
+            self._theme_panel = None
             return
 
-        # สร้างหน้าต่างใหม่
-        self.theme_manager_window = tk.Toplevel(self.root)
-        self.theme_manager_window.title("Theme Manager")
-        self.theme_manager_window.overrideredirect(True)
+        from pyqt_ui.theme_panel import ThemePanel
 
-        # กำหนดสีพื้นหลัง (ดึงจาก appearance_manager)
-        self.theme_manager_window.configure(bg=appearance_manager.bg_color)
-
-        # สร้าง UI จัดการธีม
-        theme_ui = appearance_manager.create_theme_manager_ui(
-            self.theme_manager_window, self.settings
+        self._theme_panel = ThemePanel(
+            appearance_manager=appearance_manager,
+            settings=self.settings,
+            on_theme_applied=self._apply_theme_update,
         )
-        theme_ui.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # ตำแหน่งหน้าต่าง (ด้านขวาของหน้าต่างหลัก)
-        x = self.root.winfo_x() + self.root.winfo_width() + 10
-        y = self.root.winfo_y()
-        self.theme_manager_window.geometry(f"+{x}+{y}")
+        # ตำแหน่งหน้าต่าง (ด้านขวาของ MBB main window)
+        mx, my, mw, mh = self._get_mbb_geometry()
+        self._theme_panel.move(mx + mw + 10, my)
+        self._theme_panel.show()
 
-        # *** Callback ถูกตั้งค่าถาวรใน __init__ แล้ว ไม่ต้องตั้งค่าที่นี่ ***
-        # appearance_manager.set_theme_change_callback(self._apply_theme_update)
-
-        # ผูก events สำหรับการเคลื่อนย้ายหน้าต่าง
-        self.theme_manager_window.bind("<Button-1>", self.start_move_theme_window)
-        self.theme_manager_window.bind("<B1-Motion>", self.do_move_theme_window)
-
-        # จัดการเมื่อปิดหน้าต่าง (อาจจะไม่จำเป็น ถ้า callback จัดการถูกต้อง)
-        self.theme_manager_window.protocol("WM_DELETE_WINDOW", self.close_theme_manager)
-
-        # รอให้หน้าต่างแสดงผลเสร็จ แล้วทำให้ขอบโค้งมน
-        self.theme_manager_window.update_idletasks()
-        self.apply_rounded_corners_to_theme_window()  # เมธอดนี้อาจจะต้องปรับปรุงให้ใช้ Windows API หรือวิธีอื่นที่เหมาะสม
-
-        # บันทึกธีมปัจจุบันเพิ่มเติมเพื่อความมั่นใจ (อาจจะไม่จำเป็น)
-        # current_theme = appearance_manager.get_current_theme()
-        # self.settings.set("theme", current_theme)
-        # self.settings.save_settings()
-
-        # บันทึกลอก
-        self.logging_manager.log_info("เปิดหน้าต่างจัดการธีม")
+        self.logging_manager.log_info("เปิดหน้าต่างจัดการธีม (PyQt6)")
 
     def restart_control_ui(self):
         """รีสตาร์ท Control UI เพื่อใช้ธีมใหม่"""
@@ -1534,9 +1501,6 @@ class MagicBabelApp:
             self.control_ui.update_preset_display()
             self.control_ui.update_button_highlights()
 
-            # เพิ่ม callback สำหรับปรับความเร็ว OCR
-            self.control_ui.speed_callback = self.set_ocr_speed
-
             # คืนค่าตำแหน่งหน้าต่าง (ถ้ามี)
             if control_ui_pos and control_root.winfo_exists():
                 control_root.geometry(f"+{control_ui_pos[0]}+{control_ui_pos[1]}")
@@ -1573,299 +1537,42 @@ class MagicBabelApp:
                 pass
             return False
 
-    def start_move_theme_window(self, event):
-        """เริ่มต้นการเคลื่อนย้ายหน้าต่าง Theme Manager"""
-        self.theme_x = event.x
-        self.theme_y = event.y
-
-    def do_move_theme_window(self, event):
-        """เคลื่อนย้ายหน้าต่าง Theme Manager"""
-        if hasattr(self, "theme_x") and hasattr(self, "theme_y"):
-            deltax = event.x - self.theme_x
-            deltay = event.y - self.theme_y
-            x = self.theme_manager_window.winfo_x() + deltax
-            y = self.theme_manager_window.winfo_y() + deltay
-            self.theme_manager_window.geometry(f"+{x}+{y}")
-
     def close_theme_manager(self):
-        """ปิดหน้าต่าง Theme Manager และรีเซ็ต callback"""
-        if (
-            hasattr(self, "theme_manager_window")
-            and self.theme_manager_window.winfo_exists()
-        ):
-            self.theme_manager_window.destroy()
-        appearance_manager.set_theme_change_callback(None)
-
-    def apply_rounded_corners_to_theme_window(self):
-        """ปรับให้หน้าต่าง Theme Manager ไม่มีขอบวินโดว์ (ไม่ต้องมีขอบโค้ง)"""
-        try:
-            # รอให้หน้าต่างแสดงผลเสร็จ
-            self.theme_manager_window.update_idletasks()
-
-            # ใช้เพียง overrideredirect แทนการใช้ Windows API
-            self.theme_manager_window.overrideredirect(True)
-
-        except Exception as e:
-            self.logging_manager.log_error(f"Error applying window style: {e}")
+        """ปิดหน้าต่าง Theme Manager"""
+        if hasattr(self, "_theme_panel") and self._theme_panel:
+            self._theme_panel.close()
+            self._theme_panel = None
 
     def _apply_theme_update(self):
         """
-        Apply the current theme to all relevant UI components.
-        Handles both modern (Canvas) and standard (tk.Button) widgets now.
+        Apply the current theme to all PyQt6 windows.
+        Propagates to: MainWindow, SettingsPanel + sub-panels (Hotkey/Model/Font).
         """
         try:
             log_func = getattr(self.logging_manager, "log_info", print)
-            print("DEBUG: _apply_theme_update called")
-            log_func("Applying theme update across all components...")
 
-            # --- ดึงค่าสีหลัก ---
-            theme_accent = appearance_manager.get_accent_color()
-            theme_highlight = appearance_manager.get_highlight_color()
-            theme_secondary = appearance_manager.get_theme_color("secondary")
-            theme_button_bg = appearance_manager.get_theme_color("button_bg", "#262637")
-            theme_bg_color = appearance_manager.bg_color
-            theme_text = appearance_manager.get_theme_color("text", "#ffffff")
-            theme_text_dim = appearance_manager.get_theme_color("text_dim", "#b2b2b2")
-            theme_error = appearance_manager.get_theme_color("error", "#e74c3c")
-            bottom_button_inactive_bg = theme_button_bg
-            bottom_button_active_state_bg = "#404040"
-            bottom_bg = "#141414"  # สีพื้นหลังส่วนล่าง
-
-            # --- 1. อัพเดท Widget ที่ MBB.py เป็นเจ้าของโดยตรง ---
-            # ... (โค้ดอัพเดท main_frame, header_frame, content_frame, ปุ่ม Modern, Status, Swap Button เหมือนเดิม) ...
-            if hasattr(self, "main_frame") and self.main_frame.winfo_exists():
-                self.main_frame.configure(bg=theme_bg_color)
-                # ... (โค้ดอัพเดท Header widgets) ...
-                header_frame, content_frame = None, None
-                for i, child in enumerate(self.main_frame.winfo_children()):
-                    if isinstance(child, tk.Frame) and child.winfo_exists():
-                        if i == 0:
-                            header_frame = child
-                            header_frame.configure(bg=theme_bg_color)
-                        elif i == 1:
-                            content_frame = child
-                            content_frame.configure(bg=theme_bg_color)
-                # NOTE: Header widgets (logo, version, pin, theme, close buttons) are now handled by HeaderBar.update_theme()
-                # if header_frame:
-                #     for widget in header_frame.winfo_children():
-                #         ... (commented out - delegated to HeaderBar)
-                if content_frame:
-                    for child in content_frame.winfo_children():
-                        if isinstance(child, tk.Frame) and child.winfo_exists():
-                            child.configure(bg=theme_bg_color)
-                    # OCR Area Selection removed - area buttons deleted from buttons_to_update list (15 lines)
-                    buttons_to_update = [  # Canvas only
-                        (
-                            getattr(self, "start_stop_button", None),
-                            theme_accent,
-                            appearance_manager.get_theme_color("accent_light"),
-                        ),
-                        (
-                            getattr(self, "settings_button", None),
-                            theme_button_bg,
-                            theme_accent,
-                        ),
-                        (
-                            getattr(self, "npc_manager_button", None),
-                            theme_button_bg,
-                            theme_accent,
-                        ),
-                    ]
-                    for button, base_color, hover_color in buttons_to_update:
-                        if (
-                            button
-                            and isinstance(button, tk.Canvas)
-                            and hasattr(button, "button_bg")
-                            and button.winfo_exists()
-                        ):
-                            try:
-                                button.configure(bg=theme_bg_color)
-                                is_selected = getattr(button, "selected", False)
-                                is_hovering = getattr(button, "_is_hovering", False)
-                                if button == getattr(self, "start_stop_button", None):
-                                    button.original_bg = (
-                                        theme_secondary if is_selected else theme_accent
-                                    )
-                                # OCR Area Selection removed - area button color handling deleted
-                                else:
-                                    button.original_bg = (
-                                        "#404060" if is_selected else theme_button_bg
-                                    )
-                                button.hover_bg = hover_color
-                                current_display_color = (
-                                    button.hover_bg
-                                    if is_hovering
-                                    else button.original_bg
-                                )
-                                # OCR Area Selection removed - area button color check deleted
-                                if is_selected and button == getattr(
-                                    self, "start_stop_button", None
-                                ):
-                                    current_display_color = theme_secondary
-                                button.itemconfig(
-                                    button.button_bg, fill=current_display_color
-                                )
-                                if hasattr(button, "button_text"):
-                                    text_color = theme_text
-                                    if is_selected and button in [
-                                        getattr(self, "settings_button", None),
-                                        # show_area_button reference removed
-                                        getattr(self, "npc_manager_button", None),
-                                        getattr(self, "start_stop_button", None),
-                                    ]:
-                                        text_color = theme_highlight
-                                    button.itemconfig(
-                                        button.button_text, fill=text_color
-                                    )
-                            except tk.TclError:
-                                logging.warning(
-                                    f"TclError updating modern button: {button}"
-                                )
-                    status_frame_widget = None
-                    if (
-                        hasattr(self, "status_label")
-                        and self.status_label.winfo_exists()
-                    ):
-                        self.status_label.configure(
-                            fg=theme_secondary, bg=theme_bg_color
-                        )
-                        if isinstance(self.status_label.master, tk.Frame):
-                            status_frame_widget = self.status_label.master
-                            status_frame_widget.configure(bg=theme_bg_color)
-                        #     bg_color=theme_bg_color,
-                        #     fg_color=appearance_manager.get_theme_color("secondary"),
-                        #     canvas_bg="#1a1a1a",
-                        # )
-                    # NOTE: swap_data_button is now handled by ControlPanel.update_theme()
-                    # if (
-                    #     hasattr(self, "swap_data_button")
-                    #     and self.swap_data_button.winfo_exists()
-                    # ):
-                    #     ... (commented out - delegated to ControlPanel)
-
-            # อัพเดท Info Label และ Frame ด้านล่าง
-            if hasattr(self, "info_label") and self.info_label.winfo_exists():
-                self.update_info_label_with_model_color()
-                if isinstance(self.info_label.master, tk.Frame):
-                    self.info_label.master.configure(bg=bottom_bg)
-            if (
-                hasattr(self, "bottom_container")
-                and self.bottom_container.winfo_exists()
-            ):
-                self.bottom_container.configure(bg=bottom_bg)
-                for child in self.bottom_container.winfo_children():
-                    if isinstance(child, tk.Frame) and child.winfo_exists():
-                        child.configure(bg=bottom_bg)
-                    # *** เพิ่ม: อัพเดทสี Label คำอธิบาย ***
-                    elif isinstance(child, tk.Label) and child == getattr(
-                        self, "bottom_button_description_label", None
-                    ):
-                        child.configure(bg=bottom_bg, fg=theme_text_dim)
-
-            # NOTE: bottom_settings_button is now handled by BottomBar.update_theme()
-            # --- อัพเดทปุ่ม Settings ---
-            # if (
-            #     hasattr(self, "bottom_settings_button")
-            #     and self.bottom_settings_button
-            #     and self.bottom_settings_button.winfo_exists()
-            # ):
-            #     ... (commented out - delegated to BottomBar)
-
-            # --- อัปเดต ButtonStateManager colors ---
-            if hasattr(self, "button_state_manager"):
-                self.button_state_manager.update_theme_colors()
-                # Re-apply current states with new colors
-                for button_key in ["tui", "log"]:  # NOTE: mini and con removed
-                    current_state = self.button_state_manager.button_states[button_key][
-                        "active"
-                    ]
-                    visual_state = "toggle_on" if current_state else "toggle_off"
-                    self.button_state_manager.update_button_visual(
-                        button_key, visual_state
-                    )
-
-            # NOTE: Bottom buttons (tui, log, mini, npc_manager, settings) are now handled by BottomBar.update_theme()
-            # --- อัพเดทปุ่มล่าง (tk.Button) และ Re-bind Hover ---
-            # bottom_buttons_map = {...}
-            # ... (commented out - delegated to BottomBar)
-
-            # OCR Area Selection removed - update_area_button_highlights call deleted (19 lines)
-
-            # --- 2. เรียก update_theme ของ Component ย่อย ---
-            # Update new UI components
-            if hasattr(self, "header_bar") and self.header_bar:
+            # Update PyQt6 main window theme
+            if hasattr(self, "qt_main_window") and self.qt_main_window:
                 try:
-                    self.header_bar.update_theme()
-                    log_func("HeaderBar theme updated.")
+                    self.qt_main_window._apply_theme()
+                    log_func("PyQt6 MainWindow theme updated.")
                 except Exception as e:
-                    logging.error(f"Error updating HeaderBar theme: {e}")
+                    logging.error(f"Error updating PyQt6 MainWindow theme: {e}")
 
-            if hasattr(self, "control_panel") and self.control_panel:
+            # Update settings panel and its sub-panels
+            if hasattr(self, "settings_ui") and self.settings_ui:
                 try:
-                    self.control_panel.update_theme()
-                    log_func("ControlPanel theme updated.")
+                    self.settings_ui.update_theme()
+                    log_func("SettingsPanel theme updated.")
                 except Exception as e:
-                    logging.error(f"Error updating ControlPanel theme: {e}")
-
-            if hasattr(self, "bottom_bar") and self.bottom_bar:
-                try:
-                    self.bottom_bar.update_theme()
-                    log_func("BottomBar theme updated.")
-                except Exception as e:
-                    logging.error(f"Error updating BottomBar theme: {e}")
-
-            # Update other UI components
-            if (
-                hasattr(self, "mini_ui")
-                and self.mini_ui
-                and self.mini_ui.mini_ui
-                and self.mini_ui.mini_ui.winfo_exists()
-            ):
-                try:
-                    self.mini_ui.update_theme(theme_accent, theme_highlight)
-                    log_func("MiniUI theme updated.")
-                except Exception as e:
-                    logging.error(f"Error updating MiniUI theme: {e}")
-            if (
-                hasattr(self, "control_ui")
-                and self.control_ui
-                and self.control_ui.root
-                and self.control_ui.root.winfo_exists()
-            ):
-                try:
-                    print("DEBUG: Calling control_ui.update_theme()")
-                    self.control_ui.update_theme()
-                    log_func("ControlUI theme updated.")
-                    print("DEBUG: control_ui.update_theme() completed")
-                except Exception as e:
-                    logging.error(f"Error updating ControlUI theme: {e}")
-                    print(f"DEBUG: Error calling control_ui.update_theme(): {e}")
-            if (
-                hasattr(self, "settings_ui")
-                and self.settings_ui.settings_visible
-                and self.settings_ui.settings_window
-                and self.settings_ui.settings_window.winfo_exists()
-            ):
-                try:
-                    if hasattr(self.settings_ui, "update_theme"):
-                        self.settings_ui.update_theme()
-                    else:
-                        self.settings_ui.settings_window.configure(bg=theme_bg_color)
-                        logging.warning("SettingsUI missing update_theme")
-                except Exception as e:
-                    logging.error(f"Error updating SettingsUI theme: {e}")
+                    logging.error(f"Error updating SettingsPanel theme: {e}")
 
             log_func("Theme update applied successfully.")
 
         except Exception as e:
-            print(
-                f"CRITICAL Error applying theme update: {e}"
-            )  # ใช้ print ถ้า logging ไม่พร้อม
+            print(f"Error applying theme update: {e}")
             if hasattr(self, "logging_manager"):
                 self.logging_manager.log_error(f"Error applying theme update: {e}")
-            import traceback
-
-            traceback.print_exc()
 
     def update_mini_ui_theme(self, accent_color, highlight_color):
         """อัพเดทธีมสำหรับ Mini UI"""
@@ -2115,7 +1822,7 @@ class MagicBabelApp:
                 self.after_id = None  # เพิ่มตัวแปรเก็บ ID ของ after callback
 
                 # ใช้รูปภาพเดิม
-                self.original_image = Image.open("assets/red_icon.png").resize((20, 20))
+                self.original_image = Image.open(resource_path("assets/red_icon.png")).resize((20, 20))
 
                 # สร้างภาพไว้ใช้งาน
                 self.create_images()
@@ -2208,17 +1915,14 @@ class MagicBabelApp:
 
     def on_npc_manager_close(self):
         """เรียกเมื่อหน้าต่าง NPC Manager ถูกปิด"""
-        self.update_button_highlight(self.npc_manager_button, False)
-
-    def on_translated_ui_close(self):
-        """เรียกเมื่อหน้าต่าง Translated UI ถูกปิด"""
-        if hasattr(self, "button_state_manager"):
-            self.button_state_manager.set_button_state("tui", False)
+        self._sync_npc_button_state(False)
 
     def on_translated_logs_close(self):
         """เรียกเมื่อหน้าต่าง Translated Logs ถูกปิด"""
         if hasattr(self, "button_state_manager"):
             self.button_state_manager.set_button_state("log", False)
+        if hasattr(self, "bottom_bar") and self.bottom_bar:
+            self.bottom_bar.set_toggle_state("log", False)
 
     def on_control_close(self):
         """เรียกเมื่อหน้าต่าง Control UI ถูกปิด"""
@@ -2249,7 +1953,7 @@ class MagicBabelApp:
 
             # สร้างและเก็บ instance
             self.translated_logs_instance = Translated_Logs(
-                self.translated_logs_window, self.settings
+                self.translated_logs_window, self.settings, main_app=self
             )
 
             # *** อัปเดต reference เพื่อให้ MBB.py ใช้ window ที่ถูกต้อง ***
@@ -2270,77 +1974,56 @@ class MagicBabelApp:
             "start_stop_translate", "f9"
         )
 
+    def safe_after(self, delay_ms, callback):
+        """Thread-safe: enqueue callback for execution inside _safe_tk_poll.
+        Uses a thread-safe queue so callbacks execute within root.update()
+        context, preventing GIL corruption from cross-context Tk operations."""
+        try:
+            if delay_ms <= 0:
+                self._tk_callback_queue.put(callback)
+            else:
+                # Delay then enqueue — QTimer handles the delay,
+                # but the callback still executes inside _safe_tk_poll
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(delay_ms, lambda: self._tk_callback_queue.put(callback))
+        except Exception as e:
+            logging.error(f"safe_after failed: {e}")
+
     def handle_error(self, error_message):
         self.logging_manager.log_error(f"Error: {error_message}")
 
     def load_icons(self):
         self.blink_icon = ImageTk.PhotoImage(
-            Image.open("assets/red_icon.png").resize((20, 20))
+            Image.open(resource_path("assets/red_icon.png")).resize((20, 20))
         )
         self.black_icon = ImageTk.PhotoImage(
-            Image.open("assets/black_icon.png").resize((20, 20))
+            Image.open(resource_path("assets/black_icon.png")).resize((20, 20))
         )
         self.pin_icon = ImageTk.PhotoImage(
-            Image.open("assets/pin.png").resize((20, 20))
+            Image.open(resource_path("assets/pin.png")).resize((20, 20))
         )
         self.unpin_icon = ImageTk.PhotoImage(
-            Image.open("assets/unpin.png").resize((20, 20))
+            Image.open(resource_path("assets/unpin.png")).resize((20, 20))
         )
 
     def create_main_ui(self):
-        # ปรับขนาดหน้าต่างหลัก (เพิ่มความสูง)
-        self.root.geometry(
-            "300x330"
-        )  # ลดความสูงทีละนิด (เอาปุ่ม Guide ออกแล้ว)
-        self.root.overrideredirect(True)
+        # === PyQt6 Main Window (replaces Tkinter main UI) ===
+        from pyqt_ui.main_window import MBBMainWindow
 
-        # เพิ่ม rounded corners ให้ UI หลัก
-        self.root.after(
-            100, lambda: self.apply_rounded_corners(self.root, 16)
-        )  # เรียกหลังจาก UI โหลดเสร็จ - เพิ่มความโค้ง 2 เท่า
+        self.qt_main_window = MBBMainWindow(self)
 
-        current_bg_color = appearance_manager.bg_color
+        # Keep references to PyQt6 components for backward compatibility
+        self.header_bar = self.qt_main_window.header_bar
+        self.control_panel = self.qt_main_window.control_panel
+        self.bottom_bar = self.qt_main_window.bottom_bar
 
-        # Main frame
-        self.main_frame = tk.Frame(
-            self.root, bg=current_bg_color, padx=10, pady=10, bd=0, highlightthickness=0
-        )
-        self.main_frame.pack(expand=True, fill=tk.BOTH)
-
-        # === REDESIGNED: HeaderBar Component ===
-        self.header_bar = HeaderBar(
-            self.main_frame,
-            self.button_factory,
-            appearance_manager,
-            {
-                'toggle_topmost': self.toggle_topmost,
-                'toggle_theme': self.toggle_theme,
-                'exit_program': self.exit_program,
-            }
-        )
+        # Set version
         self.header_bar.set_version(__version__)
-        # Update pin state based on current topmost setting
-        self.header_bar.update_pin_state(self.root.attributes("-topmost"))
-        # === End HeaderBar ===
 
-        # === REDESIGNED: ControlPanel Component ===
-        # Swap Data removed - game name detection deleted
-        # initial_game_name = self._get_current_npc_game_name()
-
-        self.control_panel = ControlPanel(
-            self.main_frame,
-            self.button_factory,
-            appearance_manager,
-            {
-                'toggle_translation': self.toggle_translation,
-                # Swap Data removed - 'swap_npc_data' callback deleted
-                # OCR Area Selection removed - 'start_selection_a/b/c' callbacks deleted
-            }
-        )
         # Load and display game info from NPC.json
         try:
             from Manager import get_game_info_from_json
-            npc_json_path = os.path.join(os.getcwd(), "NPC.json")
+            npc_json_path = resource_path("NPC.json")
             game_info = get_game_info_from_json(npc_json_path)
             if game_info and "name" in game_info:
                 self.control_panel.set_swap_text(game_info["name"])
@@ -2350,29 +2033,11 @@ class MagicBabelApp:
             print(f"Failed to load game info: {e}")
             self.control_panel.set_swap_text("Error")
 
-        # Create content_frame reference for backward compatibility
-        self.content_frame = self.control_panel.frame
-        # === End ControlPanel ===
-
-        # === REDESIGNED: BottomBar Component ===
-        self.bottom_bar = BottomBar(
-            self.root,
-            self.button_factory,
-            appearance_manager,
-            self.button_state_manager,
-            {
-                'toggle_tui': self.toggle_translated_ui,
-                'toggle_log': self.toggle_translated_logs,
-                'toggle_mini': self.toggle_mini_ui,
-                'toggle_npc_manager': self.toggle_npc_manager,
-                'toggle_settings': self.toggle_settings,
-            }
-        )
         # Set initial info text
         self.bottom_bar.set_info(self.get_current_settings_info())
 
-        # Create backward compatibility references
-        self.bottom_container = self.bottom_bar.frame
+        # Create backward compatibility references for code that accesses
+        # widgets directly (PyQt6 widgets - some old Tkinter calls may need updating)
         self.tui_button = self.bottom_bar.btn_tui
         self.log_button = self.bottom_bar.btn_log
         self.mini_button = self.bottom_bar.btn_mini
@@ -2380,45 +2045,37 @@ class MagicBabelApp:
         self.bottom_npc_manager_button = self.bottom_bar.btn_npc_manager
         self.settings_button = self.bottom_bar.btn_settings
         self.bottom_settings_button = self.bottom_bar.btn_settings
-        self.info_label = self.bottom_bar.lbl_info
-        self.bottom_button_description_label = self.bottom_bar.lbl_description
-        # === End BottomBar ===
-
-        # OCR Area Selection removed - area button references deleted
-        # Create backward compatibility references for Control Panel widgets
+        self.info_label = self.control_panel.lbl_status_info
+        self.bottom_button_description_label = None  # Removed in redesign v2
         self.status_label = self.control_panel.lbl_status
         self.start_stop_button = self.control_panel.btn_start_stop
-        self.swap_data_button = self.control_panel.btn_swap  # Swap button (UI only)
+        self.swap_data_button = self.control_panel.btn_swap
+
+        # Register PyQt6 toggle buttons with ButtonStateManager
+        if hasattr(self, 'button_state_manager'):
+            self.button_state_manager.register_button("tui", self.tui_button)
+            self.button_state_manager.register_button("log", self.log_button)
+            self.button_state_manager.register_button("mini", self.mini_button)
 
         # Update info label with model color
-        self.update_info_label_with_model_color()  # เรียกเพื่อให้สีถูกต้อง
+        self.update_info_label_with_model_color()
 
-        # Guide button removed - no longer needed
-
-        # === Tooltips for UI Components ===
-        # OCR Area Selection removed - area button tooltips deleted (4 lines)
-
-        # Control panel tooltips
-        self.create_tooltip(self.start_stop_button, "<เริ่ม-หยุด> แปล")
-        self.create_tooltip(self.control_panel.lbl_swap, "ฐานข้อมูลเกมปัจจุบัน")
-        # Swap button disabled - no tooltip needed
-
-        # Header bar tooltips (using new component references)
-        self.create_tooltip(self.header_bar.btn_pin, "ปักหมุด")
-        self.update_pin_tooltip(self.root.attributes("-topmost"))
-        self.create_tooltip(self.header_bar.btn_theme, "เลือกสีในแบบของคุณ")
-        self.create_tooltip(self.header_bar.btn_close, "close")
-
-        # Bottom bar tooltips
-        # NOTE: TUI, LOG, MINI buttons use lbl_description for hover text (not standard tooltips)
-        # เพื่อแสดงคำอธิบายแบบพิเศษบน UI แทนกล่อง tooltip ปกติ
-        self.create_tooltip(self.npc_manager_button, "จัดการข้อมูลตัวละคร")
-        self.create_tooltip(self.settings_button, "ตั้งค่าโปรแกรม")
-
-        # Hover effects และ state management ถูกจัดการโดย BottomBar component แล้ว
-        # ไม่ต้อง setup hover effects ที่นี่
-
-    # OCR Area Selection removed - update_area_button_highlights() method deleted (9 lines)
+        # Position main window: 10% from left edge, vertically centered
+        try:
+            from PyQt6.QtWidgets import QApplication
+            screen = QApplication.primaryScreen()
+            if screen:
+                sg = screen.availableGeometry()
+                self.qt_main_window.adjustSize()
+                win_h = self.qt_main_window.sizeHint().height()
+                if win_h <= 0:
+                    win_h = 370  # fallback ≈ BG_H + logo margins
+                pos_x = int(sg.width() * 0.10)
+                pos_y = sg.top() + (sg.height() - win_h) // 2
+                self.qt_main_window.move(pos_x, pos_y)
+        except Exception:
+            pass
+        self.qt_main_window.show()
 
     def apply_rounded_corners(self, widget, radius):
         """ใส่ขอบโค้งมนให้ widget"""
@@ -2456,6 +2113,10 @@ class MagicBabelApp:
             widget: Widget ที่ต้องการเพิ่ม tooltip
             text: ข้อความที่จะแสดงใน tooltip (ภาษาไทย)
         """
+        # Guard: Skip if widget is None
+        if widget is None:
+            return
+
         # Swap Data removed - swap_data_button check deleted (3 lines)
 
         # --- โค้ดเดิมสำหรับ Widget อื่นๆ ---
@@ -2579,6 +2240,10 @@ class MagicBabelApp:
             self.log_button,
             self.mini_button,
         ]:
+            # Guard: Skip if button is None
+            if button is None:
+                continue
+
             # ตรวจสอบว่าเป็นปุ่มแบบใหม่หรือเก่า
             if hasattr(button, "button_bg") and hasattr(button, "itemconfig"):
                 # กรณีปุ่มแบบใหม่ (Canvas)
@@ -2708,74 +2373,35 @@ class MagicBabelApp:
 
     def toggle_translated_ui(self):
         """Toggle Translated UI visibility without affecting translation state"""
-        # แสดง immediate feedback ผ่าง button_state_manager
-        if hasattr(self, "button_state_manager"):
-            self.button_state_manager.toggle_button_immediate("tui")
-
-        # ทำ toggle จริง
         if self.translated_ui_window.winfo_exists():
-            # Check window state
             window_withdrawn = self.translated_ui_window.state() == "withdrawn"
 
-            # *** FIX: Use self.translated_ui (TranslatedUI instance) instead of self.translated_ui_window ***
             auto_hidden = False
             if hasattr(self, 'translated_ui') and hasattr(self.translated_ui, 'state'):
                 auto_hidden = self.translated_ui.state.is_window_hidden
-                print(f"🔧 [TOGGLE DEBUG] auto_hidden from translated_ui: {auto_hidden}")
-
-            print(f"🔧 [TOGGLE DEBUG] window_withdrawn: {window_withdrawn}, auto_hidden: {auto_hidden}")
 
             if window_withdrawn or auto_hidden:
-                # *** FIX: Call force_show_tui on the correct instance ***
+                # Show TUI
                 if hasattr(self, 'translated_ui') and hasattr(self.translated_ui, 'force_show_tui'):
-                    print(f"🔧 [TOGGLE DEBUG] Calling force_show_tui on translated_ui instance")
                     self.translated_ui.force_show_tui()
                 else:
-                    # Fallback for older versions
-                    print(f"🔧 [TOGGLE DEBUG] Using fallback deiconify")
                     self.translated_ui_window.deiconify()
                     self.translated_ui_window.lift()
                     if hasattr(self, 'translated_ui') and hasattr(self.translated_ui, 'state'):
                         self.translated_ui.state.is_window_hidden = False
+                self._sync_tui_button_state(True, "TUI toggle show")
             else:
-                print(f"🔧 [TOGGLE DEBUG] Withdrawing window")
+                # Hide TUI
                 self.translated_ui_window.withdraw()
-                self.on_translated_ui_close()  # เรียก callback
+                self._sync_tui_button_state(False, "TUI toggle hide")
         else:
-            # กรณีหน้าต่างถูกทำลายไปแล้ว ให้สร้างใหม่
-            print(f"🔧 [TOGGLE DEBUG] Creating new translated_ui")
             self.create_translated_ui()
             self.translated_ui_window.deiconify()
+            self._sync_tui_button_state(True, "TUI toggle recreate")
 
     def on_translated_ui_close(self):
         """เรียกเมื่อหน้าต่าง Translated UI ถูกปิด"""
-        self.logging_manager.log_info(
-            "Translated UI window was closed, updating main UI button and hiding Mini UI."
-        )
-        # อัปเดตสถานะและแจ้ง ButtonStateManager
-        # NOTE: Using ButtonStateManager only - bottom_button_states removed
-
-        # แจ้ง ButtonStateManager ให้อัปเดตสีปุ่ม TUI ให้กลับเป็นสถานะ off
-        if hasattr(self, "button_state_manager"):
-            self.button_state_manager.button_states["tui"]["active"] = False
-            self.button_state_manager.update_button_visual("tui", "toggle_off")
-
-        # UI INDEPENDENCE: ไม่ซ่อน Mini UI เมื่อปิด TUI
-        # Mini UI และ Main UI เป็นเพียงหน้ากาก - การซ่อน TUI ไม่ควรส่งผลต่อ Mini UI
-        # self.logging_manager.log_info("TUI closed - Mini UI remains visible (UI independence)")
-
-        # 🔄 UNIFIED SYNC: ใช้ฟังก์ชัน unified sync หลังจาก toggle เสร็จ
-        current_visibility = self._is_tui_visible()
-        self._sync_tui_button_state(current_visibility, "F9/TUI toggle")
-
-        # *** TUI INDEPENDENCE ***
-        # F9 ควบคุมเฉพาะ TUI การแปลแยกจากกัน
-        # การกดปุ่ม TUI จะไม่หยุดการแปล (TUI independence)
-        if hasattr(self, "is_translating") and self.is_translating:
-            # TUI ถูกปิดโดยผู้ใช้ - การแปลยังคงทำงานต่อ
-            self.logging_manager.log_info(
-                "TUI closed independently - translation continues."
-            )
+        self._sync_tui_button_state(False, "TUI close")
 
     def get_mbb_position_info(self):
         """ตรวจจับตำแหน่งและข้อมูลจอภาพสำหรับ smart positioning ของ LOG UI"""
@@ -2828,115 +2454,62 @@ class MagicBabelApp:
                 "height": 1080,
             }
 
+    def _sync_log_button_state(self, is_visible):
+        """Sync LOG button state to both Tkinter and PyQt6"""
+        if hasattr(self, "button_state_manager"):
+            self.button_state_manager.set_button_state("log", is_visible)
+        if hasattr(self, "bottom_bar") and self.bottom_bar:
+            self.bottom_bar.set_toggle_state("log", is_visible)
+
+    def _sync_npc_button_state(self, is_visible):
+        """Sync NPC Manager button state to PyQt6 bottom_bar"""
+        if hasattr(self, "bottom_bar") and self.bottom_bar:
+            self.bottom_bar.set_toggle_state("npc_manager", is_visible)
+
     def toggle_translated_logs(self):
         """Toggle Translated Logs visibility independently"""
         logging.info("Attempting to toggle translated logs")
 
-        # แสดง immediate feedback ผ่าน button_state_manager
-        if hasattr(self, "button_state_manager"):
-            self.button_state_manager.toggle_button_immediate("log")
-
-        # 1. ตรวจสอบว่า instance ถูกสร้างสำเร็จหรือไม่ (ทั้ง hasattr และ ไม่ใช่ None)
-        if (
-            not hasattr(self, "translated_logs_instance")
-            or self.translated_logs_instance is None
-        ):
-            logging.error(
-                "translated_logs_instance is missing or was not created successfully."
-            )
-            # ลองสร้างใหม่ดูก่อน
-            logging.info("Attempting to recreate translated_logs_instance...")
+        # 1. ตรวจสอบว่า instance ถูกสร้างสำเร็จหรือไม่
+        if not hasattr(self, "translated_logs_instance") or self.translated_logs_instance is None:
             self.create_translated_logs()
-            # ตรวจสอบอีกครั้งหลังพยายามสร้างใหม่
-            if (
-                not hasattr(self, "translated_logs_instance")
-                or self.translated_logs_instance is None
-            ):
-                logging.error("Failed to create/recreate translated_logs_instance.")
-                messagebox.showwarning(
-                    "Logs ไม่พร้อมใช้งาน", "ไม่สามารถเปิด/ปิดหน้าต่างประวัติการแปลได้"
-                )
-                # อาจจะปรับสีปุ่มกลับ ถ้าจำเป็น
-                if hasattr(self, "button_state_manager"):
-                    try:
-                        # Use ButtonStateManager to reset button state
-                        self.button_state_manager.set_button_state("log", False)
-                    except Exception as btn_err:
-                        logging.warning(f"Could not reset log button state: {btn_err}")
-                return  # ออกจากฟังก์ชันถ้าสร้างไม่สำเร็จ
+            if not hasattr(self, "translated_logs_instance") or self.translated_logs_instance is None:
+                self._sync_log_button_state(False)
+                return
 
-        # --- ถ้ามาถึงตรงนี้ แสดงว่า self.translated_logs_instance มีค่าและไม่ใช่ None ---
-
-        # 2. ตรวจสอบหน้าต่าง (ต้องมี self.translated_logs_window ด้วย)
-
-        # Debug: ตรวจสอบสถานะ window
-        has_window_attr = hasattr(self, "translated_logs_window")
+        # 2. ตรวจสอบหน้าต่าง
+        has_window = hasattr(self, "translated_logs_window")
         window_exists = False
-        if has_window_attr:
+        if has_window:
             try:
                 window_exists = self.translated_logs_window.winfo_exists()
-            except Exception as e:
-                logging.error(f"Error checking window existence: {e}")
+            except Exception:
                 window_exists = False
 
-        if not has_window_attr or not window_exists:
-            # กรณีหน้าต่างถูกทำลายไปแล้ว แต่ instance อาจจะยังอยู่ (หรือเพิ่งสร้างใหม่ด้านบน)
-            logging.info(
-                "Translated logs window doesn't exist or was destroyed, attempting to show/recreate..."
-            )
-            # Instance ควรจะมีอยู่แล้วจากการตรวจสอบด้านบน
-            # เราแค่ต้องแน่ใจว่าหน้าต่างแสดงผลและตั้งค่า visibility ถูกต้อง
+        if not has_window or not window_exists:
             try:
-                # แสดงหน้าต่าง (Translated_Logs จะจัดการสร้าง/แสดง window ให้ถ้าจำเป็น)
-                # show_window ใน translated_logs ควรจะ deiconify ถ้ามี window อยู่แล้ว
-                # เตรียมข้อมูลสำหรับ smart positioning
                 mbb_side, monitor_info = self.get_mbb_position_info()
                 self.translated_logs_instance.show_window(mbb_side, monitor_info)
-                # ตรวจสอบอีกครั้งว่า show_window ทำงานสำเร็จหรือไม่
-                if (
-                    self.translated_logs_window.winfo_exists()
-                    and self.translated_logs_window.state() != "withdrawn"
-                ):
-                    self.translated_logs_instance.is_visible = (
-                        True  # ตั้งค่า is_visible หลังแสดงหน้าต่าง
-                    )
-                    # ButtonStateManager จัดการสีให้แล้ว ไม่ต้อง hardcode
-                    # NOTE: Using ButtonStateManager only - bottom_button_states removed
+                if self.translated_logs_window.winfo_exists() and self.translated_logs_window.state() != "withdrawn":
+                    self.translated_logs_instance.is_visible = True
+                    self._sync_log_button_state(True)
                 else:
-                    # ถ้า show_window ไม่สำเร็จ (อาจเกิด error ภายใน Translated_Logs)
-                    logging.error(
-                        "Failed to show the translated logs window after attempting."
-                    )
-                    messagebox.showerror("ข้อผิดพลาด", "ไม่สามารถแสดงหน้าต่างประวัติการแปลได้")
-                    # รีเซ็ตปุ่มถ้าจำเป็น
-                    if hasattr(self, "button_state_manager"):
-                        self.button_state_manager.set_button_state("log", False)
-
-            except Exception as show_err:
-                logging.error(
-                    f"Error trying to show translated logs window: {show_err}"
-                )
-                messagebox.showerror(
-                    "ข้อผิดพลาด", f"เกิดปัญหาในการแสดงหน้าต่าง Logs: {show_err}"
-                )
-                # รีเซ็ตปุ่มถ้าจำเป็น
-                if hasattr(self, "button_state_manager"):
-                    self.button_state_manager.set_button_state("log", False)
+                    self._sync_log_button_state(False)
+            except Exception as e:
+                logging.error(f"Error showing translated logs: {e}")
+                self._sync_log_button_state(False)
 
         # 3. กรณีหน้าต่างมีอยู่แล้ว: สลับการแสดงผล
         elif self.translated_logs_window.winfo_exists():
             if self.translated_logs_window.state() == "withdrawn":
-                # แสดงหน้าต่าง - ใช้ show_window เพื่อให้ logic positioning ทำงาน
                 mbb_side, monitor_info = self.get_mbb_position_info()
                 self.translated_logs_instance.show_window(mbb_side, monitor_info)
-                self.translated_logs_instance.is_visible = True  # ตั้งค่า is_visible
-                # ButtonStateManager จัดการสีให้แล้ว ไม่ต้อง hardcode
-                # NOTE: Using ButtonStateManager only - bottom_button_states removed
+                self.translated_logs_instance.is_visible = True
+                self._sync_log_button_state(True)
             else:
-                # ซ่อนหน้าต่าง
                 self.translated_logs_window.withdraw()
-                self.translated_logs_instance.is_visible = False  # ตั้งค่า is_visible
-                self.on_translated_logs_close()  # เรียก callback ซึ่งควรจะเปลี่ยนสีปุ่มกลับ
+                self.translated_logs_instance.is_visible = False
+                self._sync_log_button_state(False)
 
     def toggle_control(self):
         """Toggle the control UI window visibility and sync its state."""
@@ -3035,11 +2608,6 @@ class MagicBabelApp:
             traceback.print_exc()
             # อาจจะแสดง messagebox แจ้งผู้ใช้
             messagebox.showerror("Error", f"Could not toggle Control Panel: {e}")
-
-    # OCR removed - method deleted
-    # def set_ocr_speed(self, speed_mode):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
 
     def add_message(self, text):
         if hasattr(self, "translated_logs_instance"):
@@ -3249,7 +2817,7 @@ class MagicBabelApp:
 
         # Schedule next update in 2 seconds
         if getattr(self, '_dalamud_status_timer_active', False):
-            self.root.after(2000, self._schedule_dalamud_status_update)
+            self.safe_after(2000, self._schedule_dalamud_status_update)
 
     def _stop_dalamud_status_timer(self):
         """Stop the independent status update timer"""
@@ -3322,22 +2890,40 @@ class MagicBabelApp:
         else:
             bridge_status = ""
 
+        # 📝 CONVERSATION LOGGER: ต่อท้ายสถานะ [LOG] ถ้าเปิดอยู่
+        log_tag = ""
+        if hasattr(self, 'conversation_logger') and self.conversation_logger:
+            log_tag = " [LOG]"
+
         # แสดงใน 2 บรรทัด: บรรทัดแรก MODEL, บรรทัดที่สอง DALAMUD STATUS
         if self.dalamud_mode and bridge_status:
-            display_text = f"{model_icon} MODEL: {model_text}\n{bridge_status.strip()}"
+            display_text = f"{model_icon} MODEL: {model_text}\n{bridge_status.strip()}{log_tag}"
             height = 2
         else:
             display_text = f"{model_icon} MODEL: {model_text}"
             height = 1
 
         # อัพเดทข้อความและสี
-        self.info_label.config(
-            text=display_text,
-            bg="#141414",
-            fg=text_color,
-            font=("Consolas", 8, "bold"),
-            height=height,
-        )
+        if hasattr(self.info_label, 'config'):
+            # Tkinter Label
+            self.info_label.config(
+                text=display_text,
+                bg="#141414",
+                fg=text_color,
+                font=("Consolas", 8, "bold"),
+                height=height,
+            )
+        elif hasattr(self.info_label, 'setText'):
+            # PyQt6 QLabel
+            self.info_label.setText(display_text)
+            self.info_label.setStyleSheet(
+                f"color: {text_color}; background: transparent; "
+                f"font-family: Consolas; font-size: 8pt; font-weight: bold;"
+            )
+
+        # Also update control panel Model field
+        if hasattr(self, 'control_panel') and self.control_panel:
+            self.control_panel.set_info(self.settings.get_displayed_model())
 
     def _is_tui_visible(self):
         """ตรวจสอบว่า TUI กำลังแสดงอยู่หรือไม่"""
@@ -3364,66 +2950,69 @@ class MagicBabelApp:
         return False
 
     def _trigger_tui_auto_show(self):
-        """TUI AUTO-SHOW: แสดง TUI เมื่อพบข้อความ text hook"""
+        """TUI AUTO-SHOW: แสดง TUI เมื่อพบข้อความ text hook
+        Thread-safe: schedules Tkinter calls on main thread via safe_after."""
         try:
-
-            # Check if auto-show is enabled
+            # Quick checks (thread-safe, no Tkinter calls)
             if not self.settings.get("enable_tui_auto_show", True):
                 return
-
-
-            # Debounce: ไม่ auto-show หากเพิ่งแสดงไปแล้ว
-            import time
-            current_time = time.time()
-            if hasattr(self, '_last_auto_show_time'):
-                if current_time - self._last_auto_show_time < 1.0:  # 1 second cooldown
-                    return
-            self._last_auto_show_time = current_time
-
-            # Don't auto-show if user recently manually hid TUI
-            if hasattr(self, '_user_manual_hide_time'):
-                if current_time - self._user_manual_hide_time < 5.0:  # 5 second grace period
-                    return
-
-            # Only auto-show if system is in valid state
             if not self.dalamud_mode:
                 return
             if not hasattr(self, 'translated_ui'):
                 return
 
+            # Debounce: ไม่ auto-show หากเพิ่งแสดงไปแล้ว
+            import time
+            current_time = time.time()
+            if hasattr(self, '_last_auto_show_time'):
+                if current_time - self._last_auto_show_time < 1.0:
+                    return
+            self._last_auto_show_time = current_time
 
-            # Only show if not already visible
-            is_visible = self._is_tui_visible()
+            # Don't auto-show if user recently manually hid TUI
+            if hasattr(self, '_user_manual_hide_time'):
+                if current_time - self._user_manual_hide_time < 5.0:
+                    return
 
-            if not is_visible:
-                if self._show_translated_ui_auto():
-                    self._sync_tui_button_state(True, "Auto-show trigger")
-                    if hasattr(self, 'logging_manager'):
-                        self.logging_manager.log_info("📱 TUI AUTO-SHOW: Displayed TUI on text hook detection")
+            # Schedule Tkinter-touching logic on main thread
+            self.safe_after(0, self._do_tui_auto_show)
 
         except Exception as e:
             if hasattr(self, 'logging_manager'):
                 self.logging_manager.log_error(f"TUI auto-show trigger error: {e}")
 
+    def _do_tui_auto_show(self):
+        """Actual TUI auto-show logic (must run on main thread)."""
+        try:
+            is_visible = self._is_tui_visible()
+            if not is_visible:
+                if self._show_translated_ui_auto():
+                    self._sync_tui_button_state(True, "Auto-show trigger")
+                    if hasattr(self, 'logging_manager'):
+                        self.logging_manager.log_info("📱 TUI AUTO-SHOW: Displayed TUI on text hook detection")
+        except Exception as e:
+            if hasattr(self, 'logging_manager'):
+                self.logging_manager.log_error(f"TUI auto-show error (main thread): {e}")
+
     def toggle_topmost(self):
-        # อ่านสถานะปัจจุบัน
-        current_state = bool(self.root.attributes("-topmost"))
-        # เปลี่ยนสถานะเป็นตรงข้าม
-        new_state = not current_state
-        # กำหนดสถานะใหม่
-        self.root.attributes("-topmost", new_state)
+        # PyQt6 main window handles topmost internally via _on_toggle_topmost
+        # This method is kept for backward compatibility with Tkinter sub-windows
+        if self.qt_main_window:
+            self.qt_main_window._on_toggle_topmost()
+        else:
+            # Fallback for Tkinter-only mode
+            current_state = bool(self.root.attributes("-topmost"))
+            new_state = not current_state
+            self.root.attributes("-topmost", new_state)
+            self.header_bar.update_pin_state(new_state)
 
-        # อัพเดท HeaderBar pin state
-        self.header_bar.update_pin_state(new_state)
-
-        # อัพเดท tooltip ด้วยเมธอดใหม่
-        self.update_pin_tooltip(new_state)
-
-        # บันทึกล็อกเพื่อดีบัก
+    def toggle_topmost_from_qt(self, is_topmost):
+        """Called from PyQt6 main window when topmost state changes.
+        Updates Tkinter root to match (for sub-window consistency)."""
+        self.root.attributes("-topmost", is_topmost)
         self.logging_manager.log_info(
-            f"Topmost state changed: {current_state} -> {new_state}"
+            f"Topmost state changed to: {is_topmost}"
         )
-        self.logging_manager.log_info(f"New tooltip: {'unpin' if new_state else 'Pin'}")
 
     def update_pin_tooltip(self, is_pinned=None):
         """อัพเดท tooltip ของปุ่มปักหมุดตามสถานะปัจจุบัน
@@ -3437,6 +3026,10 @@ class MagicBabelApp:
 
         # Get pin button from header_bar
         pin_button = self.header_bar.btn_pin
+
+        # Guard: Skip if pin_button is None
+        if pin_button is None:
+            return
 
         # ลบ tooltip เดิมถ้ามี
         if hasattr(pin_button, "_tooltip") and pin_button._tooltip:
@@ -3474,6 +3067,7 @@ class MagicBabelApp:
             self.logging_manager.log_info("🔍 [TOGGLE CALLED] No character name (manual toggle)")
 
         if NPCManagerCard is None:
+            logging.warning("NPC Manager is not available (import failed)")
             messagebox.showwarning("Warning", "NPC Manager is not available.")
             return
 
@@ -3481,16 +3075,16 @@ class MagicBabelApp:
             # 🎯 UI INDEPENDENCE: เปิด NPC Manager โดยไม่หยุดการแปล
 
             # ซ่อน TUI ทันที
-            if hasattr(self, 'translated_ui_window') and self.translated_ui_window.winfo_exists():
-                if self.translated_ui_window.state() != "withdrawn":
-                    self.translated_ui_window.withdraw()
-                    self.logging_manager.log_info("👁️ NPC Manager: ซ่อน TUI อัตโนมัติ")
+            try:
+                if hasattr(self, 'translated_ui_window') and self.translated_ui_window is not None and self.translated_ui_window.winfo_exists():
+                    if self.translated_ui_window.state() != "withdrawn":
+                        self.translated_ui_window.withdraw()
+                        self.logging_manager.log_info("NPC Manager: TUI hidden automatically")
+            except (tk.TclError, AttributeError) as e:
+                logging.warning(f"Error hiding TUI for NPC Manager: {e}")
 
-            # อัพเดตสถานะปุ่ม TUI
-            # NOTE: Using ButtonStateManager only - bottom_button_states removed
-            if hasattr(self, "button_state_manager"):
-                self.button_state_manager.button_states["tui"]["active"] = False
-                self.button_state_manager.update_button_visual("tui", "toggle_off")
+            # Sync TUI button to off (TUI hidden for NPC Manager)
+            self._sync_tui_button_state(False, "NPC Manager auto-hide TUI")
 
             # ล็อค UI ระหว่างทำงานหนัก
             self.lock_ui_movement()
@@ -3509,8 +3103,7 @@ class MagicBabelApp:
                 )
                 self.npc_manager.on_close_callback = self.on_npc_manager_close
                 self.npc_manager.show_window()
-                self.update_button_highlight(self.npc_manager_button, True)
-                # ปลดล็อค UI และซ่อนไอคอนกำลังโหลด
+                self._sync_npc_button_state(True)
                 self._finish_npc_manager_loading()
                 return
 
@@ -3528,8 +3121,7 @@ class MagicBabelApp:
                 )
                 self.npc_manager.on_close_callback = self.on_npc_manager_close
                 self.npc_manager.show_window()
-                self.update_button_highlight(self.npc_manager_button, True)
-                # ปลดล็อค UI และซ่อนไอคอนกำลังโหลด
+                self._sync_npc_button_state(True)
                 self._finish_npc_manager_loading()
                 return
 
@@ -3546,27 +3138,31 @@ class MagicBabelApp:
 
             # 🐛 FIX: ถ้ามี character_name หมายความว่าเป็น character click flow - ให้แสดง NPC Manager เสมอ
             if character_name:
-                self.logging_manager.log_info(f"🔍 [NPC TOGGLE] Character click flow for '{character_name}' - always show NPC Manager")
                 self.npc_manager.show_window()
-                self.update_button_highlight(self.npc_manager_button, True)
+                self._sync_npc_button_state(True)
             elif is_visible:
-                self.logging_manager.log_info("🔍 [NPC TOGGLE] Manual toggle - Window is visible, hiding it")
                 self.npc_manager.window.withdraw()
-                self.update_button_highlight(self.npc_manager_button, False)
+                self._sync_npc_button_state(False)
                 if hasattr(self.npc_manager, "search_var"):
                     self.npc_manager.search_var.set("")
             else:
-                self.logging_manager.log_info("🔍 [NPC TOGGLE] Manual toggle - Window is not visible, showing it")
                 self.npc_manager.show_window()
-                self.update_button_highlight(self.npc_manager_button, True)
+                self._sync_npc_button_state(True)
 
             # ปลดล็อค UI และซ่อนไอคอนกำลังโหลด
             self._finish_npc_manager_loading()
 
         except Exception as e:
+            import traceback
             error_msg = f"Failed to toggle NPC Manager: {str(e)}"
+            full_traceback = traceback.format_exc()
             self.logging_manager.log_error(error_msg)
-            messagebox.showerror("Error", error_msg)
+            logging.error(f"NPC Manager error traceback:\n{full_traceback}")
+            print(f"[NPC Manager Error] {error_msg}\n{full_traceback}")
+            try:
+                messagebox.showerror("Error", error_msg)
+            except Exception:
+                pass  # messagebox might fail in hybrid event loop
             self.npc_manager = None
             # ปลดล็อค UI และซ่อนไอคอนกำลังโหลดในกรณีเกิดข้อผิดพลาด
             self._finish_npc_manager_loading()
@@ -3582,41 +3178,62 @@ class MagicBabelApp:
         """Reload NPC data and update related components"""
         self.logging_manager.log_info("Reloading NPC data...")
 
+        # 1. Reload Translator
         if hasattr(self, "translator") and self.translator:
             self.translator.reload_data()
-            self.logging_manager.log_info("Translator data reloaded")
+            self.logging_manager.log_info("✓ Translator reloaded")
 
+        # 2. Reload TextCorrector
         if hasattr(self, "text_corrector") and self.text_corrector:
             self.text_corrector.reload_data()
-            # เพิ่มการตรวจสอบว่ามีข้อมูลหลังจาก reload หรือไม่
+
+            # 2a. NEW: Reload EnhancedNameDetector
+            if hasattr(self.text_corrector, "enhanced_detector") and self.text_corrector.enhanced_detector:
+                self.text_corrector.enhanced_detector.reload_data()
+                self.logging_manager.log_info("✓ EnhancedNameDetector reloaded")
+
+            # Log character names
             if hasattr(self.text_corrector, "names"):
                 self.logging_manager.log_info(
-                    f"Loaded {len(self.text_corrector.names)} character names from NPC data"
+                    f"Loaded {len(self.text_corrector.names)} character names"
                 )
-                if len(self.text_corrector.names) == 0:
-                    self.logging_manager.log_warning(
-                        "No character names found after reload!"
-                    )
 
+        # 3. Clear DalamudImmediateHandler cache (use clear_cache method to fix race condition)
+        if hasattr(self, "dalamud_immediate_handler") and self.dalamud_immediate_handler:
+            self.dalamud_immediate_handler.clear_cache()
+            self.logging_manager.log_info("✓ Translation cache cleared")
+
+        # 4. NEW: Clear TranslatedLogs cache
+        if hasattr(self, "translated_logs_instance") and self.translated_logs_instance:
+            self.translated_logs_instance.message_cache.clear()
+            self.logging_manager.log_info("✓ Message cache cleared")
+
+        # 5. Clear dialog_history completely
+        if hasattr(self, "dialog_history"):
+            self.dialog_history.clear()
+            self.current_history_index = -1
+            self.logging_manager.log_info("✓ Dialog history cleared")
+
+        # 6. Update Translated_UI
         if hasattr(self, "translated_ui"):
             if hasattr(self.text_corrector, "names"):
                 character_names = self.text_corrector.names
                 self.translated_ui.update_character_names(character_names)
-                self.logging_manager.log_info(
-                    f"Updated Translated_UI with {len(character_names)} character names"
-                )
 
-        self.logging_manager.log_info("NPC data reload completed")
+        self.logging_manager.log_info("✅ NPC data reload completed")
 
     def show_main_ui_from_mini(self):
         self.save_ui_positions()
         self.mini_ui.mini_ui.withdraw()
-        self.root.deiconify()
-        # NOTE: ไม่ต้องเรียก overrideredirect(True) เพราะ main UI ต้องมี title bar
-        self.root.attributes("-topmost", True)
-        self.root.lift()
-        if self.last_main_ui_pos:
-            self.root.geometry(self.last_main_ui_pos)
+        # Show PyQt6 main window
+        if self.qt_main_window:
+            self.qt_main_window.show()
+            self.qt_main_window.raise_()
+            if self.last_main_ui_pos:
+                self._restore_qt_pos_from_geometry(self.last_main_ui_pos)
+        # Reset MINI button highlight
+        if hasattr(self, "bottom_bar") and self.bottom_bar:
+            self.bottom_bar.set_toggle_state("mini", False)
 
     def create_translated_ui(self):
         self.translated_ui_window = tk.Toplevel(self.root)
@@ -3683,23 +3300,19 @@ class MagicBabelApp:
         self.translated_ui_window.withdraw()
 
     def create_settings_ui(self):
-        # ส่ง self เป็น main_app เข้าไปให้ SettingsUI
-        self.settings_ui = SettingsUI(
-            self.root,
+        from appearance import appearance_manager
+        self.settings_ui = SettingsPanel(
             self.settings,
             self.apply_settings,
             self.update_hotkeys,
+            appearance_manager,
             main_app=self,
         )
-        # OCR removed - set_ocr_toggle_callback() call deleted
         self.settings_ui.on_close_callback = self.on_settings_close
-        self.settings_ui.close_settings()
 
     def init_translation_and_bridge(self):
-        """Initialize Text Hook Translation System (no OCR - pure text hook)"""
+        """Initialize Text Hook Translation System"""
         try:
-            # OCR removed - MBB Dalamud Bridge uses 100% text hook via Dalamud
-
             # สร้าง text_corrector
             try:
                 self.text_corrector = TextCorrector()
@@ -3774,7 +3387,25 @@ class MagicBabelApp:
 
             except Exception as e:
                 self.logging_manager.log_error(f"Error creating translator: {e}")
-                raise ValueError(f"Failed to create translator: {e}")
+                err_lower = str(e).lower()
+                is_api_key_error = any(k in err_lower for k in (
+                    "gemini_api_key", "api key", "api_key", "not found",
+                    "please restart", "api key not"
+                ))
+                if is_api_key_error:
+                    self.logging_manager.log_error("API key error detected — showing setup UI")
+                    try:
+                        from api_key_manager import show_invalid_key_ui
+                        if show_invalid_key_ui():
+                            # Retry with new key
+                            self.translator = TranslatorFactory.create_translator(self.settings)
+                            self.logging_manager.log_info("Translator created after API key update")
+                        else:
+                            raise ValueError("API Key setup cancelled by user")
+                    except Exception as retry_e:
+                        raise ValueError(f"Failed to create translator after API key update: {retry_e}")
+                else:
+                    raise ValueError(f"Failed to create translator: {e}")
 
             # Initialize Dalamud Bridge for real-time text hook
             try:
@@ -3795,6 +3426,20 @@ class MagicBabelApp:
                         )
                         self._setup_dalamud_handler()  # Configure dependencies immediately
                         self.logging_manager.log_info("✅ Dalamud handler initialized with filtering")
+
+                        # 📝 CONVERSATION LOGGER: always-on (in-memory context)
+                        # disk_logging เปิดเฉพาะเมื่อ settings → "Conversation Log" เปิด
+                        self.conversation_logger = None
+                        try:
+                            disk_log = self.settings.get("enable_conversation_logging", False)
+                            self.conversation_logger = ConversationLogger(disk_logging=disk_log)
+                            self.dalamud_handler.set_conversation_logger(self.conversation_logger)
+                            mode = "disk+memory" if disk_log else "memory-only"
+                            self.logging_manager.log_info(f"📝 ConversationLogger initialized ({mode})")
+                        except Exception as conv_e:
+                            self.logging_manager.log_warning(f"ConversationLogger init failed: {conv_e}")
+                            self.conversation_logger = None
+
                     except Exception as e:
                         self.logging_manager.log_error(f"Dalamud handler creation failed: {e}")
                         self.dalamud_mode = False
@@ -3808,27 +3453,9 @@ class MagicBabelApp:
 
         except Exception as e:
             self.logging_manager.log_error(
-                f"Error initializing OCR and translation: {e}"
+                f"Error initializing translation: {e}"
             )
             raise
-
-    # OCR removed - cache methods deleted
-    # def get_cached_ocr_result(self, area, image_hash):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
-
-    # def cache_ocr_result(self, area, image_hash, result):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
-
-    # def toggle_ocr_gpu(self):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
-
-    # OCR removed - method deleted
-    # def ocr_toggle_callback(self):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
 
     def init_variables(self):
         self.is_translating = False
@@ -3846,6 +3473,7 @@ class MagicBabelApp:
         self.dialog_history = []              # เก็บประวัติข้อความ (เก็บได้สูงสุด 10 ข้อความ)
         self.max_history = 10                 # จำนวนข้อความสูงสุดใน history
         self.current_history_index = -1       # ตำแหน่งปัจจุบันใน history (-1 = ข้อความล่าสุด)
+        self._is_browsing_history = False     # True เมื่อผู้ใช้กำลังเรียกดู history
 
         # *** REMOVED TEST DATA - ใช้เฉพาะข้อความแปลจริง ***
         # self.add_test_dialog_history()
@@ -4039,23 +3667,12 @@ class MagicBabelApp:
     def toggle_settings(self):
         if self.settings_ui.settings_visible:
             self.settings_ui.close_settings()
-            # Settings button uses icon - no text update needed
             self.update_button_highlight(self.settings_button, False)
         else:
-            # เปิด Settings โดยไม่หยุดการแปล
-            self.logging_manager.log_info("⚙️ Settings: เปิดหน้าต่างการตั้งค่า (ไม่หยุดการแปล)")
-
-            # ไม่ซ่อน TUI เมื่อเปิด Settings
-            # ไม่ปรับสถานะปุ่ม TUI (เก็บสถานะเดิมไว้)
-
-            # Settings button uses icon - text update not needed
+            self.logging_manager.log_info("⚙️ Settings: เปิดหน้าต่างการตั้งค่า")
             self.update_button_highlight(self.settings_button, True)
-
-            self.settings_ui.open_settings(
-                self.root.winfo_x(), self.root.winfo_y(), self.root.winfo_width()
-            )
-            # Settings button uses icon - text update not needed
-            self.update_button_highlight(self.settings_button, True)
+            mx, my, mw, mh = self._get_mbb_geometry()
+            self.settings_ui.open_settings(mx, my, mw)
 
     # toggle_edit_area method removed - Edit Area functionality not used in this version
 
@@ -4177,17 +3794,17 @@ class MagicBabelApp:
         self.logging_manager.log_info(f"🎯 Font target mode: {target_mode}")
 
         # อัพเดตตาม target mode
-        if target_mode == "translated_ui" or target_mode == "both":
+        if target_mode in ("tui", "both"):
             # อัพเดต TranslatedUI
             if hasattr(self, 'translated_ui') and self.translated_ui:
                 self.translated_ui.update_font(font_name)
                 self.translated_ui.adjust_font_size(font_size)
                 self.logging_manager.log_info(f"✅ TranslatedUI font updated: {font_name} size {font_size}")
 
-        if target_mode == "translated_logs" or target_mode == "both":
+        if target_mode in ("logs", "both"):
             # อัพเดต TranslatedLogs
-            if hasattr(self, 'translated_logs') and self.translated_logs:
-                self.translated_logs.update_font_settings(font_name, font_size)
+            if hasattr(self, 'translated_logs_instance') and self.translated_logs_instance:
+                self.translated_logs_instance.update_font_settings(font_name, font_size)
                 self.logging_manager.log_info(f"✅ TranslatedLogs font updated: {font_name} size {font_size}")
 
         # อัพเดตการตั้งค่าฟอนต์ผ่าน font_settings (สำหรับ observer pattern)
@@ -4216,17 +3833,17 @@ class MagicBabelApp:
         self.logging_manager.log_info(f"🎯 Font Manager callback - Target: {target_mode}, Font: {font_name}, Size: {font_size}")
 
         # อัพเดตตาม target mode ที่ส่งมาจาก Font Manager
-        if target_mode == "translated_ui":
+        if target_mode == "tui":
             # อัพเดตเฉพาะ TranslatedUI
             if hasattr(self, 'translated_ui') and self.translated_ui:
                 self.translated_ui.update_font(font_name)
                 self.translated_ui.adjust_font_size(font_size)
                 self.logging_manager.log_info(f"✅ TranslatedUI only font updated: {font_name} size {font_size}")
 
-        elif target_mode == "translated_logs":
+        elif target_mode == "logs":
             # อัพเดตเฉพาะ TranslatedLogs
-            if hasattr(self, 'translated_logs') and self.translated_logs:
-                self.translated_logs.update_font_settings(font_name, font_size)
+            if hasattr(self, 'translated_logs_instance') and self.translated_logs_instance:
+                self.translated_logs_instance.update_font_settings(font_name, font_size)
                 self.logging_manager.log_info(f"✅ TranslatedLogs only font updated: {font_name} size {font_size}")
 
         else:  # both or any other value
@@ -4236,21 +3853,22 @@ class MagicBabelApp:
                 self.translated_ui.adjust_font_size(font_size)
                 self.logging_manager.log_info(f"✅ TranslatedUI font updated: {font_name} size {font_size}")
 
-            if hasattr(self, 'translated_logs') and self.translated_logs:
-                self.translated_logs.update_font_settings(font_name, font_size)
+            if hasattr(self, 'translated_logs_instance') and self.translated_logs_instance:
+                self.translated_logs_instance.update_font_settings(font_name, font_size)
                 self.logging_manager.log_info(f"✅ TranslatedLogs font updated: {font_name} size {font_size}")
 
-        # อัพเดตการตั้งค่าใน settings file
-        self.settings.set("font", font_name)
-        self.settings.set("font_size", font_size)
+        # อัพเดตการตั้งค่าใน settings file — บันทึกเฉพาะ target ที่เกี่ยวข้อง
+        if target_mode in ("tui", "both"):
+            self.settings.set("font", font_name, save_immediately=False)
+            self.settings.set("font_size", font_size)  # save once here
+        if target_mode in ("logs", "both"):
+            # ถ้า logs instance มีอยู่ จะ save ผ่าน update_font_settings() แล้ว
+            # ถ้าไม่มี ต้อง save ตรงนี้เพื่อให้ persist
+            if not (hasattr(self, 'translated_logs_instance') and self.translated_logs_instance):
+                self.settings.set_logs_settings(font_family=font_name, font_size=font_size)
 
         # บันทึกล็อก
         self.logging_manager.log_info(f"🔤 Font applied via Font Manager to {target_mode}: {font_name} size {font_size}")
-
-    # OCR removed - reinitialize_ocr() deleted
-    # def reinitialize_ocr(self):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
 
     def update_api_settings(self):
         """อัพเดท API settings และสร้าง translator ใหม่ตามประเภท model
@@ -4387,9 +4005,7 @@ class MagicBabelApp:
                 ):
                     self.translated_logs_window.withdraw()
 
-                # บังคับให้การประมวลผลทุกส่วนทำงานเสร็จ
-                self.root.update_idletasks()
-                self.root.update()
+                # QTimer polls Tk every 16ms — no manual update needed
 
                 # รอให้กระบวนการทุกอย่างเสร็จสิ้น
                 time.sleep(0.5)
@@ -4402,10 +4018,6 @@ class MagicBabelApp:
                 # จัดการกับตัวแปรเดิม
                 old_translator = self.translator
                 self.translator = None
-
-                # ล้างข้อมูลแคช
-                if hasattr(self, "_ocr_cache"):
-                    self._ocr_cache.clear()
 
                 # ล้างข้อมูลใน text_corrector
                 if hasattr(self, "text_corrector"):
@@ -4575,7 +4187,10 @@ class MagicBabelApp:
             if hasattr(self, "get_current_settings_info"):
                 info_text = self.get_current_settings_info()
                 if hasattr(self, "info_label"):
-                    self.info_label.config(text=info_text)
+                    if hasattr(self.info_label, 'config'):
+                        self.info_label.config(text=info_text)
+                    elif hasattr(self.info_label, 'setText'):
+                        self.info_label.setText(info_text)
 
             return True
 
@@ -4689,7 +4304,6 @@ class MagicBabelApp:
             # 4. อัพเดทค่าใน settings ให้ตรงกัน
             self.settings.set("current_area", self.current_area)
 
-            # OCR Area Selection removed - update_area_button_highlights call deleted (3 lines)
 
             # 5. สั่งให้ Control UI อัพเดทการแสดงผล (ถ้ามีอยู่)
             if hasattr(self, "control_ui") and self.control_ui:
@@ -4721,7 +4335,6 @@ class MagicBabelApp:
             self.current_area = "A+B"
             self.settings.set("current_area", "A+B")
             self.settings.set("current_preset", 1)
-            # OCR Area Selection removed - update_area_button_highlights call deleted
             if (
                 hasattr(self, "control_ui")
                 and self.control_ui
@@ -4735,19 +4348,22 @@ class MagicBabelApp:
     def update_button_highlight(self, button, is_active):
         """อัพเดทสถานะไฮไลท์ของปุ่ม
         Args:
-            button: ปุ่มที่ต้องการอัพเดท
+            button: ปุ่มที่ต้องการอัพเดท (supports Tkinter Canvas, Tkinter Button, and PyQt6 QPushButton)
             is_active: สถานะการไฮไลท์ (True/False)
         """
         # ดึงสีไฮไลท์จากธีมปัจจุบัน
         highlight_color = appearance_manager.get_highlight_color()
 
-        # ตรวจสอบว่าเป็นปุ่มแบบใหม่หรือเก่า
-        if hasattr(button, "button_bg"):  # ปุ่มแบบใหม่ (Canvas)
+        # PyQt6 QPushButton (from pyqt_ui components)
+        if hasattr(button, 'setProperty'):
+            button.setProperty("toggled", "true" if is_active else "false")
+            button.style().unpolish(button)
+            button.style().polish(button)
+        elif hasattr(button, "button_bg"):  # ปุ่มแบบใหม่ (Canvas)
             if is_active:
-                # ใช้สีรองของธีมสำหรับ start_stop_button เมื่อ active
                 if button == getattr(self, "start_stop_button", None):
                     button.itemconfig(button.button_bg, fill=appearance_manager.get_theme_color("secondary"))
-                    button.itemconfig(button.button_text, fill="#ffffff")  # ตัวอักษรสีขาว
+                    button.itemconfig(button.button_text, fill="#ffffff")
                 else:
                     button.itemconfig(button.button_bg, fill="#404060")
                     button.itemconfig(button.button_text, fill=highlight_color)
@@ -4756,7 +4372,7 @@ class MagicBabelApp:
                 button.itemconfig(button.button_bg, fill=button.original_bg)
                 button.itemconfig(button.button_text, fill="#ffffff")
                 button.selected = False
-        else:  # ปุ่มแบบเดิม (Button)
+        elif hasattr(button, 'configure'):  # ปุ่มแบบเดิม (tk.Button)
             if is_active:
                 button.configure(fg=highlight_color, bg="#404060")
             else:
@@ -4779,93 +4395,8 @@ class MagicBabelApp:
         # show_area_button update removed - Edit Area functionality not used
         self.is_area_shown = False
 
-    # OCR Area Selection removed - start_selection_a/b/c methods deleted (12 lines)
-    # OCR Area Selection removed - Full selection system deleted (~310 lines):
-    #   - start_selection() - Main area selection window
-    #   - start_drag() - Mouse drag handler
-    #   - update_selection() - Selection rectangle update
-    #   - finish_selection() - Complete selection and save coordinates
-    #   - close_selection() - Close selection window
-    #   - cancel_selection() - Cancel selection (ESC key)
-        """
-        ปรับปรุงคุณภาพของภาพก่อนส่งเข้า OCR
-
-        Args:
-            image: PIL.Image object
-            area_type: ประเภทของพื้นที่ ('normal', 'choice', 'cutscene')
-
-        Returns:
-            PIL.Image: ภาพที่ผ่านการปรับปรุงแล้ว
-        """
-        try:
-            # วิเคราะห์ภาพเบื้องต้น
-            img_array = np.array(image.convert("L"))
-            brightness = np.mean(img_array)
-            contrast = np.std(img_array)
-
-            # แปลงเป็น OpenCV format
-            img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-
-            # ปรับแต่งตามประเภทพื้นที่
-            if area_type == "choice":  # ตัวเลือก
-                # เพิ่มความคมชัดสูงสำหรับพื้นที่ตัวเลือก
-                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-                gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                enhanced = clahe.apply(gray)
-
-                # ใช้ binary threshold เพื่อทำให้ข้อความชัดเจนยิ่งขึ้น
-                _, binary = cv2.threshold(enhanced, 127, 255, cv2.THRESH_BINARY)
-                processed = Image.fromarray(binary)
-
-            elif area_type == "cutscene":  # คัทซีน
-                # ลด noise สำหรับภาพฉากหลัง
-                gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-                processed = Image.fromarray(denoised)
-
-            else:  # ข้อความทั่วไป
-                # ปรับค่าตามคุณสมบัติของภาพ
-                resize_factor = 1.5  # ค่าเริ่มต้น
-                contrast_factor = 1.3  # ค่าเริ่มต้น
-
-                # ปรับ resize factor ตามขนาดภาพ - ภาพเล็กต้องขยายมากกว่า
-                image_size = image.width * image.height
-                if image_size < 10000:  # ภาพขนาดเล็ก
-                    resize_factor = 2.0
-                elif image_size > 100000:  # ภาพขนาดใหญ่
-                    resize_factor = 1.2
-
-                # ปรับ contrast ตามความสว่างของภาพ
-                if brightness < 100:  # ภาพมืด
-                    contrast_factor = 1.5
-                elif brightness > 200:  # ภาพสว่างมาก
-                    contrast_factor = 1.1
-
-                # 1. ขยายภาพตาม factor
-                width = int(image.width * resize_factor)
-                height = int(image.height * resize_factor)
-                resized = image.resize((width, height), Image.Resampling.LANCZOS)
-
-                # 2. ปรับ contrast ตาม factor
-                enhancer = ImageEnhance.Contrast(resized)
-                enhanced = enhancer.enhance(contrast_factor)
-
-                # 3. แปลงเป็นภาพขาวดำ
-                gray = enhanced.convert("L")
-
-                # 4. เพิ่มการปรับความชัดของตัวอักษร
-                sharpener = ImageEnhance.Sharpness(gray)
-                processed = sharpener.enhance(1.5)
-
-            return processed
-
-        except Exception as e:
-            logging.error(f"Error in image preprocessing: {e}")
-            # ถ้าเกิดข้อผิดพลาด ให้ใช้ภาพต้นฉบับ
-            return image
-
     def check_cpu_usage(self):
-        """ตรวจสอบและปรับการทำงานตามการใช้ CPU
+        """ตรวจสอบการใช้ CPU ปัจจุบัน
 
         Returns:
             float: เปอร์เซ็นต์การใช้งาน CPU ปัจจุบัน
@@ -4875,45 +4406,20 @@ class MagicBabelApp:
 
             current_time = time.time()
 
-            # ตรวจสอบเป็นระยะเพื่อไม่ให้ตรวจสอบบ่อยเกินไป
             if not hasattr(self, "last_cpu_check") or not hasattr(
                 self, "cpu_check_interval"
             ):
                 self.last_cpu_check = 0
-                self.cpu_check_interval = 1.0  # ตรวจสอบทุก 1 วินาที
+                self.cpu_check_interval = 1.0
 
             if current_time - self.last_cpu_check < self.cpu_check_interval:
-                return -1  # ยังไม่ถึงเวลาตรวจสอบ
+                return -1
 
             self.last_cpu_check = current_time
-
-            # วัดการใช้ CPU ปัจจุบัน
             current_cpu = psutil.cpu_percent(interval=0.1)
-
-            # ตรวจสอบว่ามีการตั้งค่า CPU limit หรือไม่
-            cpu_limit = self.settings.get("cpu_limit", 80)  # ค่าเริ่มต้น 80%
-
-            # ปรับความเร็ว OCR ตามการใช้ CPU
-            if current_cpu > cpu_limit:
-                # ถ้า CPU สูงเกิน ลดความเร็ว OCR
-                if self.ocr_speed == "high":
-                    self.set_ocr_speed("normal")
-                    self.logging_manager.log_info(
-                        f"CPU usage {current_cpu}% exceeds limit {cpu_limit}%. Reducing OCR speed."
-                    )
-
-                # ถ้ายังสูงอยู่ เพิ่ม OCR interval
-                if hasattr(self, "ocr_interval"):
-                    self.ocr_interval = min(1.0, self.ocr_interval * 1.2)
-            elif current_cpu < cpu_limit * 0.8:  # ถ้าต่ำกว่า 80% ของลิมิต
-                # อาจพิจารณาเพิ่มความเร็ว แต่ไม่เกินที่ผู้ใช้ตั้งค่าไว้
-                if hasattr(self, "ocr_interval") and self.ocr_interval > 0.3:
-                    self.ocr_interval = max(0.3, self.ocr_interval * 0.9)  # ลดลงอย่างช้าๆ
-
             return current_cpu
 
         except ImportError:
-            # ถ้าไม่มี psutil
             self.logging_manager.log_warning(
                 "psutil module not available. CPU monitoring disabled."
             )
@@ -4928,22 +4434,13 @@ class MagicBabelApp:
         Args:
             limit (int): เปอร์เซ็นต์ลิมิต CPU (0-100)
         """
-        # ตรวจสอบค่าที่รับเข้ามา
         if not 0 <= limit <= 100:
-            limit = 80  # ค่าเริ่มต้น
+            limit = 80
 
         self.cpu_limit = limit
         self.settings.set("cpu_limit", limit)
         self.settings.save_settings()
         self.logging_manager.log_info(f"CPU limit set to {limit}%")
-
-        # ปรับโหมด OCR ตามลิมิต
-        if limit <= 50:
-            self.set_ocr_speed("normal")  # ใช้โหมดปกติเมื่อลิมิตต่ำ
-        elif limit >= 80:
-            # ถ้าลิมิตสูง อาจใช้โหมด high ได้ถ้าเคยตั้งไว้แล้ว
-            if self.settings.get("ocr_speed", "normal") == "high":
-                self.set_ocr_speed("high")
 
     def on_dalamud_text_received(self, message_data):
         """DEPRECATED: Now handled by DalamudMessageHandler for proper synchronization"""
@@ -4963,21 +4460,16 @@ class MagicBabelApp:
             # Create DIRECT UI updater function - NO DELAYS
             def ui_updater(translated_text, chat_type=61):
                 if self.translated_ui and self.is_translating:
-                    # Direct call - NO after() delay
                     self.translated_ui.update_text(translated_text, chat_type=chat_type)
 
-                    # *** ADD TO HISTORY: เพิ่มข้อความลงใน history สำหรับ Previous Dialog ***
+                    # เพิ่มข้อความลงใน history สำหรับ Previous Dialog
                     if hasattr(self, 'last_original_text') and self.last_original_text:
                         self.add_to_dialog_history(
                             original_text=self.last_original_text,
                             translated_text=translated_text
                         )
                         logging.info(f"📄 [HISTORY] Added dialog to history: {len(self.dialog_history)} entries")
-
-                    # CRITICAL: Force tkinter to update NOW
-                    self.root.update_idletasks()
-                    self.root.update()
-                    logging.info("[UI FORCED] Tkinter update forced after text update")
+                    # QTimer polls Tk every 16ms — no manual root.update() needed
 
             # Pass the UI updater WITH root reference
             ui_updater.root = self.root  # Attach root for handler to use
@@ -5079,308 +4571,7 @@ class MagicBabelApp:
         self._last_dalamud_text = message_text
         print(f"📤 Processing Dalamud text: {message_text[:50]}...")
 
-        # คืนค่าในรูปแบบเดียวกับ OCR results
         return [("dalamud", message_text)]
-
-    # ========================================================================
-    # OCR METHODS REMOVED (276 lines deleted)
-    # Project is now 100% text hook - no OCR functionality
-    # Removed methods:
-    #   - capture_and_ocr() - main OCR processing (139 lines)
-    #   - get_image_signature() - OCR caching helper (53 lines)
-    #   - capture_and_ocr_all_areas() - multi-area OCR (84 lines)
-    # ========================================================================
-
-    def check_for_background_dialogue(self):
-        """
-        ตรวจสอบพื้นที่ในเบื้องหลังว่ามีบทสนทนาปกติหรือข้อความตัวเลือกหรือไม่
-        เหมาะสำหรับใช้เมื่ออยู่ในพื้นที่ C และต้องการตรวจสอบว่ามีข้อความในพื้นที่ A+B หรือไม่
-
-        Returns:
-            str: ประเภทข้อความที่พบ หรือ None ถ้าไม่พบข้อความที่เปลี่ยนไป
-        """
-        # ถ้าไม่ได้อยู่ในพื้นที่ C ไม่จำเป็นต้องตรวจสอบพื้นหลัง
-        current_areas = (
-            self.current_area.split("+")
-            if isinstance(self.current_area, str)
-            else self.current_area
-        )
-        if set(current_areas) != set(["C"]):
-            return None
-
-        self._update_status_line("Checking background for dialogue text...")
-        self.logging_manager.log_info(
-            "Checking background for dialogue while in area C"
-        )
-
-        # ทำ OCR พื้นที่ A และ B เพื่อตรวจสอบว่ามีข้อความสนทนาปกติหรือไม่
-        background_texts = {}
-
-        # ให้ความสำคัญสูงกับการตรวจสอบพื้นที่ B ก่อน (เพื่อหา choice dialogue)
-        # ตรวจสอบพื้นที่ B ก่อนเสมอเพื่อความรวดเร็ว
-        priority_areas = ["B", "A"]
-
-        for area in priority_areas:
-            translate_area = self.settings.get_translate_area(area)
-            if not translate_area:
-                continue
-
-            start_x = translate_area["start_x"]
-            start_y = translate_area["start_y"]
-            end_x = translate_area["end_x"]
-            end_y = translate_area["end_y"]
-
-            # ตรวจสอบพื้นที่ว่าง
-            if start_x == end_x or start_y == end_y:
-                continue
-
-            try:
-                # คำนวณ scale ตามขนาดหน้าจอ
-                screen_size = self.settings.get("screen_size", "2560x1440")
-                screen_width, screen_height = map(int, screen_size.split("x"))
-                scale_x = self.root.winfo_screenwidth() / screen_width
-                scale_y = self.root.winfo_screenheight() / screen_height
-
-                # คำนวณพิกัดที่จะจับภาพ
-                x1 = int(min(start_x, end_x) * scale_x)
-                y1 = int(min(start_y, end_y) * scale_y)
-                x2 = int(max(start_x, end_x) * scale_x)
-                y2 = int(max(start_y, end_y) * scale_y)
-
-                # จับภาพหน้าจอ
-                img = ImageGrab.grab(bbox=(x1, y1, x2, y2))
-
-                # ทำ OCR แบบรวดเร็ว (ใช้ความเร็วสูง)
-                img = self.preprocess_image(img)
-
-                # บันทึกภาพชั่วคราว
-                temp_path = f"temp_background_{area}_{int(time.time()*1000)}.png"
-                try:
-                    img.save(temp_path)
-                    # ใช้ค่าความเชื่อมั่นต่ำลงและความเร็วสูงสำหรับการตรวจสอบเบื้องหลัง
-                    result = self.reader.readtext(
-                        temp_path,
-                        detail=0,
-                        paragraph=True,
-                        min_size=3,
-                        text_threshold=0.5,  # ค่าต่ำกว่าปกติเพื่อให้ตรวจจับได้มากขึ้น
-                    )
-
-                    text = " ".join(result)
-                    if text:
-                        background_texts[area] = text
-
-                        # ตรวจสอบ choice dialogue ทันทีสำหรับพื้นที่ B
-                        if area == "B":
-                            # ให้ความสำคัญกับการตรวจหา "What will you say?"
-                            if (
-                                "what will you say" in text.lower()
-                                or "whatwill you say" in text.lower()
-                                or "what willyou say" in text.lower()
-                            ):
-                                self.logging_manager.log_info(
-                                    f"Found choice dialogue in background area B: '{text[:30]}...'"
-                                )
-                                return (
-                                    "choice"  # พบ choice dialogue ในพื้นหลัง - สลับพื้นที่ทันที
-                                )
-                finally:
-                    # ทำความสะอาดไฟล์ชั่วคราว
-                    try:
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
-                    except Exception as e:
-                        self.logging_manager.log_warning(
-                            f"Could not remove temp file {temp_path}: {e}"
-                        )
-            except Exception as e:
-                self._update_status_line(
-                    f"Error in background check area {area}: {str(e)}"
-                )
-                continue
-
-        # ตรวจสอบว่าพบบทสนทนาทั้งในพื้นที่ A และ B หรือไม่
-        if "A" in background_texts and "B" in background_texts:
-            name_text = background_texts["A"].strip()
-            dialogue_text = background_texts["B"].strip()
-
-            # ตรวจสอบว่าพื้นที่ A มีชื่อตัวละครจริงๆ หรือไม่
-            if name_text and len(name_text) < 25:  # ชื่อตัวละครมักสั้นกว่า 25 ตัวอักษร
-                self.logging_manager.log_info(
-                    f"Found character name '{name_text}' in background area A"
-                )
-
-                # ตรวจสอบว่าพื้นที่ B มีข้อความบทสนทนาจริงๆ หรือไม่
-                if dialogue_text and len(dialogue_text) > 5:  # บทสนทนามักยาวกว่า 5 ตัวอักษร
-                    self.logging_manager.log_info(
-                        f"Found dialogue text in background area B: '{dialogue_text[:30]}...'"
-                    )
-                    return "normal"  # พบบทสนทนาปกติในพื้นหลัง
-
-        # ตรวจสอบเพิ่มเติมว่าพบข้อความตัวเลือกในพื้นที่ B หรือไม่
-        if "B" in background_texts:
-            b_text = background_texts["B"]
-
-            # ใช้ฟังก์ชันเต็มรูปแบบในการตรวจสอบอีกครั้ง
-            if self.is_choice_dialogue(b_text):
-                self.logging_manager.log_info(
-                    "Found choice dialogue in background area B"
-                )
-                return "choice"
-
-        return None  # ไม่พบรูปแบบข้อความที่ต้องการในพื้นหลัง
-
-    def _is_choice_dialogue_quick_check(self, text):
-        """ตรวจสอบอย่างรวดเร็วว่าเป็น choice dialogue หรือไม่
-        ใช้เฉพาะกับการตรวจสอบพื้นหลังเพื่อความรวดเร็ว
-
-        Args:
-            text (str): ข้อความที่ต้องการตรวจสอบ
-        Returns:
-            bool: True ถ้าเป็น choice dialogue
-        """
-        # ทำความสะอาดข้อความก่อนตรวจสอบ
-        cleaned_text = text.strip().lower()
-
-        # รูปแบบที่พบบ่อยในข้อความตัวเลือก - เน้นรูปแบบที่มักพบในเกม
-        choice_patterns = [
-            "what will you say?",
-            "what will you say",
-            "whatwill you say",
-            "what willyou say",
-            "what will yousay",
-            "whatwillyou say",
-        ]
-
-        # ตรวจสอบอย่างรวดเร็วเฉพาะรูปแบบหลักๆ
-        for pattern in choice_patterns:
-            if pattern in cleaned_text:
-                self._update_status_line(
-                    f"Quick check: Choice dialogue detected: {pattern}"
-                )
-                return True
-
-        return False
-
-    def detect_dialogue_type_improved(self, texts):
-        """วิเคราะห์ประเภทของข้อความจากผลลัพธ์ OCR ด้วยความแม่นยำสูงขึ้น
-
-        Args:
-            texts: dict ของพื้นที่และข้อความที่ได้จาก OCR
-
-        Returns:
-            str: ประเภทข้อความ ("normal", "narrator", "choice" ฯลฯ)
-        """
-        # ถ้าไม่มีข้อความ
-        if not texts:
-            return "unknown"
-
-        # 1. ตรวจสอบบทสนทนาปกติ (normal dialogue) - มีทั้งชื่อและข้อความ (ให้ priority สูงสุด)
-        if "A" in texts and "B" in texts and texts["A"] and texts["B"]:
-            name_text = texts["A"].strip()
-            dialogue_text = texts["B"].strip()
-
-            # ชื่อตัวละครมักสั้น (ไม่เกิน 25 ตัวอักษร) และไม่ใช่ตัวเลขหรือเครื่องหมาย
-            if (
-                name_text
-                and len(name_text) < 25
-                and any(c.isalpha() for c in name_text)
-            ):
-                # ตรวจสอบว่าชื่อมีความยาวมากกว่า 1 ตัวอักษร
-                if len(name_text) > 1:
-                    # ตรวจสอบเพิ่มเติมว่าข้อความใน B มีลักษณะของบทสนทนา
-                    if len(dialogue_text) > 3:  # ข้อความต้องมีความยาวพอสมควร
-                        self.logging_manager.log_info(
-                            f"Detected normal dialogue (A+B): '{name_text}: {dialogue_text[:30]}...'"
-                        )
-                        return "normal"
-
-        # 2. ตรวจสอบ choice dialogue (ตัวเลือก) - ต้องตรวจสอบหลังจากบทสนทนาปกติ
-        if "B" in texts and texts["B"]:
-            if self.is_choice_dialogue(texts["B"]):
-                self.logging_manager.log_info("Detected choice dialogue in area B")
-                return "choice"
-
-        # 3. ตรวจสอบกรณีพิเศษ - มีเฉพาะข้อความในพื้นที่ B
-        if "B" in texts and texts["B"] and (not "A" in texts or not texts["A"]):
-            b_text = texts["B"]
-
-            # ตรวจสอบว่ามีชื่อคนพูดในข้อความหรือไม่
-            speaker, content, _ = self.text_corrector.split_speaker_and_content(b_text)
-            if speaker:
-                self.logging_manager.log_info(
-                    f"Detected dialogue with speaker in text: '{speaker}'"
-                )
-                return "speaker_in_text"
-            else:
-                # กรณีพิเศษ - อาจเป็นบทสนทนาต่อเนื่องจากคนเดิม
-                # ตรวจสอบว่าข้อความมีลักษณะของบทสนทนาหรือไม่
-                if ('"' in b_text or "'" in b_text) and len(b_text) > 5:
-                    self.logging_manager.log_info(
-                        f"Detected dialogue without name: '{b_text[:30]}...'"
-                    )
-                    return "dialog_without_name"
-
-        # 4. ตรวจสอบบทบรรยาย (narrator text) ในพื้นที่ C
-        # ต้องตรวจสอบเป็นอันดับสุดท้าย เพื่อลดความผิดพลาดในการตรวจจับ
-        if "C" in texts and texts["C"]:
-            narrator_text = texts["C"]
-            # ถ้าข้อความไม่มีชื่อคน และมีความยาวพอสมควร น่าจะเป็นบทบรรยาย
-            speaker, content, _ = self.text_corrector.split_speaker_and_content(
-                narrator_text
-            )
-
-            # ต้องเป็นข้อความที่ยาวพอสมควร และไม่มีชื่อนำหน้า
-            if not speaker and len(narrator_text) > 20:  # เพิ่มความยาวขั้นต่ำจาก 15 เป็น 20
-                # เพิ่มการตรวจสอบลักษณะของบทบรรยาย
-                # บทบรรยายมักไม่มีเครื่องหมายคำพูดในช่วงต้น และมักมีคำบรรยาย
-                if '"' not in narrator_text[:15] and "'" not in narrator_text[:15]:
-                    # ตรวจสอบคำที่พบบ่อยในบทบรรยาย
-                    narrator_words = [
-                        "the",
-                        "a",
-                        "an",
-                        "there",
-                        "it",
-                        "they",
-                        "you",
-                        "your",
-                        "this",
-                        "that",
-                        "he",
-                        "she",
-                        "his",
-                        "her",
-                        "their",
-                        "its",
-                        "our",
-                        "we",
-                        "I",
-                        "my",
-                        "me",
-                        "when",
-                        "as",
-                        "if",
-                        "then",
-                        "while",
-                        "after",
-                        "before",
-                    ]
-                    word_count = sum(
-                        1
-                        for word in narrator_words
-                        if f" {word} " in f" {narrator_text.lower()} "
-                    )
-
-                    # ต้องมีคำบรรยายอย่างน้อย 2 คำ (เพิ่มความเข้มงวด)
-                    if word_count >= 2:
-                        self.logging_manager.log_info(
-                            f"Detected narrator text in area C: '{narrator_text[:30]}...'"
-                        )
-                        return "narrator"
-
-        # 5. กรณีที่ไม่สามารถระบุได้
-        return "unknown"
 
     def smart_switch_area(self):
         """
@@ -5389,142 +4580,6 @@ class MagicBabelApp:
         # ปิดการใช้งาน Auto Switch ทั้งหมด
         logging.debug("Auto area switching is permanently disabled.")
         return False
-
-        # 2. --- เพิ่ม: ตรวจสอบ Grace Period หลังจาก Manual Switch ---
-        manual_selection_grace_period = 15  # วินาที
-        last_manual_time = self.settings.get("last_manual_preset_selection_time", 0)
-        current_time_for_check = time.time()  # ใช้เวลาเดียวกันตลอดการตรวจสอบ
-
-        if current_time_for_check - last_manual_time < manual_selection_grace_period:
-            time_left = manual_selection_grace_period - (
-                current_time_for_check - last_manual_time
-            )
-            logging.info(
-                f"Manual preset selection grace period active ({time_left:.1f}s left). Skipping auto-switch."
-            )
-            return False  # ข้าม Auto-Switch
-        # --- จบการตรวจสอบ Grace Period ---
-
-        # 3. ตรวจสอบ Cooldown ของ Auto Switch เอง (ป้องกันการสลับถี่เกินไป)
-        if not hasattr(self, "_last_auto_switch_time"):
-            self._last_auto_switch_time = 0
-        auto_switch_cooldown_duration = 3.0
-        if (
-            current_time_for_check - self._last_auto_switch_time
-            < auto_switch_cooldown_duration
-        ):
-            logging.debug(f"Auto-switch cooldown active.")
-            return False
-
-        # 4. ตรวจสอบพื้นที่ปัจจุบัน
-        current_areas = (
-            self.current_area.split("+")
-            if isinstance(self.current_area, str)
-            else self.current_area
-        )
-        current_areas_set = set(current_areas)
-
-        # 5. ตรวจสอบพื้นหลังถ้าอยู่ในโหมด Lore (Area C)
-        if current_areas_set == set(["C"]):
-            background_type = self.check_for_background_dialogue()
-            if background_type in ["normal", "choice"]:
-                target_preset = self.find_appropriate_preset(background_type) or 1
-                preset_data = self.settings.get_preset(target_preset)
-                target_area_string = (
-                    preset_data.get("areas", "A+B") if preset_data else "A+B"
-                )
-
-                # ตรวจสอบว่าต้องสลับจริงหรือไม่
-                if (
-                    self.current_area == target_area_string
-                    and self.settings.get("current_preset") == target_preset
-                ):
-                    logging.debug("Already in correct state for background dialogue.")
-                    return False
-
-                self._update_status_line(
-                    f"✓ BG {background_type}, switching to P{target_preset}"
-                )
-                logging.info(
-                    f"Auto switching from C to P{target_preset} ({target_area_string}) due to background {background_type}"
-                )
-                # เรียก switch_area พร้อม preset override
-                switched = self.switch_area(
-                    target_area_string, preset_number_override=target_preset
-                )
-                if switched:
-                    self._last_auto_switch_time = time.time()  # บันทึกเวลา auto switch
-                    return True
-                else:
-                    return False  # ถ้า switch_area ไม่ทำงาน
-
-        # 6. ทำ OCR ทุกพื้นที่เพื่อวิเคราะห์ประเภท
-        all_texts = self.capture_and_ocr_all_areas()
-        if not all_texts:
-            logging.debug("Smart Switch: No text detected.")
-            return False
-
-        # 7. วิเคราะห์ประเภทข้อความ
-        dialogue_type = self.detect_dialogue_type_improved(all_texts)
-        logging.info(f"Detected dialogue type: {dialogue_type}")
-
-        # 8. ตรวจสอบความเสถียร
-        self.update_detection_history(dialogue_type)
-        stability_info = self.area_detection_stability_system()
-        logging.debug(f"Stability check: {stability_info}")
-
-        required_consecutive = (
-            3 if dialogue_type == "narrator" and current_areas_set == {"A", "B"} else 2
-        )
-        min_confidence = 75
-
-        if (
-            not stability_info["is_stable"]
-            or stability_info["stable_type"] != dialogue_type
-            or stability_info["confidence"].get(dialogue_type, 0) < min_confidence
-            or stability_info["consecutive_detections"] < required_consecutive
-        ):
-            logging.debug(f"Waiting for stable detection of {dialogue_type}...")
-            return False  # ยังไม่เสถียรพอ
-
-        # 9. ค้นหา Preset ที่เหมาะสมและสลับพื้นที่
-        if dialogue_type != "unknown":
-            target_preset = self.find_appropriate_preset(dialogue_type)
-            if target_preset is None:
-                logging.warning(f"No appropriate preset found for {dialogue_type}.")
-                return False
-
-            preset_data = self.settings.get_preset(target_preset)
-            target_area_string = (
-                preset_data.get("areas", "A+B") if preset_data else "A+B"
-            )
-            current_preset_num = self.settings.get("current_preset", 1)
-
-            # ตรวจสอบว่าต้องสลับจริงหรือไม่ (Preset และ Area ต้องตรงกัน)
-            if (
-                current_preset_num == target_preset
-                and self.current_area == target_area_string
-            ):
-                logging.debug(f"Already in correct preset/area for {dialogue_type}.")
-                return False
-
-            # --- ทำการสลับ ---
-            self._update_status_line(
-                f"✓ Auto switching to P{target_preset} for {dialogue_type}"
-            )
-            logging.info(
-                f"Auto switching preset: P{current_preset_num} -> P{target_preset} ({target_area_string}) for type: {dialogue_type}"
-            )
-            switched = self.switch_area(
-                target_area_string, preset_number_override=target_preset
-            )
-            if switched:
-                self._last_auto_switch_time = time.time()  # บันทึกเวลา auto switch
-                return True
-            else:
-                return False  # ถ้า switch_area ไม่ทำงาน
-
-        return False  # ถ้าไม่เข้าเงื่อนไขใดๆ
 
     def is_choice_preset_active(self):
         """ตรวจสอบว่า preset ปัจจุบันเป็น choice preset หรือไม่"""
@@ -5650,6 +4705,12 @@ class MagicBabelApp:
 
         return False
 
+    def manual_zone_change(self):
+        """Manual zone change — ตัด conversation context สำหรับดูคัทซีนย้อนหลัง"""
+        if hasattr(self, 'conversation_logger') and self.conversation_logger:
+            self.conversation_logger.log_system_event('zone_change', 'manual')
+        logging.info("[MANUAL] Zone change triggered by user")
+
     def toggle_translation(self):
         try:
             # 🚫 AUTO-START CANCELLATION: ยกเลิก auto-start หากผู้ใช้กดปุ่มเอง
@@ -5696,6 +4757,22 @@ class MagicBabelApp:
                     self._setup_dalamud_handler()
                     if hasattr(self, "dalamud_handler"):
                         self.dalamud_handler.set_translation_active(True)
+
+                    # 📝 CONVERSATION LOGGER: always-on context, disk logging ตาม settings
+                    conv_log_enabled = self.settings.get("enable_conversation_logging", False)
+                    if not self.conversation_logger:
+                        # สร้าง logger ถ้ายังไม่มี (fallback กรณี init ล้มเหลว)
+                        try:
+                            self.conversation_logger = ConversationLogger(disk_logging=conv_log_enabled)
+                            if hasattr(self, 'dalamud_handler'):
+                                self.dalamud_handler.set_conversation_logger(self.conversation_logger)
+                        except Exception:
+                            self.conversation_logger = None
+                    else:
+                        # อัพเดท disk_logging state ตาม settings ปัจจุบัน
+                        self.conversation_logger.set_disk_logging(conv_log_enabled)
+                    if self.conversation_logger:
+                        self.conversation_logger.start_session()
                     self.translation_event.set()
                     self.control_panel.set_translating(True)
                     # เพิ่มการไฮไลท์ปุ่มเมื่อเริ่มการแปล
@@ -5811,6 +4888,14 @@ class MagicBabelApp:
                 self.dalamud_handler.set_translation_active(False)
             self.translation_event.clear()
 
+            # 📝 CONVERSATION LOGGER: จบ session (save JSON เฉพาะเมื่อ disk_logging เปิด)
+            if hasattr(self, 'conversation_logger') and self.conversation_logger:
+                try:
+                    self.conversation_logger.end_session()
+                except Exception:
+                    pass
+                # ไม่ set เป็น None — เก็บ logger ไว้ เพราะ next session จะ reuse ได้
+
             # === PHASE 2: Update UI immediately ===
             print("🛑 Phase 2: Update UI")
             self.control_panel.set_translating(False)
@@ -5866,13 +4951,13 @@ class MagicBabelApp:
                     # TUI จะยังคงแสดงอยู่และแสดงสถานะปัจจุบัน ไม่ว่าการแปลจะทำงานหรือหยุด
                     print("✅ Translation stopped - TUI remains visible with current content")
 
-                    # Finish cleanup after short delay
-                    self.root.after(100, self._finish_stopping_translation)
+                    # Finish cleanup after short delay (thread-safe)
+                    self.safe_after(100, self._finish_stopping_translation)
 
                 except Exception as e:
                     print(f"⚠️ Error in stop_components_async: {e}")
                     # Still try to finish cleanup even if error
-                    self.root.after(50, self._finish_stopping_translation)
+                    self.safe_after(50, self._finish_stopping_translation)
 
             # Start async stop in separate thread
             threading.Thread(target=stop_components_async, daemon=True).start()
@@ -5916,10 +5001,6 @@ class MagicBabelApp:
             if hasattr(self, "button_state_manager"):
                 self.button_state_manager.button_states["tui"]["active"] = False
                 self.button_state_manager.update_button_visual("tui", "toggle_off")
-
-            # Force UI update
-            if hasattr(self, 'root'):
-                self.root.update_idletasks()
 
             # รีเซ็ตข้อมูลแสดงผล
             if hasattr(self, '_current_original_text'):
@@ -5987,14 +5068,7 @@ class MagicBabelApp:
             except Exception as e:
                 print(f"⚠️ F9: Error updating UI states: {e}")
 
-            # ======= PHASE 4: Force UI refresh =======
-            try:
-                self.root.update_idletasks()
-                self.root.update()
-                print("✅ F9: UI force refreshed")
-            except Exception as e:
-                print(f"⚠️ F9: Error refreshing UI: {e}")
-
+            # PHASE 4: QTimer polls Tk every 16ms — no manual update needed
             print("🎯 F9 LEGACY HARD STOP - deprecated function completed")
 
         except Exception as e:
@@ -6066,44 +5140,12 @@ class MagicBabelApp:
         return difflib.SequenceMatcher(None, text1, text2).ratio()
 
     def test_area_switching(self):
-        """ทดสอบระบบสลับพื้นที่อัตโนมัติ"""
-        try:
-            # แสดงพื้นที่ปัจจุบัน
-            current_areas = (
-                self.current_area.split("+")
-                if isinstance(self.current_area, str)
-                else self.current_area
-            )
-            self._update_status_line(f"Current areas: {'+'.join(current_areas)}")
-            self.logging_manager.log_info(
-                f"Testing auto area switch. Current areas: {'+'.join(current_areas)}"
-            )
-
-            # ทดสอบการตรวจจับในพื้นหลัง (สำหรับพื้นที่ C)
-            if set(current_areas) == set(["C"]):
-                self._update_status_line("Testing background detection for area C...")
-                background_type = self.check_for_background_dialogue()
-                if background_type:
-                    self._update_status_line(
-                        f"Found {background_type} dialogue in background"
-                    )
-                    messagebox.showinfo(
-                        "Background Detection",
-                        f"พบข้อความประเภท {background_type} ในพื้นหลัง\nโปรแกรมจะสลับไปยังพื้นที่ที่เหมาะสม",
-                    )
-
-            # ทดสอบการสลับพื้นที่อัตโนมัติ (ปิดใช้งานแล้ว)
-            messagebox.showinfo(
-                "Auto Area Switch Test",
-                "การสลับพื้นที่อัตโนมัติถูกปิดใช้งานถาวรแล้ว\nใช้การสลับ Preset แบบ Manual เท่านั้น",
-            )
-
-            return False  # Always return False since auto switching is disabled
-        except Exception as e:
-            error_msg = f"เกิดข้อผิดพลาดในการทดสอบ: {str(e)}"
-            self.logging_manager.log_error(error_msg)
-            messagebox.showerror("Test Error", error_msg)
-            return False
+        """ทดสอบระบบสลับพื้นที่อัตโนมัติ (ปิดใช้งานถาวร)"""
+        messagebox.showinfo(
+            "Auto Area Switch Test",
+            "การสลับพื้นที่อัตโนมัติถูกปิดใช้งานถาวรแล้ว\nใช้การสลับ Preset แบบ Manual เท่านั้น",
+        )
+        return False
 
     def explain_area_switching(self):
         """แสดงหน้าต่างอธิบายระบบสลับพื้นที่อัตโนมัติ"""
@@ -6154,7 +5196,7 @@ class MagicBabelApp:
 
         # โหลดไอคอน del.png และใช้ Label แทน Button เพื่อให้โปร่งใส
         try:
-            del_icon = tk.PhotoImage(file="assets/del.png")
+            del_icon = tk.PhotoImage(file=resource_path("assets/del.png"))
 
             # สร้างปุ่มปิดใช้ Label (โปร่งใสได้)
             close_button = tk.Label(
@@ -6616,8 +5658,8 @@ class MagicBabelApp:
                     dalamud_status_counter = 0
                     # อัพเดต info label เพื่อแสดงสถานะล่าสุด
                     try:
-                        self.logging_manager.log_info("🔄 Updating Dalamud status display...")
-                        self.root.after(0, self.update_info_label_with_model_color)
+                        self.logging_manager.log_info("Updating Dalamud status display...")
+                        self.safe_after(0, self.update_info_label_with_model_color)
                     except Exception as e:
                         self.logging_manager.log_error(f"Status update error: {e}")
 
@@ -6647,105 +5689,19 @@ class MagicBabelApp:
                     is_processing = False
                     continue
 
-                # --- DALAMUD MODE: Skip OCR completely if Dalamud is enabled and running ---
-                # CRITICAL FIX: Check is_running instead of just is_connected
-                # This prevents OCR from running when bridge is running but temporarily disconnected
+                # --- Dalamud mode: wait for text hook data ---
                 if self.dalamud_mode and hasattr(self, 'dalamud_bridge') and self.dalamud_bridge.is_running:
-                    # Don't do OCR when using Dalamud mode, even if temporarily disconnected
                     if self.dalamud_bridge.is_connected:
                         self._update_status_line("✅ Dalamud Bridge Connected")
                     else:
                         self._update_status_line("⏳ Waiting for Dalamud connection...")
-                    is_processing = False
-                    time.sleep(0.1)  # Reduce CPU usage
-                    continue
-
-                # --- Capture & OCR (เฉพาะเมื่อไม่ใช้ Dalamud หรือไม่เชื่อมต่อ) ---
-                ocr_results = self.capture_and_ocr()
-
-                # --- Logic การรวมข้อความ (เหมือนเดิม) ---
-                # ส่วนนี้ยังคงซับซ้อนเหมือนเดิมเพื่อรองรับทุก Use Case ของคุณ
-                # แต่ผลลัพธ์สุดท้ายคือตัวแปร `combined_text`
-                combined_text = ""
-                # (โค้ดส่วนการรวมข้อความจาก area ต่างๆ ที่ซับซ้อนของคุณจะถูกนำมาวางที่นี่...
-                # แต่เพื่อความง่าย ผมจะย่อส่วนนี้ให้เห็นภาพรวม Logic ใหม่)
-                temp_texts = []
-                has_dalamud = False
-                for area, text in ocr_results:
-                    corrected_text = self.text_corrector.correct_text(text).strip()
-                    if area == "dalamud":
-                        has_dalamud = True
-                        temp_texts.insert(0, corrected_text)  # Dalamud text ใช้เป็น combined_text โดยตรง
-                    elif area == "A":
-                        temp_texts.insert(0, corrected_text)  # ชื่อขึ้นก่อน
-                    else:
-                        temp_texts.append(corrected_text)
-
-                # สำหรับ Dalamud text ใช้โดยตรง ไม่ต้อง join
-                if has_dalamud:
-                    combined_text = temp_texts[0] if temp_texts else ""
-                else:
-                    combined_text = ": ".join(filter(None, temp_texts))
-
-                # --- *** ระบบตรวจสอบความเสถียรของข้อความ (Logic ใหม่!) *** ---
-                stable_text_to_translate = None
-
-                if self.force_next_translation:
-                    # ถ้าบังคับแปล ให้ข้ามระบบตรวจสอบทั้งหมด รวมทั้งการตรวจสอบข้อความซ้ำ
-                    if combined_text:
-                        stable_text_to_translate = combined_text
-                        self.last_stable_text = combined_text  # อัปเดตทันที
-                    self.force_next_translation = False  # ใช้ Flag ไปแล้ว รีเซ็ต
-                    # รีเซ็ตระบบตรวจสอบความนิ่งสำหรับประโยคถัดไป
-                    self.unstable_text = ""
-                    self.stability_counter = 0
-
-                else:  # โหมดแปลอัตโนมัติปกติ
-                    # สำหรับ Dalamud text ให้แปลทันที ไม่ต้องรอ stability
-                    if has_dalamud and combined_text:
-                        stable_text_to_translate = combined_text
-                        self.last_stable_text = combined_text
-                        # Skip ทั้ง stability check - ไปตรงไป translation section
-                    elif not combined_text:
-                        # ถ้าไม่เจอข้อความเลย ให้รีเซ็ตระบบ
-                        self.unstable_text = ""
-                        self.stability_counter = 0
-                        is_processing = False
-                        continue
-
-                    # Skip stability check ถ้าเป็น Dalamud text
-                    if not has_dalamud:
-                        if combined_text != self.unstable_text:
-                            # หากข้อความมีการเปลี่ยนแปลง (เริ่มพิมพ์ / ประโยคใหม่)
-                            # ให้เริ่มนับความเสถียรใหม่
-                            self.unstable_text = combined_text
-                            self.stability_counter = 1
-                            self._update_status_line(
-                                f"▶ Watching: {self.unstable_text[:30]}..."
-                            )
-                            is_processing = False
-                            continue  # **สำคัญ: ยังไม่แปล รอรอบถัดไป**
-                        else:
-                            # หากข้อความเหมือนเดิม (กำลังนิ่ง)
-                            self.stability_counter += 1
-                            self._update_status_line(
-                                f"▶ Stabilizing ({self.stability_counter}/{self.STABILITY_THRESHOLD})..."
-                            )
-
-                        # ตรวจสอบว่าข้อความนิ่งพอที่จะแปลหรือยัง
-                        if self.stability_counter >= self.STABILITY_THRESHOLD:
-                            # นิ่งแล้ว! แต่ต้องเป็นประโยคใหม่ที่ไม่ใช่ประโยคเดิมที่เพิ่งแปลไป
-                            if self.unstable_text != self.last_stable_text:
-                                stable_text_to_translate = self.unstable_text
-                                self.last_stable_text = self.unstable_text
-
-                            # รีเซ็ตระบบเพื่อรอประโยคถัดไป
-                            self.unstable_text = ""
-                            self.stability_counter = 0
-
-                # --- *** สิ้นสุด Logic ใหม่ *** ---
+                is_processing = False
+                time.sleep(0.1)
+                continue
 
                 # --- ส่งข้อความที่ "เสถียร" แล้วไปแปล ---
+                stable_text_to_translate = None
+                has_dalamud = False
                 if stable_text_to_translate:
                     # ตั้ง flag การแปล สำหรับ Dalamud rate limiting
                     if has_dalamud:
@@ -6770,7 +5726,7 @@ class MagicBabelApp:
 
                     if translated_text and not translated_text.startswith("[Error"):
                         # ใช้ dual-state display สำหรับแสดงข้อความแปล
-                        self.root.after(
+                        self.safe_after(
                             0,
                             lambda txt=translated_text: self._display_translation_complete(
                                 txt, stable_text_to_translate
@@ -6845,8 +5801,8 @@ class MagicBabelApp:
             translated_text = self.translator.translate(text_hook_data, is_choice_option=False)
 
             if translated_text and not translated_text.startswith("[Error"):
-                # Display immediately
-                self.root.after(
+                # Display immediately (thread-safe via QTimer)
+                self.safe_after(
                     0,
                     lambda txt=translated_text: self._display_translation_complete(
                         txt, text_hook_data
@@ -6867,422 +5823,6 @@ class MagicBabelApp:
         except Exception as e:
             self.logging_manager.log_error(f"Error in direct translation: {e}")
             return False
-
-    def translation_loop_improved(self):
-        """
-        Main OCR and Translation loop with improved logic for handling multiple areas,
-        context, and preventing redundant translations.
-        """
-        if not self.ocr_available or not self.translator_ready:
-            logging.warning(
-                "OCR Engine or Translator not ready. Stopping translation loop."
-            )
-            self.translating = False
-            # Optionally update UI to reflect stopped state
-            if hasattr(self, "status_line_label"):
-                self._update_status_line("Error: OCR/Translator not ready.")
-            return
-
-        logging.info("Starting improved translation loop...")
-        if hasattr(self, "status_line_label"):
-            self._update_status_line("Translation loop running...")
-
-        # Initialize last state variables for comparison
-        self.last_processed_text_a = ""
-        self.last_processed_text_b = ""
-        self.last_speaker = None
-        self.last_translated_content_only = (
-            ""  # Store only the content part of the last successful translation
-        )
-
-        while self.translating:
-            try:
-                start_time = time.time()
-
-                # --- Area Capture and OCR ---
-                if not self.area_manager or not self.area_manager.current_area_keys:
-                    logging.warning("No active OCR areas selected.")
-                    time.sleep(0.5)
-                    continue
-
-                area_key_a = self.area_manager.current_area_keys[0]
-                area_key_b = (
-                    self.area_manager.current_area_keys[1]
-                    if len(self.area_manager.current_area_keys) > 1
-                    else None
-                )
-
-                img_a, bbox_a = self.capture_screen_area(area_key_a)
-                img_b, bbox_b = (
-                    self.capture_screen_area(area_key_b) if area_key_b else (None, None)
-                )
-
-                if img_a is None:
-                    logging.warning(f"Failed to capture Area A ({area_key_a}).")
-                    time.sleep(0.2)
-                    continue
-
-                # Image Hashing and Cache Check
-                img_hash_a = self.get_image_signature(img_a)
-                img_hash_b = (
-                    self.get_image_signature(img_b) if img_b is not None else None
-                )
-
-                cached_result_a = self.get_cached_ocr_result(area_key_a, img_hash_a)
-                cached_result_b = (
-                    self.get_cached_ocr_result(area_key_b, img_hash_b)
-                    if area_key_b and img_hash_b
-                    else None
-                )
-
-                text_a = ""
-                text_b = ""
-
-                # OCR Area A if not cached
-                if cached_result_a is not None:
-                    text_a = cached_result_a
-                    logging.debug(f"Using cached OCR for Area A: {text_a[:30]}...")
-                else:
-                    # Preprocess image A (optional, depending on settings)
-                    processed_img_a = self.preprocess_image(
-                        img_a
-                    )  # Add area_type if needed
-                    ocr_result_a = self.ocr_engine.recognize(processed_img_a)
-                    text_a = ocr_result_a if ocr_result_a else ""
-                    self.cache_ocr_result(area_key_a, img_hash_a, text_a)
-                    logging.debug(f"OCR Result Area A: {text_a[:30]}...")
-
-                # OCR Area B if present and not cached
-                if area_key_b and img_b is not None:
-                    if cached_result_b is not None:
-                        text_b = cached_result_b
-                        logging.debug(f"Using cached OCR for Area B: {text_b[:30]}...")
-                    else:
-                        processed_img_b = self.preprocess_image(
-                            img_b
-                        )  # Add area_type if needed
-                        ocr_result_b = self.ocr_engine.recognize(processed_img_b)
-                        text_b = ocr_result_b if ocr_result_b else ""
-                        self.cache_ocr_result(area_key_b, img_hash_b, text_b)
-                        logging.debug(f"OCR Result Area B: {text_b[:30]}...")
-
-                # --- Text Processing and Speaker Detection ---
-                processed_text_a = text_a.strip() if text_a else ""
-                processed_text_b = text_b.strip() if text_b else ""
-
-                # Reset variables for this iteration
-                speaker = None
-                content_to_translate = ""
-                dialogue_type_detected = DialogueType.NORMAL  # Default to NORMAL
-                final_text_for_translation = ""  # Text to actually send for translation
-
-                # --- Logic Modification Start ---
-                if processed_text_a:
-                    # If Area A has text, try to split speaker from Area A primarily
-                    # Use the enhanced detector if available, otherwise fallback to text_corrector
-                    temp_speaker, temp_content_a, temp_type = (
-                        None,
-                        processed_text_a,
-                        DialogueType.NORMAL,
-                    )  # Initialize fallbacks
-                    if hasattr(self, "enhanced_detector") and self.enhanced_detector:
-                        temp_speaker, temp_content_a, temp_type = (
-                            self.enhanced_detector.enhanced_split_speaker_and_content(
-                                processed_text_a, previous_speaker=self.last_speaker
-                            )
-                        )
-                    elif hasattr(self, "text_corrector"):
-                        temp_speaker, temp_content_a, temp_type = (
-                            self.text_corrector.split_speaker_and_content(
-                                processed_text_a
-                            )
-                        )
-                    else:  # Fallback if neither detector is available
-                        logging.warning("No name detector (enhanced or basic) found.")
-
-                    if temp_speaker:
-                        # Speaker found in Area A
-                        speaker = temp_speaker
-                        content_to_translate = temp_content_a
-                        dialogue_type_detected = (
-                            temp_type if temp_type else DialogueType.CHARACTER
-                        )  # Use detected type or default to CHARACTER
-
-                        # If Area B also has text, consider appending it
-                        if processed_text_b:
-                            # Heuristic: Append B if it seems like a continuation
-                            # (e.g., A is short, or B starts similarly to A's end)
-                            if (
-                                len(temp_content_a.split()) < 7
-                                or self.text_similarity(
-                                    temp_content_a[-20:], processed_text_b[:20]
-                                )
-                                > 0.25
-                            ):
-                                content_to_translate += " " + processed_text_b
-                                logging.debug(
-                                    f"Appended text from Area B to Area A content."
-                                )
-                            else:
-                                logging.warning(
-                                    f"Area B text ('{processed_text_b[:30]}...') not appended to Area A speaker '{speaker}' due to low similarity/long A content."
-                                )
-                        # Prepare text for translation API (includes speaker)
-                        final_text_for_translation = (
-                            f"{speaker}: {content_to_translate}"
-                        )
-
-                    else:
-                        # No speaker found in Area A, treat all of A as content
-                        speaker = None  # Explicitly no speaker identified from Area A
-                        content_to_translate = processed_text_a
-                        dialogue_type_detected = (
-                            temp_type if temp_type else DialogueType.NORMAL
-                        )  # Use detected type
-
-                        # If Area B has text, append it (more likely to be part of the same block)
-                        if processed_text_b:
-                            content_to_translate += " " + processed_text_b
-                            logging.debug(
-                                f"Appended text from Area B to Area A (no speaker found in A)."
-                            )
-
-                        # Text for translation API is just the content
-                        final_text_for_translation = content_to_translate
-
-                elif processed_text_b:
-                    # If Area A is empty, but Area B has text
-                    # *** CRITICAL: Do NOT attempt to split speaker from Area B ***
-                    # Treat all of Area B as content, no speaker identified from areas.
-                    speaker = None  # Explicitly no speaker found
-                    content_to_translate = processed_text_b
-                    final_text_for_translation = (
-                        content_to_translate  # Text for translation is just B's content
-                    )
-                    # Try to detect type from B's content alone (e.g., might be System message)
-                    dialogue_type_detected = DialogueType.NORMAL  # Default
-                    if hasattr(self, "enhanced_detector") and self.enhanced_detector:
-                        _, _, dialogue_type_detected = (
-                            self.enhanced_detector.enhanced_split_speaker_and_content(
-                                processed_text_b
-                            )
-                        )
-                    elif hasattr(self, "text_corrector"):
-                        _, _, dialogue_type_detected = (
-                            self.text_corrector.split_speaker_and_content(
-                                processed_text_b
-                            )
-                        )
-                    # Keep NORMAL if no specific type detected from B alone
-
-                else:
-                    # Both Area A and B are empty
-                    # Clear the display if it's currently showing something and exists
-                    if (
-                        self.last_translated_content_only
-                        and self.active_translation_display
-                        and hasattr(self.active_translation_display, "winfo_exists")
-                        and self.active_translation_display.winfo_exists()
-                    ):
-                        if hasattr(self.active_translation_display, "update_text"):
-                            self.active_translation_display.update_text("")
-                            self.last_translated_content_only = (
-                                ""  # Reset cache as display is cleared
-                            )
-                            self.last_speaker = None
-                        else:
-                            logging.warning(
-                                "active_translation_display exists but has no update_text method."
-                            )
-
-                    # Prevent busy-waiting if OCR yields nothing consistently
-                    time.sleep(
-                        self.settings.get("ocr_interval", 0.1) + 0.05
-                    )  # Slightly longer sleep
-                    continue  # Skip to the next iteration
-
-                # --- Logic Modification End ---
-
-                # --- Check if translation should proceed ---
-                should_translate_this_loop = False
-                if content_to_translate:
-                    # Basic check: Is the content different enough from the last translated content?
-                    similarity_threshold = 0.95  # High threshold - only translate if significantly different
-
-                    # Normalize content for comparison (optional, e.g., lowercasing)
-                    current_content_norm = content_to_translate  # .lower()
-                    last_content_norm = self.last_translated_content_only  # .lower()
-
-                    if speaker == self.last_speaker:
-                        # If speaker is the same, content needs to be different
-                        if (
-                            self.text_similarity(
-                                current_content_norm, last_content_norm
-                            )
-                            < similarity_threshold
-                        ):
-                            should_translate_this_loop = True
-                        # else: logging.debug("Skipping translation: Same speaker, similar content.")
-                    else:
-                        # If speaker is different, or no last speaker, translate new content
-                        should_translate_this_loop = True
-
-                # --- Translation Block ---
-                if should_translate_this_loop and content_to_translate:
-                    # Ensure translator object exists
-                    if not hasattr(self, "translator") or not self.translator:
-                        logging.error("Translator object not available!")
-                        time.sleep(0.5)  # Wait before retrying or stopping
-                        continue  # Or handle error more gracefully
-
-                    # Check for choice dialogue based on the content_to_translate
-                    is_choice = False
-                    if hasattr(self.translator, "is_similar_to_choice_prompt"):
-                        is_choice, _, _ = self.translator.is_similar_to_choice_prompt(
-                            content_to_translate
-                        )
-                    else:
-                        logging.error(
-                            "Translator object missing 'is_similar_to_choice_prompt' method!"
-                        )
-
-                    if is_choice:
-                        dialogue_type_detected = DialogueType.CHOICE
-                        logging.info(
-                            f"Choice dialogue detected: {content_to_translate[:50]}..."
-                        )
-                        # Handle choice translation
-                        translated_text = ""
-                        if hasattr(self.translator, "translate_choice"):
-                            translated_text = self.translator.translate_choice(
-                                content_to_translate
-                            )
-                        else:
-                            logging.error(
-                                "Translator object missing 'translate_choice' method!"
-                            )
-
-                        if translated_text and "[Error:" not in translated_text:
-                            self.update_translation_display(
-                                translated_text, None
-                            )  # Update UI for choice
-                            self.add_translated_log(
-                                "Choice", content_to_translate, translated_text
-                            )
-                            # Update last translation cache specifically for choices
-                            self.last_translated_content_only = (
-                                content_to_translate  # Cache original choice block
-                            )
-                            self.last_speaker = "Choice"  # Set speaker context
-                        else:
-                            logging.warning(
-                                f"Choice translation failed or returned error for: {content_to_translate[:50]}"
-                            )
-
-                    elif (
-                        final_text_for_translation
-                    ):  # Ensure we have something non-choice to translate
-                        logging.info(
-                            f"Translating: {final_text_for_translation[:60]}..."
-                        )
-                        # Normal translation
-                        translated_text = ""
-                        if hasattr(self.translator, "translate"):
-                            translated_text = self.translator.translate(
-                                final_text_for_translation
-                            )
-                        else:
-                            logging.error(
-                                "Translator object missing 'translate' method!"
-                            )
-
-                        # Update cache and UI
-                        if translated_text and "[Error:" not in translated_text:
-
-                            # Extract only the translated part if speaker was prepended by the API
-                            display_translation = translated_text
-                            if speaker and translated_text.startswith(speaker + ":"):
-                                potential_display = translated_text[
-                                    len(speaker) + 1 :
-                                ].strip()
-                                if (
-                                    potential_display
-                                ):  # Ensure something remains after stripping speaker
-                                    display_translation = potential_display
-                                # else: Keep the full translated_text if only speaker was returned
-
-                            self.update_translation_display(
-                                display_translation, speaker
-                            )
-                            self.add_translated_log(
-                                speaker if speaker else "Narrator/System",
-                                content_to_translate,
-                                display_translation,
-                            )
-
-                            # Update last successful translation caches
-                            self.last_translated_content_only = content_to_translate
-                            self.last_speaker = speaker  # Can be None
-
-                            # Update dialogue context if applicable
-                            if hasattr(self.dialogue_context, "add_entry") and speaker:
-                                self.dialogue_context.add_entry(
-                                    speaker,
-                                    content_to_translate,
-                                    display_translation,
-                                    current_time,
-                                )
-                        else:
-                            # Handle translation failure or error response
-                            logging.warning(
-                                f"Translation failed or returned error/empty for: {final_text_for_translation[:60]}"
-                            )
-                            # Do not update last translated content on failure
-
-                # --- End of Translation Block ---
-
-                # --- Post-Translation Actions ---
-
-                # Smart area switching logic can be called here
-                # Consider basing it on dialogue_type_detected or content patterns
-                # self.smart_switch_area(dialogue_type_detected, content_to_translate)
-
-                # Update last processed raw texts (even if translation skipped)
-                self.last_processed_text_a = processed_text_a
-                self.last_processed_text_b = processed_text_b
-                # Note: self.last_speaker is updated only on successful translation or choice detection
-
-                # --- Loop Timing and Control ---
-                elapsed = time.time() - start_time
-                ocr_interval = self.settings.get(
-                    "ocr_interval", 0.1
-                )  # Get interval from settings
-                sleep_time = max(0, ocr_interval - elapsed)
-                time.sleep(sleep_time)
-
-            except Exception as loop_error:
-                logging.exception(
-                    f"Error in translation loop: {loop_error}"
-                )  # Use logging.exception for traceback
-                # Consider adding a mechanism to stop the loop after too many consecutive errors
-                # Update status UI to indicate error
-                if hasattr(self, "status_line_label"):
-                    self._update_status_line(f"Error: {loop_error}")
-                time.sleep(1)  # Longer sleep after an error
-
-        # --- Loop End ---
-        logging.info("Translation loop stopped.")
-        if hasattr(self, "status_line_label"):
-            self._update_status_line("Translation stopped.")
-        self._finish_stopping_translation()  # Call the cleanup method
-
-    # --- Helper method potentially needed by the loop ---
-    def _finish_stopping_translation(self):
-        """Additional cleanup actions after the loop variable is set to False."""
-        # Example: Ensure translator resources are released if necessary
-        logging.debug("Executing post-translation loop cleanup.")
-        # Maybe hide the UI?
-        # self._hide_translated_ui_safely()
 
     def format_original_text_for_display(self, text, max_words=30):
         """Format original text for status display - single line, first 30 words"""
@@ -7331,28 +5871,52 @@ class MagicBabelApp:
             logging.error(f"Error hiding original text display: {e}")
 
     def _update_status_line(self, message):
-        """อัพเดทข้อความสถานะในบรรทัดเดียว และ Rainbow Progress Bar"""
+        """อัพเดทข้อความสถานะในบรรทัดเดียว (thread-safe via signals)"""
         print(f"\r{message:<60}", end="", flush=True)  # ใช้ 60 ช่องสำหรับข้อความ
         self.logging_manager.update_status(message)
 
-        # Update status label (rainbow progress bar disabled)
-        if hasattr(self, "status_label"):
-            self.status_label.config(text=message)
+        # Update status label via PyQt6 signal (thread-safe)
+        if self.qt_main_window and hasattr(self.qt_main_window, 'signals'):
+            self.qt_main_window.signals.status_update.emit(message)
+        elif hasattr(self, "status_label"):
+            if hasattr(self.status_label, 'config'):
+                self.status_label.config(text=message)
+            elif hasattr(self.status_label, 'setText'):
+                self.status_label.setText(message)
 
     def save_ui_positions(self):
-        self.last_main_ui_pos = self.root.geometry()
+        # Save PyQt6 main window position as Tkinter-compatible geometry string
+        if self.qt_main_window and self.qt_main_window.isVisible():
+            w = self.qt_main_window.width()
+            h = self.qt_main_window.height()
+            x = self.qt_main_window.x()
+            y = self.qt_main_window.y()
+            self.last_main_ui_pos = f"{w}x{h}+{x}+{y}"
         if hasattr(self, "mini_ui"):
             self.last_mini_ui_pos = self.mini_ui.mini_ui.geometry()
         if hasattr(self, "translated_ui_window"):
             self.last_translated_ui_pos = self.translated_ui_window.geometry()
 
     def load_ui_positions(self):
-        if self.last_main_ui_pos:
-            self.root.geometry(self.last_main_ui_pos)
+        if self.last_main_ui_pos and self.qt_main_window:
+            self._restore_qt_pos_from_geometry(self.last_main_ui_pos)
         if self.last_mini_ui_pos and hasattr(self, "mini_ui"):
             self.mini_ui.mini_ui.geometry(self.last_mini_ui_pos)
         if self.last_translated_ui_pos and hasattr(self, "translated_ui_window"):
             self.translated_ui_window.geometry(self.last_translated_ui_pos)
+
+    def _restore_qt_pos_from_geometry(self, geometry_str):
+        """Parse Tkinter geometry string (WxH+X+Y) and move PyQt6 window."""
+        if not self.qt_main_window or not geometry_str:
+            return
+        try:
+            # Format: "300x330+100+200"
+            parts = geometry_str.replace("x", "+").split("+")
+            if len(parts) >= 4:
+                x, y = int(parts[2]), int(parts[3])
+                self.qt_main_window.move(x, y)
+        except (ValueError, IndexError):
+            pass
 
     def do_move(self, event):
         # ตรวจสอบว่าไม่ได้อยู่ในระหว่างการทำงานหนัก
@@ -7393,10 +5957,11 @@ class MagicBabelApp:
     def toggle_ui(self):
         if self.settings.get("enable_ui_toggle"):
             self.save_ui_positions()
-            if self.root.state() == "normal":
+            qt_visible = self.qt_main_window and self.qt_main_window.isVisible()
+
+            if qt_visible:
                 # สลับจาก Main UI เป็น Mini UI
-                self.main_window_pos = self.root.geometry()
-                self.root.withdraw()
+                self.qt_main_window.hide()
                 self.mini_ui.mini_ui.deiconify()
                 self.mini_ui.mini_ui.lift()
                 self.mini_ui.mini_ui.attributes("-topmost", True)
@@ -7404,11 +5969,11 @@ class MagicBabelApp:
                     self.mini_ui.mini_ui.geometry(self.last_mini_ui_pos)
             else:
                 # สลับจาก Mini UI เป็น Main UI
-                self.root.deiconify()
-                self.root.attributes("-topmost", True)
-                self.root.lift()
-                if self.last_main_ui_pos:
-                    self.root.geometry(self.last_main_ui_pos)
+                if self.qt_main_window:
+                    self.qt_main_window.show()
+                    self.qt_main_window.raise_()
+                    if self.last_main_ui_pos:
+                        self._restore_qt_pos_from_geometry(self.last_main_ui_pos)
                 self.mini_ui.mini_ui.withdraw()
 
             # ทำให้แน่ใจว่า Translated UI ยังคงแสดงอยู่ถ้ากำลังแปลอยู่
@@ -7427,20 +5992,24 @@ class MagicBabelApp:
 
     def toggle_mini_ui(self):
         """Toggle between Main UI and Mini UI"""
-        # NOTE: ปุ่ม MINI ไม่ต้องการ highlight เพราะเป็นการ transform UI ไม่ใช่การเปิด/ปิดหน้าต่าง
-        # การ highlight จึงไม่เหมาะสมสำหรับปุ่มประเภทนี้ที่เปลี่ยนแปลงรูปแบบการแสดงผล
-
         try:
             self.save_ui_positions()
 
-            if self.root.state() == "normal":
-                # Switch to Mini UI
-                main_x = self.root.winfo_x()
-                main_y = self.root.winfo_y()
-                main_width = self.root.winfo_width()
-                main_height = self.root.winfo_height()
+            # Check if PyQt6 main window is visible
+            qt_visible = self.qt_main_window and self.qt_main_window.isVisible()
 
-                self.root.withdraw()
+            if qt_visible:
+                # Switch to Mini UI - hide PyQt6 window
+                main_x = self.qt_main_window.x()
+                main_y = self.qt_main_window.y()
+                main_width = self.qt_main_window.width()
+                main_height = self.qt_main_window.height()
+
+                # Set MINI button active before hiding (so it shows when returning)
+                if hasattr(self, "bottom_bar") and self.bottom_bar:
+                    self.bottom_bar.set_toggle_state("mini", True)
+
+                self.qt_main_window.hide()
 
                 # Ensure mini UI exists before showing
                 if hasattr(self, "mini_ui") and self.mini_ui and hasattr(self.mini_ui, "mini_ui"):
@@ -7448,26 +6017,28 @@ class MagicBabelApp:
                     self.mini_ui.mini_ui.lift()
                     self.mini_ui.mini_ui.attributes("-topmost", True)
 
-                    # Position Mini UI at the center of Main UI's last position
                     self.mini_ui.position_at_center_of_main(
                         main_x, main_y, main_width, main_height
                     )
                 else:
-                    # If mini UI doesn't exist, show main UI again
-                    self.root.deiconify()
+                    self.qt_main_window.show()
                     self.logging_manager.log_error("Mini UI not found, staying in main UI")
 
             else:
-                # Switch to Main UI
-                self.root.deiconify()
-                self.root.lift()
-                self.root.attributes("-topmost", True)
+                # Switch to Main UI - show PyQt6 window
+                if self.qt_main_window:
+                    self.qt_main_window.show()
+                    self.qt_main_window.raise_()
                 if self.last_main_ui_pos:
-                    self.root.geometry(self.last_main_ui_pos)
+                    self._restore_qt_pos_from_geometry(self.last_main_ui_pos)
 
                 # Safely withdraw mini UI
                 if hasattr(self, "mini_ui") and self.mini_ui and hasattr(self.mini_ui, "mini_ui"):
                     self.mini_ui.mini_ui.withdraw()
+
+                # Reset MINI button state
+                if hasattr(self, "bottom_bar") and self.bottom_bar:
+                    self.bottom_bar.set_toggle_state("mini", False)
 
             # Update Mini UI status safely
             if hasattr(self, "mini_ui") and self.mini_ui:
@@ -7606,8 +6177,9 @@ class MagicBabelApp:
                 self.dialog_history.pop(0)
                 logging.info(f"📄 [HISTORY] Removed oldest entry, keeping {self.max_history} entries")
 
-            # Update current index to latest
+            # Update current index to latest + reset browsing state
             self.current_history_index = len(self.dialog_history) - 1
+            self._is_browsing_history = False
 
             logging.info(f"📄 [HISTORY] Added entry for '{speaker}': {len(self.dialog_history)}/{self.max_history}")
 
@@ -7615,24 +6187,25 @@ class MagicBabelApp:
             logging.error(f"❌ [HISTORY] Error adding to dialog history: {e}")
 
     def show_previous_dialog(self):
-        """แสดงข้อความก่อนหน้า + reset fade timer"""
+        """แสดงข้อความก่อนหน้า + reset fade timer
+
+        คลิกครั้งแรก = แสดงข้อความล่าสุดใน history
+        คลิกต่อไป = ย้อนกลับทีละรายการ (วนกลับเมื่อถึงตัวแรก)
+        """
         try:
             if not self.dialog_history:
                 logging.info("📄 [PREVIOUS] No dialog history available")
                 return
 
-            # ตรวจสอบว่ามีข้อความพอสำหรับ previous หรือไม่
-            if len(self.dialog_history) < 2:
-                logging.info("📄 [PREVIOUS] Not enough dialog history (need at least 2)")
-                return
-
-            # *** FIX v1.5.22: Simplified navigation logic without flag ***
-            # Simple decrement with wrap-around
-            self.current_history_index -= 1
-
-            # ถ้าย้อนเกิน ให้วนกลับไปล่าสุด
-            if self.current_history_index < 0:
+            if not self._is_browsing_history:
+                # คลิกครั้งแรก: แสดงข้อความล่าสุด
+                self._is_browsing_history = True
                 self.current_history_index = len(self.dialog_history) - 1
+            else:
+                # คลิกต่อไป: ย้อนกลับทีละรายการ
+                self.current_history_index -= 1
+                if self.current_history_index < 0:
+                    self.current_history_index = len(self.dialog_history) - 1
 
             # Get dialog entry
             current_dialog = self.dialog_history[self.current_history_index]
@@ -7640,10 +6213,9 @@ class MagicBabelApp:
             # Display the previous dialog
             self.display_previous_dialog(current_dialog)
 
-            # *** CRITICAL: Reset fade timer for user activity ***
+            # Reset fade timer for user activity
             if hasattr(self, 'translated_ui') and hasattr(self.translated_ui, 'reset_fade_timer_for_user_activity'):
                 self.translated_ui.reset_fade_timer_for_user_activity("previous_dialog")
-                logging.info("🔄 [PREVIOUS] Fade timer reset completed")
 
             logging.info(f"📄 [PREVIOUS] Showing dialog {self.current_history_index + 1}/{len(self.dialog_history)}")
 
@@ -7686,11 +6258,6 @@ class MagicBabelApp:
 
                 # Update text using the same method as in TUI test files
                 self.translated_ui.update_text(display_text)
-
-                # Force UI update
-                if hasattr(self.translated_ui, 'root'):
-                    self.translated_ui.root.update_idletasks()
-                    self.translated_ui.root.update()
 
                 # Show feedback with position indicator - larger and more prominent
                 time_ago = int(time.time() - dialog_entry['timestamp'])
@@ -7839,8 +6406,6 @@ class MagicBabelApp:
                         f"Set current_preset in settings to {determined_preset_num}"
                     )
 
-            # OCR Area Selection removed - update_area_button_highlights call deleted (2 lines)
-
             # 5. Update Control UI Display (if it exists)
             if (
                 hasattr(self, "control_ui")
@@ -7893,79 +6458,44 @@ class MagicBabelApp:
     def _sync_tui_button_state(self, is_visible, source="unknown"):
         """🔄 UNIFIED TUI BUTTON SYNC: ซิงค์สถานะ TUI button จากทุกแหล่ง"""
         try:
-            # อัปเดตสถานะ TUI button ใน button_state_manager
             if hasattr(self, "button_state_manager"):
                 self.button_state_manager.button_states["tui"]["active"] = is_visible
                 visual_state = "toggle_on" if is_visible else "toggle_off"
                 self.button_state_manager.update_button_visual("tui", visual_state)
 
-            # NOTE: Using ButtonStateManager only - bottom_button_states removed
-
-            state_text = "ON" if is_visible else "OFF"
-            self.logging_manager.log_info(f"✅ TUI button synced to {state_text} state from {source}")
+            # Sync PyQt6 bottom_bar
+            if hasattr(self, "bottom_bar") and self.bottom_bar:
+                self.bottom_bar.set_toggle_state("tui", is_visible)
 
         except Exception as e:
             self.logging_manager.log_error(f"❌ Error syncing TUI button state: {e}")
 
     def hide_and_stop_translation(self):
-        """ซ่อน UI เมื่อกดปุ่ม WASD (ใช้กับฟีเจอร์ auto-hide) - ไม่หยุดการแปล"""
+        """ซ่อน UI เมื่อกดปุ่ม WASD (ใช้กับฟีเจอร์ auto-hide) - ไม่หยุดการแปล
+        NOTE: ถูกเรียกจาก keyboard listener thread → ต้อง queue UI operations ไป main thread"""
         if self.settings.get("enable_wasd_auto_hide"):
             try:
                 # ⚔️ CHECK: ถ้า TUI อยู่ใน Battle Chat Mode → ไม่ซ่อน
+                # (อ่าน boolean flag เฉยๆ — thread-safe)
                 if hasattr(self, 'translated_ui') and self.translated_ui:
                     if hasattr(self.translated_ui, 'battle_mode_active'):
                         if self.translated_ui.battle_mode_active:
-                            self.logging_manager.log_info("⚔️ [WASD] Battle Chat active - ignoring WASD hide")
                             return  # ออกจาก function ทันที
 
-                # บันทึกล็อก
-                self.logging_manager.log_info(
-                    "WASD auto-hide triggered - hiding UI only (translation continues)"
-                )
-
-                # 🎯 SYNC FIX: ซ่อน translated_ui ในทุกกรณี (รวม WASD keys)
-                self._hide_translated_ui_all_cases()
-                self.logging_manager.log_info("✅ ซ่อน Translated UI จาก WASD auto-hide")
-
-                # 🔄 UNIFIED SYNC: ใช้ฟังก์ชัน unified sync
-                self._sync_tui_button_state(False, "WASD auto-hide")
-
-                # 🚫 NOTE: ไม่หยุดการแปล - ให้การแปลดำเนินต่อไปใน background
-                # การซ่อน TUI เท่านั้น ตามการตั้งค่า enable_auto_hide setting
-
-                # จัดการ thread ในเบื้องหลัง
-                def stop_translation_background():
+                # 🎯 Queue UI operations ไป main thread ผ่าน safe_after
+                # (keyboard callback มาจาก background thread — ห้ามเรียก Tkinter ตรงๆ)
+                def _do_hide_ui():
                     try:
-                        # ✅ FREEZE FIX: ไม่รอ thread เสร็จสิ้น ในโหมด auto-hide ด้วย
-                        if (
-                            self.translation_thread
-                            and self.translation_thread.is_alive()
-                        ):
-                            self.logging_manager.log_info(
-                                "Signaling translation thread to stop (auto-hide)"
-                            )
-                            # ไม่ใช้ join() - thread จะจบเองเมื่อตรวจพบ is_translating = False
-                        else:
-                            self.logging_manager.log_info(
-                                "Translation thread already stopped (auto-hide)"
-                            )
-
-                        # ซ่อนไอคอนกำลังโหลดหลังจากเสร็จสิ้น - ลดดีเลย์เหลือ 200ms
-                        self.root.after(200, self.hide_loading_indicator)
-
-                        # 🔄 SYNC FIX: ส่ง callback ไป TranslatedUI เมื่อหยุดจาก WASD
-                        self.root.after(100, lambda: self._notify_translated_ui_status_change(False))
+                        self._hide_translated_ui_all_cases()
+                        self._sync_tui_button_state(False, "WASD auto-hide")
+                        self.safe_after(200, self.hide_loading_indicator)
+                        self.safe_after(100, lambda: self._notify_translated_ui_status_change(False))
                     except Exception as e:
                         self.logging_manager.log_error(
-                            f"Error in hide_and_stop_translation background: {e}"
+                            f"Error in hide_and_stop_translation UI update: {e}"
                         )
-                        # ซ่อนไอคอนกำลังโหลดในกรณีที่เกิดข้อผิดพลาด
-                        self.root.after(0, self.hide_loading_indicator)
 
-                # เริ่ม thread สำหรับหยุดการแปลในเบื้องหลัง
-                threading.Thread(
-                    target=stop_translation_background, daemon=True
-                ).start()
+                self.safe_after(0, _do_hide_ui)
 
             except Exception as e:
                 self.logging_manager.log_error(
@@ -8001,10 +6531,12 @@ class MagicBabelApp:
             self.translated_logs_window,  # เพิ่มบรรทัดนี้
             self.mini_ui.mini_ui,
         ]
-        if hasattr(self.settings_ui, "settings_window"):
-            windows_to_close.append(self.settings_ui.settings_window)
-        if hasattr(self.settings_ui, "advance_ui") and self.settings_ui.advance_ui:
-            windows_to_close.append(self.settings_ui.advance_ui.advance_window)
+        # Close PyQt6 settings panel and sub-panels
+        if self.settings_ui:
+            try:
+                self.settings_ui.close_settings()
+            except Exception:
+                pass
 
         for window in windows_to_close:
             if window:
@@ -8029,23 +6561,28 @@ class MagicBabelApp:
         except Exception as cleanup_error:
             self.logging_manager.log_error(f"Error cleaning up auto-start: {cleanup_error}")
 
+        # Close PyQt6 main window
+        if self.qt_main_window:
+            try:
+                self.qt_main_window.close()
+            except Exception as e:
+                self.logging_manager.log_error(f"Error closing PyQt6 window: {e}")
+
         try:
             self.root.quit()
             self.root.destroy()
         except Exception as e:
             self.logging_manager.log_error(f"Error destroying root window: {e}")
 
+        # Quit PyQt6 application
+        if self.qt_app:
+            try:
+                self.qt_app.quit()
+            except Exception as e:
+                self.logging_manager.log_error(f"Error quitting Qt app: {e}")
+
         self.logging_manager.log_info("MagicBabel application closed")
         sys.exit(0)
-
-    # ========================================================================
-    # SWAP DATA METHODS REMOVED (90 lines deleted)
-    # Methods deleted:
-    #   - _get_current_npc_game_name() - read game name from npc.json (36 lines)
-    #   - swap_npc_data() - launch swap_data.py subprocess (32 lines)
-    #   - _update_swap_button_text() - update swap button UI (20 lines)
-    # Reason: Project uses single npc.json (FFXIV only), no need to swap
-    # ========================================================================
 
     def show_starter_guide(self, force_show=False):  # เพิ่ม parameter force_show
         """แสดงหน้าต่างแนะนำการใช้งานโปรแกรมสำหรับผู้ใช้ใหม่ รองรับไฟล์คู่มือแบบไดนามิก"""
@@ -8209,7 +6746,7 @@ class MagicBabelApp:
 
             # โหลดไอคอน del.png และใช้ Label แทน Button เพื่อให้โปร่งใส
             try:
-                del_icon = tk.PhotoImage(file="assets/del.png")
+                del_icon = tk.PhotoImage(file=resource_path("assets/del.png"))
 
                 # ใช้ Label เพื่อให้พื้นหลังโปร่งใส
                 close_button = tk.Label(
@@ -8839,13 +7376,79 @@ Traceback:
 
 
 if __name__ == "__main__":
+    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QTimer
+
+    # Windows taskbar: unique AppUserModelID so icon/grouping works
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "iarcanar.MBB.DalamudBridge"
+        )
+    except Exception:
+        pass
+
+    # QApplication MUST exist before any PyQt6 dialog (including API key UI)
+    qt_app = QApplication(sys.argv)
+    qt_app.setStyleSheet("QWidget { font-family: 'Segoe UI'; }")
+
+    # Check and setup API key (PyQt6 dialog — needs QApplication above)
+    from api_key_manager import check_and_setup
+    if not check_and_setup():
+        print("API key setup cancelled by user")
+        sys.exit(0)
+
+    # Continue normal startup
     crash_handler = CrashErrorHandler()
 
     try:
+
+        # App-level icon (shown in taskbar for all windows)
+        from PyQt6.QtGui import QIcon
+        from resource_utils import resource_path
+        _app_icon_path = resource_path("assets/mbb_icon.ico")
+        if os.path.exists(_app_icon_path):
+            qt_app.setWindowIcon(QIcon(_app_icon_path))
+
+        # Tkinter root (hidden) - still needed for sub-windows
         root = tk.Tk()
-        app = MagicBabelApp(root)
+        root.withdraw()
+
+        # Create app with both event loops
+        app = MagicBabelApp(root, qt_app)
         app.setup_ui_position_tracking()
-        root.mainloop()
+
+        # Poll Tkinter event loop from Qt (~60fps)
+        # Drains the thread-safe callback queue THEN calls root.update()
+        # so all Tkinter operations happen in the correct event loop context.
+        _tk_poll_guard = [False]  # Mutable container for re-entrancy guard
+
+        def _safe_tk_poll():
+            if _tk_poll_guard[0]:
+                return  # Re-entrancy guard
+            _tk_poll_guard[0] = True
+            try:
+                # Drain callback queue (thread-safe → main thread)
+                for _ in range(50):
+                    try:
+                        cb = app._tk_callback_queue.get_nowait()
+                        cb()
+                    except queue.Empty:
+                        break
+                    except Exception as e:
+                        logging.error(f"Queued callback error: {e}")
+                # Drive Tkinter event loop
+                root.update()
+            except Exception:
+                pass  # Tk window destroyed during update cycle — non-fatal
+            finally:
+                _tk_poll_guard[0] = False
+
+        tk_poll_timer = QTimer()
+        tk_poll_timer.timeout.connect(_safe_tk_poll)
+        tk_poll_timer.start(16)
+
+        sys.exit(qt_app.exec())
     except Exception as e:
         error_msg = crash_handler.log_error(
             type(e), e, e.__traceback__, "Main Application Startup"

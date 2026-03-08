@@ -13,6 +13,7 @@ from PIL import Image, ImageTk
 import cProfile
 import pstats
 import io
+from resource_utils import resource_path
 
 
 class PerformanceAnalyzer:
@@ -131,10 +132,10 @@ class PerformanceAnalyzer:
         # Load icons for blinking
         try:
             self.blink_icon = ImageTk.PhotoImage(
-                Image.open("assets/red_icon.png").resize((20, 20))
+                Image.open(resource_path("assets/red_icon.png")).resize((20, 20))
             )
             self.black_icon = ImageTk.PhotoImage(
-                Image.open("assets/black_icon.png").resize((20, 20))
+                Image.open(resource_path("assets/black_icon.png")).resize((20, 20))
             )
         except:
             # Create simple colored squares if icons not found

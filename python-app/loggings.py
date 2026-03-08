@@ -42,7 +42,6 @@ class LoggingManager:
         """บันทึกข้อมูลสำคัญตอนเริ่มต้นระบบ"""
         current_model = self.settings.get_displayed_model()
         screen_size = self.settings.get("screen_size", "2560x1440")
-        # OCR removed - no GPU setting needed
 
         startup_info = [
             "=== MagicBabel System Started ===",
@@ -75,7 +74,6 @@ class LoggingManager:
     def log_system_status(self):
         """บันทึกสถานะระบบ"""
         memory_usage = psutil.Process().memory_info().rss / 1024 / 1024  # MB
-        # OCR removed - no GPU usage tracking needed
 
         status_lines = [
             "=== System Status ===",
@@ -137,7 +135,7 @@ class LoggingManager:
             "=== MagicBabel System Started ===",
             "Model: ",
             "Screen: ",
-            "Mode: ",  # OCR removed - changed to "Mode: Text Hook"
+            "Mode: ",
             "===============================",
             "MagicBabel application started and ready",
         ]
@@ -146,11 +144,6 @@ class LoggingManager:
         if any(msg in info_message for msg in allowed_messages):
             logging.info(info_message.replace("INFO:root:", ""))
             return
-
-        # OCR removed - easyocr warning handler deleted
-        # if "Using CPU" in info_message:
-        #     logging.warning("OCR running on CPU mode")
-        #     return
 
         # กรณี NPC.json โหลดสำเร็จ แสดงครั้งเดียว
         if "Loaded NPC.json successfully" in info_message and not hasattr(
@@ -184,7 +177,6 @@ class LoggingManager:
 
         # สถานะการทำงานต่อเนื่อง
         continuous_states = {
-            # OCR removed - "OCR scanning" state deleted
             "Waiting for text": {
                 "icon": "⌛",
                 "variants": ["waiting.", "waiting..", "waiting..."],
@@ -210,7 +202,7 @@ class LoggingManager:
                 return
 
         # ข้อความที่ไม่ต้องแสดงซ้ำ
-        skip_messages = {"Processing image"}  # OCR removed - "OCR completed" deleted
+        skip_messages = {"Processing image"}
 
         if message in skip_messages:
             if hasattr(self, "_last_message") and self._last_message == message:

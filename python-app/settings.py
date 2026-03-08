@@ -8,6 +8,7 @@ from appearance import appearance_manager
 from advance_ui import AdvanceUI
 from simplified_hotkey_ui import SimplifiedHotkeyUI  # import จากไฟล์ใหม่
 from font_manager import FontUI, initialize_font_manager
+from version import __version__
 
 
 def is_valid_hotkey(hotkey):
@@ -42,6 +43,18 @@ def is_valid_hotkey(hotkey):
 
 class Settings:
     VALID_MODELS = {
+        "gemini-2.5-flash": {
+            "display_name": "gemini-2.5-flash",
+            "type": "gemini",
+        },
+        "gemini-2.5-flash-lite": {
+            "display_name": "gemini-2.5-flash-lite",
+            "type": "gemini",
+        },
+        "gemini-2.5-pro": {
+            "display_name": "gemini-2.5-pro",
+            "type": "gemini",
+        },
         "gemini-2.0-flash": {
             "display_name": "gemini-2.0-flash",
             "type": "gemini",
@@ -50,15 +63,14 @@ class Settings:
 
     DEFAULT_API_PARAMETERS = {
         # Main parameters for the model
-        "model": "gemini-2.0-flash",
-        "displayed_model": "gemini-2.0-flash",
+        "model": "gemini-2.5-flash",
+        "displayed_model": "gemini-2.5-flash",
         "max_tokens": 500,
         "temperature": 0.8,
         "top_p": 0.9,
         "role_mode": "rpg_general",
         # Language mode settings
         "language_mode": "en_to_th",  # Current: en→th, Future: "zh_tw_to_en_th"
-        # OCR removed - ocr_settings section deleted (10 lines)
         # Translation settings
         "translation_settings": {
             "source_languages": [
@@ -87,7 +99,7 @@ class Settings:
             "api_parameters": self.DEFAULT_API_PARAMETERS.copy(),
             "transparency": 0.8,
             "font_size": 24,
-            "font": "IBM Plex Sans Thai Medium.ttf",  # ชื่อไฟล์ฟอนต์เริ่มต้น
+            "font": "Anuphan",  # ฟอนต์เริ่มต้น (bundled)
             "line_spacing": -50,  # ค่า default สำหรับ line spacing
             "text_transparency": 0.8,  # ค่า default สำหรับ text transparency
             "width": 960,
@@ -105,13 +117,29 @@ class Settings:
             "enable_translation_warmup": True,  # เปิด/ปิด warmup injection เพื่อ pre-initialize Gemini API
             "warmup_delay": 0.8,  # หน่วงเวลาก่อน warmup injection (วินาที)
             "enable_battle_chat_mode": True,  # เปิด Battle Chat Mode สำหรับ ChatType 68
+            "enable_conversation_logging": False,  # บันทึกบทสนทนา (dev/debug)
             "tui_positions": {  # จำตำแหน่ง TUI แยกตามโหมด (Dialog, Battle, Cutscene)
                 "dialog": {"x": None, "y": None},
                 "battle": {"x": None, "y": None},
                 "cutscene": {"x": None, "y": None}
             },
-            "bg_color": appearance_manager.bg_color,  # ดึงจาก appearance_manager
-            "bg_alpha": 0.96,  # ค่า transparency เริ่มต้น (96% ทึบ)
+            "tui_sizes": {  # จำขนาด TUI แยกตามโหมด
+                "dialog": {"width": 960, "height": 240},
+                "battle": {"width": None, "height": None},  # Auto-calculate
+                "cutscene": {"width": None, "height": None}  # Auto-calculate
+            },
+            "tui_colors": {  # จำสีพื้นหลัง TUI แยกตามโหมด
+                "dialog": appearance_manager.bg_color,
+                "battle": appearance_manager.bg_color,
+                "cutscene": appearance_manager.bg_color
+            },
+            "tui_alphas": {  # จำความโปร่งใส TUI แยกตามโหมด
+                "dialog": 0.97,
+                "battle": 0.97,
+                "cutscene": 0.97
+            },
+            "bg_color": appearance_manager.bg_color,  # ดึงจาก appearance_manager (legacy)
+            "bg_alpha": 0.97,  # ค่า transparency เริ่มต้น (97% เกือบทึบ)
             "bg_swatch_mode": 1,  # ค่า default swatch mode
             "bg_swatch_transparency": 0.97,  # ค่า default swatch transparency (97%)
             "translate_areas": {  # พิกัดเริ่มต้นเป็น 0
@@ -123,7 +151,6 @@ class Settings:
             "current_preset": 1,  # preset เริ่มต้น
             "last_manual_preset_selection_time": 0,  # *** เพิ่ม field นี้ ***
             "display_scale": None,
-            # OCR removed - use_gpu_for_ocr setting deleted
             "screen_size": "2560x1440",  # ขนาดหน้าจออ้างอิงเริ่มต้น
             "shortcuts": {  # ค่า default shortcuts
                 "toggle_ui": "alt+l",
@@ -255,7 +282,7 @@ class Settings:
             self.settings = {
                 "transparency": 0.8,
                 "font_size": 24,
-                "font": "IBM Plex Sans Thai Medium.ttf",
+                "font": "Anuphan",
                 "width": 960,
                 "height": 240,
                     "enable_previous_dialog": True,  # เปิดใช้งาน Previous Dialog ด้วย right-click
@@ -273,7 +300,6 @@ class Settings:
                     "temperature": 0.7,
                     "top_p": 0.9,
                 },
-                # OCR removed - use_gpu_for_ocr setting deleted
                 "shortcuts": {"toggle_ui": "alt+h", "start_stop_translate": "f9"},
                 "logs_ui": {
                     "width": 480,
@@ -824,11 +850,12 @@ class Settings:
     def get_logs_settings(self):
         """Return the settings for the logs UI."""
         return self.settings.get(
-            "logs_ui", {"width": 480, "height": 320, "font_size": 16, "visible": True}
+            "logs_ui", {"width": 480, "height": 320, "font_size": 16, "font_family": "Anuphan", "visible": True}
         )
 
     def set_logs_settings(
-        self, width=None, height=None, font_size=None, visible=None, x=None, y=None
+        self, width=None, height=None, font_size=None, font_family=None, visible=None, x=None, y=None,
+        transparency_mode=None, logs_reverse_mode=None
     ):
         """Update the logs UI settings."""
         if "logs_ui" not in self.settings:
@@ -840,12 +867,18 @@ class Settings:
             self.settings["logs_ui"]["height"] = height
         if font_size is not None:
             self.settings["logs_ui"]["font_size"] = font_size
+        if font_family is not None:
+            self.settings["logs_ui"]["font_family"] = font_family
         if visible is not None:
             self.settings["logs_ui"]["visible"] = visible
         if x is not None:
             self.settings["logs_ui"]["x"] = x
         if y is not None:
             self.settings["logs_ui"]["y"] = y
+        if transparency_mode is not None:
+            self.settings["logs_ui"]["transparency_mode"] = transparency_mode
+        if logs_reverse_mode is not None:
+            self.settings["logs_reverse_mode"] = logs_reverse_mode
 
         self.save_settings()
 
@@ -869,11 +902,6 @@ class Settings:
     def set_screen_size(self, size):
         self.settings["screen_size"] = size
         self.save_settings()
-
-    # OCR removed - set_gpu_for_ocr() method deleted
-    # def set_gpu_for_ocr(self, use_gpu):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
 
     def set_current_area(self, area):
         self.settings["current_area"] = area
@@ -1037,7 +1065,6 @@ class SettingsUI:
         self.main_app = main_app  # เก็บ reference ของ MagicBabelApp
         self.settings_window = None
         self.settings_visible = False
-        # OCR removed - ocr_toggle_callback attribute deleted
         self.on_close_callback = None
         self.create_settings_window()
         self.advance_ui = None
@@ -1098,14 +1125,9 @@ class SettingsUI:
         # เพิ่ม protocol handler
         self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings)
 
-    # OCR removed - set_ocr_toggle_callback() method deleted
-    # def set_ocr_toggle_callback(self, callback):
-    #     """OCR removed - project is 100% text hook"""
-    #     pass
-
     def open_settings(self, parent_x, parent_y, parent_width):
         """Open settings window at specified position relative to parent"""
-        x = parent_x + parent_width + 20
+        x = parent_x + parent_width + 10
         y = parent_y
         self.settings_window.geometry(f"+{x}+{y}")
 
@@ -1116,7 +1138,7 @@ class SettingsUI:
         # ตั้งค่า variables สำหรับ toggle switches (เฉพาะที่ยังคงมี UI)
         self.auto_hide_var.set(self.settings.get("enable_wasd_auto_hide", False))
         self.cpu_monitoring_var.set(self.settings.get("enable_cpu_monitoring", True))
-        self.tui_auto_show_var.set(True)  # Always True for TUI Auto Show
+        self.tui_auto_show_var.set(self.settings.get("enable_tui_auto_show", True))
         self.battle_chat_mode_var.set(self.settings.get("enable_battle_chat_mode", True))  # ⚔️ Battle Chat Mode
 
         # Track initial values for change detection
@@ -1124,7 +1146,7 @@ class SettingsUI:
             "auto_hide": self.auto_hide_var.get(),
             "cpu_monitoring": self.cpu_monitoring_var.get(),
             "tui_auto_show": self.tui_auto_show_var.get(),
-            "battle_chat_mode": self.battle_chat_mode_var.get()  # ⚔️ Battle Chat Mode
+            "battle_chat_mode": self.battle_chat_mode_var.get(),  # ⚔️ Battle Chat Mode
         }
         self.has_changes = False
 
@@ -1299,7 +1321,6 @@ class SettingsUI:
             features_section,
             "Auto Show TUI (แสดง TUI อัตโนมัติเมื่อพบข้อความ)",
             self.tui_auto_show_var,
-            always_on=True
         )
 
         # ====== SECTION 3: ADVANCED SETTINGS ======
@@ -1465,7 +1486,7 @@ class SettingsUI:
         version_frame.pack(fill=tk.X, pady=5)
         self.version_label = tk.Label(
             version_frame,
-            text="MagicBabel Dalamud v1.5.18 build 11012026 by iarcanar",
+            text=f"MagicBabel Dalamud v{__version__} by iarcanar",
             bg=appearance_manager.bg_color,
             fg="#AAAAAA",
             font=("IBM Plex Sans Thai Medium", 8),
@@ -2198,8 +2219,7 @@ class SettingsUI:
                     enable_cpu_monitoring = bool(
                         self.cpu_monitoring_var.get()
                     )  # CPU Monitoring
-                    # TUI Auto Show is always enabled
-                    enable_tui_auto_show = True  # Always True, cannot be disabled
+                    enable_tui_auto_show = bool(self.tui_auto_show_var.get())
 
                     # บันทึกค่าลง settings เฉพาะที่มี UI (ไม่บันทึกไฟล์ทันทีเพื่อป้องกัน duplicate save)
                     self.settings.set("enable_wasd_auto_hide", enable_wasd_auto_hide, save_immediately=False)
@@ -2309,7 +2329,7 @@ class SettingsUI:
             "auto_hide": self.auto_hide_var.get(),
             "cpu_monitoring": self.cpu_monitoring_var.get(),
             "tui_auto_show": self.tui_auto_show_var.get(),
-            "battle_chat_mode": self.battle_chat_mode_var.get()  # ⚔️ Battle Chat Mode
+            "battle_chat_mode": self.battle_chat_mode_var.get(),  # ⚔️ Battle Chat Mode
         }
 
         # Check if any value has changed

@@ -5,6 +5,7 @@ BottomBar - Manages bottom toolbar
 import tkinter as tk
 from PIL import Image, ImageTk
 from typing import Callable, Dict, Optional
+from resource_utils import resource_path
 
 
 class BottomBar:
@@ -170,7 +171,7 @@ class BottomBar:
     def _create_settings_button(self, parent: tk.Frame, bg_color: str):
         """Create settings icon button"""
         try:
-            setting_img = Image.open("assets/setting.png")
+            setting_img = Image.open(resource_path("assets/setting.png"))
             setting_img.thumbnail((20, 20), Image.Resampling.LANCZOS)
             self._settings_icon = ImageTk.PhotoImage(setting_img)
 
