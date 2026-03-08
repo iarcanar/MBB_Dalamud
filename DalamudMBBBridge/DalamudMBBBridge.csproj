@@ -4,7 +4,15 @@
     <Authors>iarcanar</Authors>
     <Company>iarcanar</Company>
     <Version>1.7.8</Version>
-    <Description>Real-time Thai translation for FFXIV via Gemini AI</Description>
+    <Description>Hooks into FFXIV text system and translates dialogue, cutscenes, and battle text into Thai in real-time using Gemini AI. Features 290+ character database, context-aware translation, transparent overlay (TUI), and chat-style log (LOG). Requires the MBB companion app.
+
+Commands:
+/mbb — Open config panel
+/mbb launch — Start MBB application
+/mbb status — Show connection status
+/mbb help — List commands
+
+Tip: Add these commands to FFXIV Macro Editor for quick access from your hotbar.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <PackageProjectUrl>https://github.com/iarcanar/MBB_Dalamud</PackageProjectUrl>
   </PropertyGroup>

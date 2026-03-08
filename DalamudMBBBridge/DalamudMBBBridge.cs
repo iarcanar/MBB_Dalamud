@@ -79,6 +79,7 @@ namespace DalamudMBBBridge
 
                 PluginInterface.UiBuilder.Draw += windowSystem.Draw;
                 PluginInterface.UiBuilder.OpenConfigUi += OpenConfigUi;
+                PluginInterface.UiBuilder.OpenMainUi += OpenConfigUi;
 
                 // Register command
                 CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
@@ -1730,6 +1731,7 @@ namespace DalamudMBBBridge
                 // Dispose UI resources
                 PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
                 PluginInterface.UiBuilder.OpenConfigUi -= OpenConfigUi;
+                PluginInterface.UiBuilder.OpenMainUi -= OpenConfigUi;
 
                 windowSystem.RemoveAllWindows();
                 configWindow?.Dispose();
