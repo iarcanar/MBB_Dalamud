@@ -34,7 +34,7 @@ This project is migrated from:
 ```
 C:\MBB_Dalamud/
 ├── python-app/           # Python translation application
-├── dalamud-plugin/       # C# Dalamud plugin
+├── DalamudMBBBridge/     # C# Dalamud plugin
 ├── fonts/                # Font assets
 ├── MBB/                  # Additional resources
 └── claude.md            # This file

@@ -43,9 +43,10 @@ _QSS = f"""
     }}
     QWidget#api_header {{
         background: {_BG_HEADER};
-        border-top-left-radius: 10px;
-        border-top-right-radius: 10px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
         border-bottom: 1px solid #1f1f1f;
+        margin: 0px;
     }}
     QLabel#api_title {{
         color: {_TEXT};
@@ -241,7 +242,7 @@ class APIKeyDialog(QDialog):
         self.bg.setGraphicsEffect(shadow)
 
         root = QVBoxLayout(self.bg)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(2, 2, 2, 2)
         root.setSpacing(0)
 
         root.addWidget(self._make_header())

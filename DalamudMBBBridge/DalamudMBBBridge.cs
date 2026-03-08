@@ -25,7 +25,8 @@ namespace DalamudMBBBridge
 {
     public sealed class DalamudMBBBridge : IDalamudPlugin
     {
-        public string Name => "Magicite Babel Bridge v1.7.8 by iarcanar";
+        public static string PluginVersion => typeof(DalamudMBBBridge).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        public string Name => $"Magicite Babel Bridge v{PluginVersion} by iarcanar";
         private const string CommandName = "/mbb";
 
         [PluginService] public static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
@@ -143,7 +144,7 @@ namespace DalamudMBBBridge
                 // Start named pipe server
                 Task.Run(StartPipeServer);
 
-                Log.Info("MBB Dalamud Bridge v1.4.10.4 initialized - Fixed icon display with images folder structure");
+                Log.Info($"MBB Dalamud Bridge v{PluginVersion} initialized");
             }
             catch (Exception ex)
             {

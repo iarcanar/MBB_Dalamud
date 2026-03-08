@@ -2,10 +2,10 @@
 MBB Version Bump Script — อัปเดตเลขเวอร์ชันทุกจุดในโปรเจกต์พร้อมกัน
 
 Usage:
-    python bump_version.py 1.7.5
-    python bump_version.py patch      # 1.7.4 → 1.7.5
-    python bump_version.py minor      # 1.7.4 → 1.8.0
-    python bump_version.py major      # 1.7.4 → 2.0.0
+    python bump_version.py 1.8.0
+    python bump_version.py patch      # 1.7.8 → 1.7.9
+    python bump_version.py minor      # 1.7.8 → 1.8.0
+    python bump_version.py major      # 1.7.8 → 2.0.0
     python bump_version.py            # แสดงเวอร์ชันปัจจุบัน
 """
 import re
@@ -19,47 +19,61 @@ VERSION_FILE = os.path.join(PROJECT_ROOT, "python-app", "version.py")
 
 # ── All files that contain version strings ──
 VERSION_LOCATIONS = [
+    # Python source of truth
     {
         "file": "python-app/version.py",
         "patterns": [
             (r'__version__\s*=\s*"[^"]*"', '__version__ = "{version}"'),
         ],
     },
+    # C# plugin manifest
     {
-        "file": "dalamud-plugin/DalamudMBBBridge/DalamudMBBBridge.json",
+        "file": "DalamudMBBBridge/DalamudMBBBridge.json",
         "patterns": [
             (r'"Name":\s*"MBB Dalamud Bridge v[^"]*"', '"Name": "MBB Dalamud Bridge v{version}"'),
             (r'"AssemblyVersion":\s*"[^"]*"', '"AssemblyVersion": "{version}"'),
         ],
     },
+    # C# project version
     {
-        "file": "dalamud-plugin/DalamudMBBBridge/DalamudMBBBridge.csproj",
+        "file": "DalamudMBBBridge/DalamudMBBBridge.csproj",
         "patterns": [
             (r"<Version>[^<]*</Version>", "<Version>{version}</Version>"),
         ],
     },
+    # Dalamud custom repo manifest
     {
-        "file": "dalamud-plugin/DalamudMBBBridge/DalamudMBBBridge.cs",
+        "file": "pluginmaster.json",
         "patterns": [
-            (
-                r'public string Name => "Magicite Babel Bridge v[^"]*"',
-                'public string Name => "Magicite Babel Bridge v{version} by iarcanar"',
-            ),
+            (r'"AssemblyVersion":\s*"[^"]*"', '"AssemblyVersion": "{version}"'),
         ],
     },
+    # Dalamud repo-structure manifest
     {
-        "file": "dalamud-plugin/DalamudMBBBridge/MBBConfigWindow.cs",
+        "file": "repo-structure/pluginmaster.json",
         "patterns": [
-            (
-                r': base\("Magicite Babel Bridge v[^#]*###MBBBridge"\)',
-                ': base("Magicite Babel Bridge v{version}###MBBBridge")',
-            ),
+            (r'"AssemblyVersion":\s*"[^"]*"', '"AssemblyVersion": "{version}"'),
         ],
     },
+    # PyInstaller spec
     {
         "file": "python-app/mbb.spec",
         "patterns": [
             (r"# Version: [\d.]+", "# Version: {version}"),
+        ],
+    },
+    # README badge
+    {
+        "file": "README.md",
+        "patterns": [
+            (r"\*\*Version:\*\* \d+\.\d+\.\d+", "**Version:** {version}"),
+        ],
+    },
+    # claude.md header
+    {
+        "file": "claude.md",
+        "patterns": [
+            (r"\*\*Version:\*\* \d+\.\d+\.\d+", "**Version:** {version}"),
         ],
     },
 ]
@@ -147,7 +161,10 @@ def main():
             changed += 1
 
     print(f"\nDone! Updated {changed} file(s) to v{new_version}")
-    print(f"Next: rebuild C# plugin with 'dotnet build -c Release'")
+    print(f"\nNext steps:")
+    print(f"  1. cd DalamudMBBBridge && dotnet build -c Release")
+    print(f"  2. Test in game")
+    print(f"  3. git add -A && git commit")
 
 
 if __name__ == "__main__":

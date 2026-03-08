@@ -1514,12 +1514,9 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- IMAGE MODAL                                        -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <div id="imageModal" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden">
-        <div class="relative max-w-5xl max-h-screen p-2">
+    <div id="imageModal" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden" style="cursor:zoom-out;">
+        <div class="max-w-5xl max-h-screen p-2" style="pointer-events:none;">
             <img id="modalImage" src="" alt="Zoomed Image" class="max-h-[90vh] max-w-full rounded-lg">
-            <button id="closeModal" class="absolute top-4 right-4 text-white bg-indigo-600 rounded-full w-8 h-8 flex items-center justify-center hover:bg-indigo-700 transition">
-                <i data-lucide="x" style="width:16px;height:16px"></i>
-            </button>
         </div>
     </div>
 
@@ -1605,8 +1602,7 @@
         const openModal = src => { modalImg.src=src; modal.classList.remove('hidden'); document.body.style.overflow='hidden'; };
         const closeModal = () => { modal.classList.add('hidden'); document.body.style.overflow=''; };
         document.querySelectorAll('.zoomable-image').forEach(el=>el.addEventListener('click',()=>openModal(el.src)));
-        document.getElementById('closeModal').addEventListener('click',closeModal);
-        modal.addEventListener('click',e=>{if(e.target===modal) closeModal();});
+        modal.addEventListener('click',closeModal);
         document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.classList.contains('hidden')) closeModal();});
 
         // ── Discord Copy ──

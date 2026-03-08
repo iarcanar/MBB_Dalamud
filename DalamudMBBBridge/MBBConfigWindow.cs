@@ -12,7 +12,7 @@ namespace DalamudMBBBridge
         private string currentMbbPath = "";
         private bool showPathNotFoundWarning = false;
 
-        public MBBConfigWindow(DalamudMBBBridge plugin) : base("Magicite Babel Bridge v1.7.5###MBBBridge")
+        public MBBConfigWindow(DalamudMBBBridge plugin) : base($"Magicite Babel Bridge v{DalamudMBBBridge.PluginVersion}###MBBBridge")
         {
             this.SizeConstraints = new WindowSizeConstraints
             {

@@ -5,7 +5,7 @@
     "Punchline": "Real-time Thai translation for FFXIV",
     "Description": "แปลภาษา FFXIV เป็นไทยแบบ real-time ผ่าน Gemini AI - Real-time FFXIV translation with advanced character database and Netflix-quality localization. Features elegant UI with auto-show/hide, full customization (size, colors), and seamless gameplay integration.",
     "InternalName": "DalamudMBBBridge",
-    "AssemblyVersion": "1.0.0",
+    "AssemblyVersion": "1.7.8",
     "RepoUrl": "https://github.com/iarcanar/MBB_Dalamud",
     "ApplicableVersion": "any",
     "Tags": [
@@ -16,7 +16,7 @@
       "Thai",
       "Utility"
     ],
-    "DalamudApiLevel": 13,
+    "DalamudApiLevel": 14,
     "DownloadLinkInstall": "https://raw.githubusercontent.com/iarcanar/MBB_Dalamud/main/plugins/DalamudMBBBridge/latest.zip",
     "DownloadLinkUpdate": "https://raw.githubusercontent.com/iarcanar/MBB_Dalamud/main/plugins/DalamudMBBBridge/latest.zip",
     "DownloadLinkTesting": "https://raw.githubusercontent.com/iarcanar/MBB_Dalamud/main/plugins/DalamudMBBBridge/latest.zip",

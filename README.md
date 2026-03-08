@@ -31,12 +31,11 @@ FFXIV Game  ──>  Dalamud Plugin (C#)  ──>  Named Pipe  ──>  Python A
 ```
 MBB_Dalamud/
 |
-|-- dalamud-plugin/                   C# Dalamud Plugin
-|   +-- DalamudMBBBridge/
-|       |-- DalamudMBBBridge.cs       Main plugin: text hook, zone detection, IPC
-|       |-- MBBConfigWindow.cs        Plugin config UI (ImGui)
-|       |-- DalamudMBBBridge.csproj   .NET project (Dalamud.NET.Sdk)
-|       +-- DalamudMBBBridge.json     Plugin manifest
+|-- DalamudMBBBridge/                 C# Dalamud Plugin
+|   |-- DalamudMBBBridge.cs           Main plugin: text hook, zone detection, IPC
+|   |-- MBBConfigWindow.cs            Plugin config UI (ImGui)
+|   |-- DalamudMBBBridge.csproj       .NET project (Dalamud.NET.Sdk)
+|   +-- DalamudMBBBridge.json         Plugin manifest
 |
 |-- python-app/                       Python Translation Application
 |   |-- MBB.py                        Main application entry point
@@ -67,7 +66,7 @@ MBB_Dalamud/
 |   |-- fonts/                        Bundled fonts (Anuphan, FC Minimal)
 |   +-- assets/                       Icons and images
 |
-|-- website/                          Project website (GitHub Pages)
+|-- docs/                             Project website (GitHub Pages)
 |   |-- index.html                    Single-file website
 |   +-- screenshots/                  UI screenshots
 |
@@ -132,7 +131,7 @@ python MBB.py
 ### Dalamud Plugin (C#)
 
 ```bash
-cd dalamud-plugin/DalamudMBBBridge
+cd DalamudMBBBridge
 dotnet build
 ```
 
