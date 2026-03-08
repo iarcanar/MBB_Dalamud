@@ -83,7 +83,7 @@ namespace DalamudMBBBridge
                 // Register command
                 CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
                 {
-                    HelpMessage = "Show MBB Bridge status and controls"
+                    HelpMessage = "Open MBB config panel. Subcommands: launch, status, help"
                 });
 
                 // FIXED: Focused approach to eliminate handler conflicts
@@ -1406,29 +1406,17 @@ namespace DalamudMBBBridge
         private void ShowStatus()
         {
             var mbbRunning = CheckMBBProcess();
-            var connectionStatus = isConnected ? "🟢 Connected" : "🟡 Waiting";
-            var mbbStatus = mbbRunning ? "🟢 Running" : "🔴 Not Running";
+            var bridge = isConnected ? "Connected" : "Waiting";
+            var app = mbbRunning ? "Running" : "Not Running";
 
-            ChatGui.Print($"[MBB Bridge] Bridge: {connectionStatus} | MBB: {mbbStatus} | Queue: {messageQueue.Count}");
-
-            if (!isConnected)
-            {
-                ChatGui.Print("[MBB Bridge] Waiting for MBB connection...");
-                ChatGui.Print("[MBB Bridge] Make sure MBB is running with Dalamud Bridge Mode enabled");
-            }
-            else
-            {
-                ChatGui.Print("[MBB Bridge] Bridge is active with IMMEDIATE Talk dialog capture!");
-            }
+            ChatGui.Print($"[MBB] Bridge: {bridge} | App: {app} | Queue: {messageQueue.Count}");
         }
 
         private void ShowHelp()
         {
-            ChatGui.Print("🌉 MBB Dalamud Bridge Commands:");
-            ChatGui.Print("/mbb - Show configuration panel");
-            ChatGui.Print("/mbb status - Show quick status");
-            ChatGui.Print("/mbb launch - Launch MBB application");
-            ChatGui.Print("/mbb help - Show this help");
+            ChatGui.Print("[MBB] /mbb — Open config panel");
+            ChatGui.Print("[MBB] /mbb launch — Start MBB application");
+            ChatGui.Print("[MBB] /mbb status — Connection status");
         }
 
         public bool CheckMBBProcess()
