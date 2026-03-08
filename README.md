@@ -1,12 +1,12 @@
 # Magicite Babel — Dalamud Edition
 
-![MBB Logo](images/icon.png)
+[![MBB Banner](https://res.cloudinary.com/docoo51xb/image/upload/v1772939144/banner_site178_mtnxjd.png)](https://iarcanar.github.io/MBB_Dalamud/)
 
 **Real-time Thai translation overlay for Final Fantasy XIV**
 
 MBB hooks into FFXIV's text system via [Dalamud](https://github.com/goatcorp/Dalamud) plugin and translates dialogue, cutscenes, and battle text into Thai in real-time using Google Gemini AI.
 
-> **Version:** 1.7.8 &nbsp;|&nbsp; **Build:** 04032026-01
+> **Version:** 1.7.8 &nbsp;|&nbsp; **Build:** 04032026-01 &nbsp;|&nbsp; [**Website**](https://iarcanar.github.io/MBB_Dalamud/)
 
 ---
 
