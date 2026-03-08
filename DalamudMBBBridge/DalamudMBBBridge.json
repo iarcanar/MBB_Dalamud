@@ -4,7 +4,7 @@
   "Punchline": "Real-time Thai translation for FFXIV via Gemini AI",
   "InternalName": "DalamudMBBBridge",
   "AssemblyVersion": "1.7.8",
-  "Description": "Hooks into FFXIV text system and translates dialogue, cutscenes, and battle text into Thai in real-time using Gemini AI. Features 290+ character database, context-aware translation, transparent overlay (TUI), and chat-style log (LOG). Requires the MBB companion app.",
+  "Description": "Hooks into FFXIV text system and translates dialogue, cutscenes, and battle text into Thai in real-time using Gemini AI. Features 290+ character database, context-aware translation, transparent overlay (TUI), and chat-style log (LOG). Requires the MBB companion app.\n\nCommands:\n/mbb — Open config panel\n/mbb launch — Start MBB application\n/mbb status — Show connection status\n/mbb help — List commands\n\nTip: Add these commands to FFXIV Macro Editor for quick access from your hotbar.",
   "ApplicableVersion": "any",
   "Tags": [
     "Translation",
