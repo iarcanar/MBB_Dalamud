@@ -1625,11 +1625,11 @@
                     </div>
                 </div>
 
-                <!-- Step 3 — Configure Path -->
+                <!-- Step 3 — Add Plugin DLL -->
                 <div class="accordion-step" data-step="3">
                     <div class="accordion-header" onclick="toggleStep(this)">
                         <span class="step-num">3</span>
-                        <span class="step-title">ตั้งค่า Path ใน Dalamud Plugin</span>
+                        <span class="step-title">เพิ่ม Plugin DLL ใน Dalamud</span>
                         <i data-lucide="chevron-down" class="step-chevron" style="width:20px;height:20px;stroke-width:2"></i>
                     </div>
                     <div class="accordion-body">
@@ -1637,36 +1637,35 @@
                             <div class="flex flex-col md:flex-row gap-6 items-start">
                                 <div class="flex-1">
                                     <p class="text-gray-300 mb-4 leading-relaxed">
-                                        เปิด Dalamud Plugin ของ MBB แล้วบอก path ที่ติดตั้ง MBB.exe ไว้
-                                        เพื่อให้ Plugin รู้ว่าจะเชื่อมต่อไปที่ไหน
+                                        เพิ่มไฟล์ <strong class="text-white">DLL</strong> ของ Plugin เข้า Dalamud เพื่อให้เกมโหลด MBB Bridge ตอนเริ่มเกม
                                     </p>
                                     <ol class="space-y-2.5 mb-4">
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">1</span>
-                                            <span class="text-gray-300 text-sm">เปิดเกม → กด <kbd class="bg-slate-700 text-cyan-300 rounded px-1.5 py-0.5 text-xs font-mono">/xlplugins</kbd> หรือ Dalamud Plugin List</span>
+                                            <span class="text-gray-300 text-sm">เปิดเกม → เปิด <strong class="text-white">Dalamud Settings</strong></span>
                                         </li>
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">2</span>
-                                            <span class="text-gray-300 text-sm">ค้นหา <strong class="text-white">MBB Dalamud</strong> → คลิก ⚙ Settings</span>
+                                            <span class="text-gray-300 text-sm">ไปที่แท็บ <strong class="text-white">Experimental</strong></span>
                                         </li>
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">3</span>
-                                            <span class="text-gray-300 text-sm">ช่อง <strong class="text-white">MBB App Path</strong> → วาง path ไปยัง <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">MBB.exe</code></span>
+                                            <span class="text-gray-300 text-sm">ที่หัวข้อ <strong class="text-white">Dev Plugin Locations</strong> → กด <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">Select Dev Plugin DLL</code></span>
                                         </li>
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">4</span>
-                                            <span class="text-gray-300 text-sm">กด <strong class="text-emerald-400">Save</strong> → Plugin พร้อมเชื่อมต่อ</span>
+                                            <span class="text-gray-300 text-sm">เลือกไฟล์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">DalamudMBBBridge.dll</code> → Plugin จะปรากฏในรายการ</span>
                                         </li>
                                     </ol>
                                     <div class="bg-slate-900/80 rounded-lg p-3 font-mono text-xs text-cyan-300 break-all border border-white/[0.06]">
-                                        C:\Program Files\MBB\MBB.exe
+                                        C:\MBB_Dalamud\DalamudMBBBridge\bin\Release\DalamudMBBBridge.dll
                                     </div>
                                 </div>
                                 <div class="md:w-72 flex-shrink-0 space-y-3">
                                     <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772952047/dalamud01_gpqx6v.png"
-                                         alt="Dalamud Plugin List" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
+                                         alt="Dalamud Plugin List — MBB Bridge" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
                                     <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772952047/dalamud02_yajwup.png"
-                                         alt="Dalamud Plugin Path Settings" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
+                                         alt="Dalamud Settings — Dev Plugin DLL" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
                                 </div>
                             </div>
                         </div>
