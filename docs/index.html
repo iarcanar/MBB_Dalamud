@@ -817,6 +817,9 @@
             /* ── Hero ── */
             .hero-ui-img { max-width: 320px !important; }
 
+            /* ── Typography: readable on mobile ── */
+            .eyebrow { font-size: 0.62rem; letter-spacing: 0.15em; }
+
             /* ── Section titles ── */
             .section-title { margin-bottom: 1.8rem; }
             .section-title::after { width: 50px; }
@@ -829,7 +832,7 @@
             /* ── Secondary features: last card span full ── */
             .secondary-features-grid .card:last-child {
                 grid-column: 1 / -1;
-                max-width: 60%;
+                max-width: 75%;
                 margin: 0 auto;
             }
 
@@ -862,6 +865,16 @@
             /* ── UI Showcase: aura image constrain ── */
             .ui-showcase-aura { max-width: 260px; }
             .ui-showcase-aura img { max-height: 420px; width: auto !important; max-width: 100%; object-fit: contain; }
+
+            /* ── UI Showcase: section padding tighter ── */
+            .glass-panel > div[class*="p-6"] { padding: 1.25rem !important; }
+
+            /* ── UI Showcase: headings ── */
+            .glass-panel h3 { font-size: 1.35rem !important; }
+
+            /* ── UI Showcase: feature list tighter ── */
+            .glass-panel ul.space-y-3 { gap: 0.5rem; }
+            .glass-panel ul.space-y-3 > li { font-size: 0.82rem; }
 
             /* ── TUI image: ultra-wide — fit in container, no overflow ── */
             .tui-image-wrap {
@@ -916,6 +929,20 @@
 
             /* ── Carousel arrows always visible on touch ── */
             #galleryCarousel .carousel-arrow { opacity: 0.8; }
+        }
+
+        /* ── Small phone overrides (<380px) ── */
+        @media (max-width: 380px) {
+            .cinematic-banner { height: 160px; }
+            .cinematic-banner .banner-logo-group { width: 36%; max-width: 130px; }
+            .cinematic-banner .banner-version { font-size: 0.6rem; }
+            .eyebrow { font-size: 0.58rem; letter-spacing: 0.12em; }
+            .glass-panel h3 { font-size: 1.15rem !important; }
+            .bento-mobile-grid { grid-template-columns: 1fr !important; }
+            .secondary-features-grid { grid-template-columns: 1fr !important; }
+            .secondary-features-grid .card:last-child { max-width: 100%; }
+            .ui-compare-grid { grid-template-columns: 1fr !important; gap: 0.75rem !important; }
+            .ui-compare-divider { display: none; }
         }
 
         /* ── Tablet overrides (641-1023px) ── */
