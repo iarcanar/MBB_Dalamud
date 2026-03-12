@@ -863,16 +863,17 @@
             .ui-showcase-aura { max-width: 260px; }
             .ui-showcase-aura img { max-height: 420px; width: auto !important; max-width: 100%; object-fit: contain; }
 
-            /* ── TUI image: ultra-wide — allow overflow scroll ── */
+            /* ── TUI image: ultra-wide — fit in container, no overflow ── */
             .tui-image-wrap {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
+                overflow: hidden;
                 border-radius: 0.75rem;
+                background: rgba(10, 14, 26, 0.6);
+                padding: 0.5rem;
             }
             .tui-image-wrap img {
-                min-width: 540px;
-                width: 540px !important;
-                max-width: none !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
             }
 
             /* ── LOG image: very tall — constrain height ── */
@@ -920,7 +921,6 @@
         /* ── Tablet overrides (641-1023px) ── */
         @media (min-width: 641px) and (max-width: 1023px) {
             .ui-showcase-aura { max-width: 360px; }
-            .tui-image-wrap img { min-width: auto; width: 100% !important; }
         }
     </style>
 </head>
