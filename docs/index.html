@@ -476,25 +476,10 @@
         /* ── Image Modal ── */
         .image-container {
             position: relative; overflow: hidden; cursor: pointer;
-            transition: filter 0.4s ease;
+            transition: all 0.35s ease;
         }
-        .image-container:hover { filter: drop-shadow(0 0 18px rgba(99,102,241,0.35)); }
-        .zoomable-image { display: block; width: 100%; transition: filter 0.4s ease; }
-        .image-container:hover .zoomable-image { filter: brightness(1.07) saturate(1.1); }
-        /* cyber scan-line sweep */
-        .image-container::after {
-            content: '';
-            position: absolute; top: -110%; left: 0;
-            width: 100%; height: 55%;
-            background: linear-gradient(to bottom,
-                transparent 0%,
-                rgba(99,102,241,0.09) 35%,
-                rgba(139,92,246,0.06) 60%,
-                transparent 100%);
-            pointer-events: none;
-            transition: top 0.7s cubic-bezier(0.25,0.46,0.45,0.94);
-        }
-        .image-container:hover::after { top: 155%; }
+        .zoomable-image { display: block; width: 100%; transition: filter 0.35s ease; }
+        .image-container:hover .zoomable-image { filter: brightness(1.04); }
 
         /* ── Gallery Caption Badge ── */
         .gallery-badge {
@@ -527,11 +512,143 @@
             white-space: nowrap;
         }
         .group:hover .gallery-badge {
-            border-color: rgba(99, 102, 241, 0.55);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 16px rgba(99, 102, 241, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            border-color: rgba(129, 140, 248, 0.65);
+            background: rgba(15, 18, 35, 0.88);
+            box-shadow:
+                0 4px 20px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(99, 102, 241, 0.25),
+                0 0 40px rgba(99, 102, 241, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            animation: badge-shimmer 1.5s ease-in-out;
         }
         .group:hover .gallery-badge .badge-dot {
-            box-shadow: 0 0 12px rgba(129, 140, 248, 0.8);
+            background: #a5b4fc;
+            box-shadow: 0 0 14px rgba(165, 180, 252, 0.9);
+            animation: dot-pulse 1s ease-in-out infinite;
+        }
+        .group:hover .gallery-badge span {
+            color: #e0e7ff;
+        }
+        @keyframes badge-shimmer {
+            0%   { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 8px rgba(99,102,241,0.1), inset 0 1px 0 rgba(255,255,255,0.06); }
+            40%  { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 28px rgba(99,102,241,0.35), 0 0 50px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.12); }
+            100% { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(99,102,241,0.25), 0 0 40px rgba(99,102,241,0.1), inset 0 1px 0 rgba(255,255,255,0.1); }
+        }
+        @keyframes dot-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 14px rgba(165,180,252,0.9); }
+            50%      { transform: scale(1.4); box-shadow: 0 0 20px rgba(165,180,252,1); }
+        }
+
+        /* ── Gallery Carousel ── */
+        .gallery-carousel { position: relative; }
+        .carousel-slide {
+            display: none;
+            border-radius: 0.75rem;
+        }
+        .carousel-slide.active { display: block; }
+        .carousel-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: rgba(15, 18, 35, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(99,102,241,0.3);
+            color: #c7d2fe;
+            cursor: pointer;
+            opacity: 0; transition: opacity 0.25s ease, background 0.2s ease;
+            z-index: 3;
+        }
+        #galleryCarousel:hover .carousel-arrow { opacity: 1; }
+        .carousel-arrow:hover {
+            background: rgba(99,102,241,0.4);
+            border-color: rgba(99,102,241,0.6);
+        }
+        .carousel-prev { left: 10px; }
+        .carousel-next { right: 10px; }
+        .carousel-dots {
+            position: absolute; top: 12px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 6px; z-index: 3;
+        }
+        .carousel-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            border: none; cursor: pointer;
+            transition: all 0.25s ease; padding: 0;
+        }
+        .carousel-dot.active {
+            background: #818cf8;
+            box-shadow: 0 0 8px rgba(129,140,248,0.6);
+            transform: scale(1.25);
+        }
+
+        /* ── UI Compare Card ── */
+        .ui-compare-card {
+            background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.04) 100%);
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 1.25rem;
+            overflow: hidden;
+        }
+        .ui-compare-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 0.85rem 1.25rem;
+            border-bottom: 1px solid rgba(99,102,241,0.12);
+            font-size: 0.8rem; font-weight: 600;
+            color: #a5b4fc;
+            letter-spacing: 0.03em;
+        }
+        .ui-compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1px 1fr;
+            gap: 0;
+            padding: 1rem 1rem 0.5rem;
+            align-items: stretch;
+        }
+        .ui-compare-divider {
+            width: 1px;
+            background: linear-gradient(180deg, transparent 5%, rgba(129,140,248,0.45) 30%, rgba(129,140,248,0.45) 70%, transparent 95%);
+            align-self: stretch;
+        }
+        @media (max-width: 640px) {
+            .ui-compare-grid { padding: 0.6rem 0.6rem 0.4rem; }
+        }
+        .ui-compare-item { display: flex; flex-direction: column; align-items: center; }
+        .ui-compare-item img { border-radius: 0.5rem; }
+        .ui-compare-label {
+            display: flex; align-items: center; gap: 8px;
+            padding: 0.6rem 0.25rem 0;
+        }
+        .ui-compare-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%; flex-shrink: 0;
+        }
+        .ui-compare-name {
+            display: block;
+            font-size: 0.82rem; font-weight: 600;
+            color: #e0e7ff;
+        }
+        .ui-compare-desc {
+            display: block;
+            font-size: 0.7rem;
+            color: #6b7280;
+        }
+
+        /* ── UI Showcase Aura ── */
+        .ui-showcase-aura {
+            position: relative;
+            display: inline-block;
+            filter: drop-shadow(0 0 32px rgba(99,130,241,0.35)) drop-shadow(0 0 80px rgba(99,130,241,0.18));
+        }
+        .ui-showcase-aura::before {
+            content: '';
+            position: absolute;
+            inset: -12px;
+            border-radius: 2rem;
+            background: radial-gradient(ellipse at center, rgba(99,130,241,0.14) 0%, rgba(99,130,241,0.05) 50%, transparent 75%);
+            z-index: -1;
+            pointer-events: none;
         }
 
         /* ── Miqo'te wiggle ── */
@@ -691,6 +808,119 @@
         /* Hide custom cursor on mobile/touch — fallback auto */
         @media (hover: none) and (pointer: coarse) {
             *, *::before, *::after { cursor: auto !important; }
+        }
+
+        /* ══════════════════════════════════════════════════════ */
+        /* MOBILE RESPONSIVE OVERRIDES (max-width: 640px)        */
+        /* ══════════════════════════════════════════════════════ */
+        @media (max-width: 640px) {
+            /* ── Hero ── */
+            .hero-ui-img { max-width: 320px !important; }
+
+            /* ── Section titles ── */
+            .section-title { margin-bottom: 1.8rem; }
+            .section-title::after { width: 50px; }
+
+            /* ── Feature cards ── */
+            .card-primary-mobile { padding: 1.25rem !important; }
+            .card-primary-mobile h3 { font-size: 1.2rem !important; }
+            .card-primary-mobile p { font-size: 0.875rem !important; }
+
+            /* ── Secondary features: last card span full ── */
+            .secondary-features-grid .card:last-child {
+                grid-column: 1 / -1;
+                max-width: 60%;
+                margin: 0 auto;
+            }
+
+            /* ── Bento gallery: 2 cols on mobile (carousel stays full) ── */
+            .bento-mobile-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 0.5rem !important;
+            }
+            .bento-mobile-grid .bento-full-row {
+                grid-column: 1 / -1;
+            }
+            .bento-mobile-grid .gallery-badge {
+                padding: 4px 8px;
+                bottom: 6px; left: 6px;
+            }
+            .bento-mobile-grid .gallery-badge span {
+                font-size: 0.6rem;
+            }
+            .bento-mobile-grid .gallery-badge .badge-dot {
+                width: 4px; height: 4px;
+            }
+
+            /* ── UI Compare card on mobile ── */
+            .ui-compare-header { padding: 0.6rem 0.8rem; font-size: 0.7rem; }
+            .ui-compare-name { font-size: 0.72rem; }
+            .ui-compare-desc { font-size: 0.6rem; }
+            .ui-compare-label { padding: 0.4rem 0.15rem 0; gap: 5px; }
+            .ui-compare-dot { width: 6px; height: 6px; }
+
+            /* ── UI Showcase: aura image constrain ── */
+            .ui-showcase-aura { max-width: 260px; }
+            .ui-showcase-aura img { max-height: 420px; width: auto !important; max-width: 100%; object-fit: contain; }
+
+            /* ── TUI image: ultra-wide — allow overflow scroll ── */
+            .tui-image-wrap {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                border-radius: 0.75rem;
+            }
+            .tui-image-wrap img {
+                min-width: 540px;
+                width: 540px !important;
+                max-width: none !important;
+            }
+
+            /* ── LOG image: very tall — constrain height ── */
+            .log-image-wrap {
+                max-height: 480px;
+                overflow: hidden;
+                border-radius: 0.75rem;
+                position: relative;
+            }
+            .log-image-wrap img {
+                max-height: 480px;
+                width: auto !important;
+                max-width: 100%;
+                object-fit: contain;
+                margin: 0 auto;
+                display: block;
+            }
+
+            /* ── NPC Manager: heading smaller ── */
+            .npc-hero-heading { font-size: 1.5rem !important; }
+
+            /* ── Accordion: tighter on mobile ── */
+            .accordion-header { padding: 1rem 1rem; gap: 0.5rem; }
+            .accordion-header .step-num { width: 1.85rem; height: 1.85rem; font-size: 0.75rem; }
+            .accordion-header .step-title { font-size: 0.95rem; }
+            .accordion-content { padding: 0 1rem 1rem; }
+
+            /* ── Download section ── */
+            .download-cta-heading { font-size: 1.4rem !important; }
+            .download-cta-btn { font-size: 1rem !important; padding: 0.75rem 1.5rem !important; }
+            .download-card-inner { padding: 1rem !important; }
+
+            /* ── Legal / FAQ on mobile ── */
+            .legal-faq-text p,
+            .legal-faq-text li { font-size: 0.85rem; }
+
+            /* ── Nav jump buttons smaller ── */
+            .nav-jump { bottom: 16px; right: 14px; gap: 6px; }
+            .nav-jump-btn { width: 36px; height: 36px; }
+
+            /* ── Carousel arrows always visible on touch ── */
+            #galleryCarousel .carousel-arrow { opacity: 0.8; }
+        }
+
+        /* ── Tablet overrides (641-1023px) ── */
+        @media (min-width: 641px) and (max-width: 1023px) {
+            .ui-showcase-aura { max-width: 360px; }
+            .tui-image-wrap img { min-width: auto; width: 100% !important; }
         }
     </style>
 </head>
@@ -898,20 +1128,40 @@
             </p>
 
             <!-- Bento Grid -->
-            <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Large: span 2 cols -->
-                <div class="lg:col-span-2 image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/translation_01_ildhk5.png"
-                         alt="การแปลบทสนทนาแบบเรียลไทม์" class="zoomable-image w-full rounded-xl">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>แปลเรียลไทม์พร้อมชื่อผู้พูด</span></div>
+            <div class="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 bento-mobile-grid">
+                <!-- Large: span 2 cols — Screenshot Carousel -->
+                <div class="lg:col-span-2 bento-full-row rounded-xl overflow-hidden relative" id="galleryCarousel">
+                    <div class="gallery-carousel">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/translation_01_ildhk5.png"
+                             alt="Screenshot" class="carousel-slide active zoomable-image w-full rounded-xl">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284837/Screenshot_2026-03-12_094540_uryfhe.png"
+                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284834/Screenshot_2026-03-12_094254_iajydb.png"
+                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284834/Screenshot_2026-03-12_095605_s70a84.png"
+                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284833/Screenshot_2026-03-12_093141_nrcfig.png"
+                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                    </div>
+                    <!-- Nav arrows -->
+                    <button class="carousel-arrow carousel-prev" onclick="carouselNav(-1)" aria-label="Previous">
+                        <i data-lucide="chevron-left" style="width:20px;height:20px;stroke-width:2.5"></i>
+                    </button>
+                    <button class="carousel-arrow carousel-next" onclick="carouselNav(1)" aria-label="Next">
+                        <i data-lucide="chevron-right" style="width:20px;height:20px;stroke-width:2.5"></i>
+                    </button>
+                    <!-- Dots -->
+                    <div class="carousel-dots" id="carouselDots"></div>
+                    <div class="gallery-badge"><div class="badge-dot"></div><span>ภาพจากการเล่นจริง</span></div>
                 </div>
-                <div class="image-container rounded-xl overflow-hidden relative group">
+                <!-- Feature screenshots — first one fills height on desktop to match carousel -->
+                <div class="image-container rounded-xl overflow-hidden relative group lg:min-h-full">
                     <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/translation_08_yheik9.png"
-                         alt="การแปลบทสนทนา" class="zoomable-image w-full rounded-xl">
+                         alt="การแปลบทสนทนา" class="zoomable-image w-full lg:h-full rounded-xl lg:object-cover">
                     <div class="gallery-badge"><div class="badge-dot"></div><span>NPC Manager — รู้จักชื่อทุกตัว</span></div>
                 </div>
                 <div class="image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/Choice_01_zm6xxd.png"
+                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284804/choice_02_vjepgu.png"
                          alt="ตัวเลือกใน dialogue" class="zoomable-image w-full rounded-xl">
                     <div class="gallery-badge"><div class="badge-dot"></div><span>แปลตัวเลือก — ตัดสินใจได้มั่นใจ</span></div>
                 </div>
@@ -925,16 +1175,44 @@
                          alt="Wide-Context Translation" class="zoomable-image w-full rounded-xl">
                     <div class="gallery-badge"><div class="badge-dot"></div><span>Wide-Context — แปลสม่ำเสมอ</span></div>
                 </div>
-                <!-- Large: span 2 cols -->
-                <div class="lg:col-span-2 image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772801199/compare_mini_ui_rky4e9.png"
-                         alt="โหมด Mini UI" class="zoomable-image w-full rounded-xl">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>Mini Mode — ไม่รก เล่นเกมได้สบายตา</span></div>
-                </div>
-                <div class="image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772801199/compare_main_ui_f4xqk2.png"
-                         alt="Main UI in-game" class="zoomable-image w-full rounded-xl">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>Main UI — ควบคุมจากที่เดียว</span></div>
+            </div>
+
+            <!-- UI Compare — separated pair -->
+            <div class="max-w-6xl mx-auto mt-8">
+                <div class="ui-compare-card">
+                    <div class="ui-compare-header">
+                        <i data-lucide="layout-panel-left" class="text-indigo-400" style="width:18px;height:18px;stroke-width:1.8"></i>
+                        <span>เปรียบเทียบโหมดการแสดงผล</span>
+                    </div>
+                    <div class="ui-compare-grid">
+                        <div class="ui-compare-item group">
+                            <div class="image-container overflow-hidden relative">
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284442/main02_nlxkre.png"
+                                     alt="MBB Main UI" class="zoomable-image w-full">
+                            </div>
+                            <div class="ui-compare-label">
+                                <span class="ui-compare-dot" style="background:#818cf8;box-shadow:0 0 8px rgba(129,140,248,0.6);"></span>
+                                <div>
+                                    <span class="ui-compare-name">Main UI</span>
+                                    <span class="ui-compare-desc">ควบคุมทุกอย่างจากที่เดียว</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ui-compare-divider"></div>
+                        <div class="ui-compare-item group">
+                            <div class="image-container overflow-hidden relative">
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284442/mini_02_x5drz0.png"
+                                     alt="MBB Mini UI" class="zoomable-image w-full">
+                            </div>
+                            <div class="ui-compare-label">
+                                <span class="ui-compare-dot" style="background:#34d399;box-shadow:0 0 8px rgba(52,211,153,0.6);"></span>
+                                <div>
+                                    <span class="ui-compare-name">Mini UI</span>
+                                    <span class="ui-compare-desc">ไม่รก เล่นเกมได้สบายตา</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -951,18 +1229,18 @@
                 ออกแบบมาเพื่อผู้เล่น FFXIV ชาวไทยโดยเฉพาะ — ใช้งานง่าย ครบครัน ไม่รบกวนการเล่น
             </p>
             <!-- Primary Features — 3 large cards -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                <div class="card p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6">
+                <div class="card p-8 card-primary-mobile">
                     <div class="feature-icon hook"><i data-lucide="plug-zap"></i></div>
                     <h3 class="text-2xl font-bold mb-3 text-white">Text Hook แม่นยำ 100%</h3>
                     <p class="text-gray-300 text-base leading-relaxed">ดึงข้อความจาก FFXIV ผ่าน Dalamud Plugin โดยตรง ไม่ต้อง OCR ไม่มีการอ่านผิด รองรับทุก ChatType — บทสนทนา, คัตซีน, แบทเทิล</p>
                 </div>
-                <div class="card p-8">
+                <div class="card p-8 card-primary-mobile">
                     <div class="feature-icon npc"><i data-lucide="users"></i></div>
                     <h3 class="text-2xl font-bold mb-3 text-white">NPC Manager 290+</h3>
                     <p class="text-gray-300 text-base leading-relaxed">ฐานข้อมูลตัวละคร FFXIV ครบถ้วน — ชื่อ, เพศ, สรรพนาม, บุคลิก ทำให้ AI แปลได้ตรงคาแรกเตอร์ เหมือนซับไตเติลมืออาชีพ</p>
                 </div>
-                <div class="card p-8">
+                <div class="card p-8 card-primary-mobile">
                     <div class="feature-icon context"><i data-lucide="brain"></i></div>
                     <h3 class="text-2xl font-bold mb-3 text-white">Wide-Context AI</h3>
                     <p class="text-gray-300 text-base leading-relaxed">จำบทสนทนาก่อนหน้า เพื่อรักษาความสม่ำเสมอ — สรรพนาม, คำเรียก, ชื่อตัวละคร ไม่สลับไปมาระหว่าง Quest</p>
@@ -970,7 +1248,7 @@
             </div>
 
             <!-- Secondary Features — 5 smaller cards -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 secondary-features-grid">
                 <div class="card p-4 text-center">
                     <div class="feature-icon speed mx-auto" style="width:40px;height:40px;margin-bottom:0.75rem;"><i data-lucide="zap" style="width:18px;height:18px"></i></div>
                     <h4 class="text-sm font-semibold text-indigo-200 mb-1">แปลใน 1 วินาที</h4>
@@ -1015,42 +1293,23 @@
                 <!-- 1: Main Window -->
                 <div class="p-6 md:p-10 border-b border-white/[0.055]">
                     <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center">
-                        <!-- Images: main screenshot + compare toggle -->
-                        <div class="lg:w-5/12 flex flex-col items-center gap-4 flex-shrink-0">
-                            <div class="image-container rounded-xl overflow-hidden w-full" style="max-width:280px;">
-                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772802695/Main_ui_vxwl64.png"
-                                     alt="MBB Main Window"
-                                     class="zoomable-image w-full rounded-xl shadow-lg">
-                            </div>
-                            <div class="compare-wrap w-full" style="max-width:280px;">
-                                <img id="compare-main"
-                                     src="https://res.cloudinary.com/docoo51xb/image/upload/v1772801199/compare_main_ui_f4xqk2.png"
-                                     alt="MBB Main UI" class="compare-img zoomable-image">
-                                <img id="compare-mini"
-                                     src="https://res.cloudinary.com/docoo51xb/image/upload/v1772801199/compare_mini_ui_rky4e9.png"
-                                     alt="MBB Mini UI" class="compare-img hidden-img zoomable-image">
-                                <div class="compare-toggle-bar">
-                                    <button class="compare-btn active" onclick="switchCompare('main',this)">
-                                        <i data-lucide="maximize-2" style="width:13px;height:13px;stroke-width:1.8"></i>
-                                        <span>Main UI</span>
-                                    </button>
-                                    <button class="compare-btn" onclick="switchCompare('mini',this)">
-                                        <i data-lucide="minimize-2" style="width:13px;height:13px;stroke-width:1.8"></i>
-                                        <span>Mini UI</span>
-                                    </button>
-                                </div>
+                        <!-- Image: combined UI elements -->
+                        <div class="lg:w-5/12 flex-shrink-0 flex justify-center">
+                            <div class="ui-showcase-aura">
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773286369/UI_element01_aill6z.png"
+                                     alt="MBB UI Elements" class="zoomable-image" style="width:100%;height:auto;display:block;">
                             </div>
                         </div>
                         <!-- Text -->
                         <div class="lg:w-7/12">
-                            <p class="eyebrow">Main Window · โหมดมินิ</p>
-                            <h3 class="text-2xl font-bold mb-3 text-white">ควบคุมทุกอย่างจากที่เดียว</h3>
-                            <p class="text-gray-300 mb-5 leading-relaxed">เปิดโปรแกรม — พร้อมแปลทันที ไม่ต้องกดอะไร เล่นเกมได้เลย เมื่อเลิกเล่นก็ปิดโปรแกรมได้เลย เมื่อต้องการพื้นที่หน้าจอสลับเป็นโหมด Mini ที่ขอบซ้ายของจอแทนได้</p>
+                            <p class="eyebrow">Main Window · Mini Mode</p>
+                            <h3 class="text-2xl font-bold mb-3 text-white">UI กระทัดรัด ยืดหยุ่น</h3>
+                            <p class="text-gray-300 mb-5 leading-relaxed">เปิดปุ๊บ พร้อมแปลทันที — สลับโหมด Mini ชิดขอบจอเมื่อต้องการพื้นที่เล่นเกม</p>
                             <ul class="space-y-3 text-sm text-gray-300">
-                                <li class="flex items-start gap-3"><i data-lucide="zap" class="text-emerald-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">เริ่มแปลอัตโนมัติ</strong> — สถานะ Ready ทันทีที่เปิดโปรแกรม ไม่ต้องกด Start</span></li>
-                                <li class="flex items-start gap-3"><i data-lucide="layout-panel-left" class="text-indigo-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">TUI / LOG / MINI</strong> — เปิด-ปิดหน้าต่างต่างๆ ด้วยคลิกเดียว</span></li>
-                                <li class="flex items-start gap-3"><i data-lucide="ghost" class="text-purple-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">Glass Mode</strong> — UI โปร่งใสสนิท ไม่บัง HUD และสถานะเกม</span></li>
-                                <li class="flex items-start gap-3"><i data-lucide="users" class="text-cyan-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">NPC Manager</strong> — เพิ่มและแก้ไขข้อมูลตัวละครตามต้องการ</span></li>
+                                <li class="flex items-start gap-3"><i data-lucide="zap" class="text-emerald-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">เริ่มแปลอัตโนมัติ</strong> — Ready ทันทีที่เปิด ไม่ต้องกด Start</span></li>
+                                <li class="flex items-start gap-3"><i data-lucide="layout-panel-left" class="text-indigo-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">TUI / LOG / MINI</strong> — สลับหน้าต่างด้วยคลิกเดียว</span></li>
+                                <li class="flex items-start gap-3"><i data-lucide="ghost" class="text-purple-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">Glass Mode</strong> — โปร่งใสสนิท ไม่บัง HUD</span></li>
+                                <li class="flex items-start gap-3"><i data-lucide="users" class="text-cyan-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">NPC Manager</strong> — จัดการข้อมูลตัวละคร 290+</span></li>
                             </ul>
                         </div>
                     </div>
@@ -1062,17 +1321,17 @@
                         <!-- Text left -->
                         <div class="lg:w-5/12 flex-shrink-0">
                             <p class="eyebrow">Translation Overlay · เรียลไทม์</p>
-                            <h3 class="text-2xl font-bold mb-3 text-white">คำแปลบนหน้าจอเกม</h3>
-                            <p class="text-gray-300 mb-5 leading-relaxed">Overlay แสดงคำแปลทันทีที่ตัวละครพูด — บทสนทนา คัตซีน แบทเทิล แต่ละประเภทมีสีแตกต่างกันอ่านง่าย</p>
+                            <h3 class="text-2xl font-bold mb-3 text-white">หน้าต่างแสดงผลการแปล (TUI)</h3>
+                            <p class="text-gray-300 mb-5 leading-relaxed">คำแปลปรากฏทันทีที่ตัวละครพูด — แยกสีตามประเภทบทสนทนา อ่านง่าย ไม่ต้องเปลี่ยนหน้าจอ</p>
                             <ul class="space-y-3 text-sm text-gray-300">
                                 <li class="flex items-start gap-3"><i data-lucide="palette" class="text-cyan-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-cyan-300">Dialogue</strong> ฟ้า · <strong class="text-yellow-300">Cutscene</strong> เหลือง · <strong class="text-orange-300">Battle</strong> ส้ม</span></li>
-                                <li class="flex items-start gap-3"><i data-lucide="type" class="text-indigo-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">ปรับฟอนต์และขนาด</strong> — วางตำแหน่งได้อิสระบนหน้าจอ</span></li>
-                                <li class="flex items-start gap-3"><i data-lucide="moon" class="text-purple-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">จางหายอัตโนมัติ</strong> — ไม่บังหน้าจอเมื่อไม่มีบทสนทนา</span></li>
+                                <li class="flex items-start gap-3"><i data-lucide="type" class="text-indigo-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">ฟอนต์ ขนาด ตำแหน่ง</strong> — ปรับได้ตามใจ</span></li>
+                                <li class="flex items-start gap-3"><i data-lucide="moon" class="text-purple-400 flex-shrink-0 mt-0.5" style="width:16px;height:16px;stroke-width:2"></i><span><strong class="text-white">จางหายอัตโนมัติ</strong> — ไม่บังจอเมื่อไม่มีบทสนทนา</span></li>
                             </ul>
                         </div>
                         <!-- Image right -->
                         <div class="lg:w-7/12">
-                            <div class="image-container rounded-xl overflow-hidden">
+                            <div class="tui-image-wrap image-container rounded-xl overflow-hidden">
                                 <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772797987/TUI_urktwy.png"
                                      alt="TUI แสดงผลจริง"
                                      class="zoomable-image w-full rounded-xl shadow-lg">
@@ -1086,7 +1345,7 @@
                     <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center">
                         <!-- Image left (tall phone-like) -->
                         <div class="lg:w-4/12 flex justify-center flex-shrink-0">
-                            <div class="image-container rounded-xl overflow-hidden" style="max-width:260px;width:100%;">
+                            <div class="log-image-wrap image-container rounded-xl overflow-hidden" style="max-width:260px;width:100%;">
                                 <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772797987/logs_history_fapgly.png"
                                      alt="LOG — ประวัติบทสนทนา"
                                      class="zoomable-image w-full rounded-xl shadow-lg">
@@ -1126,7 +1385,7 @@
                                 <i data-lucide="crown" style="width:12px;height:12px;stroke-width:2.5"></i>
                                 NPC Manager · ฟีเจอร์เด่น
                             </p>
-                            <h3 class="text-3xl font-bold mb-3 text-white leading-tight">แต่งน้ำเสียงตัวละคร<br><span class="grad-text">ตามใจชอบ</span></h3>
+                            <h3 class="text-3xl font-bold mb-3 text-white leading-tight npc-hero-heading">แต่งน้ำเสียงตัวละคร<br><span class="grad-text">ตามใจชอบ</span></h3>
                             <p class="text-gray-300 mb-5 leading-relaxed">กำหนด Role ในแท็บ <strong class="text-white">ROLES</strong> — AI จะจดจำโทนที่คุณตั้งไว้และใช้ทุกครั้งที่ตัวละครนั้นพูด ไม่ว่าจะเป็นบทสนทนา คัตซีน หรือแบทเทิล</p>
                             <!-- Before/After example — larger, prominent -->
                             <div class="rounded-xl overflow-hidden border border-white/[0.08]">
@@ -1468,11 +1727,11 @@
 
                 <!-- Download CTA -->
                 <div class="lg:w-1/2 glass-panel p-8 flex flex-col justify-center">
-                    <h2 class="text-3xl font-bold mb-6 text-white text-center">พร้อมจะทลายกำแพงภาษาแล้วหรือยัง?</h2>
+                    <h2 class="text-3xl font-bold mb-6 text-white text-center download-cta-heading">พร้อมจะทลายกำแพงภาษาแล้วหรือยัง?</h2>
                     <p class="text-xl text-indigo-100 mb-8 max-w-3xl mx-auto text-center">
                         ดาวน์โหลด Magicite Babel - Dalamud Edition และเริ่มสัมผัสเนื้อเรื่อง FFXIV ที่คุณรักได้ลึกซึ้งยิ่งขึ้น
                     </p>
-                    <div class="bg-slate-900/70 p-6 rounded-lg border border-indigo-500 shadow-inner">
+                    <div class="bg-slate-900/70 p-6 rounded-lg border border-indigo-500 shadow-inner download-card-inner">
                         <div class="text-left mb-6">
                             <div class="text-xl font-semibold text-indigo-200 mb-2">
                                 Magicite Babel - Dalamud v1.7.8
@@ -1483,7 +1742,7 @@
                         </div>
                         <div class="flex flex-col md:flex-row gap-4 justify-center items-center">
                             <!-- TODO: ใส่ link จริง -->
-                            <a href="#install" class="btn-primary px-8 py-4 rounded-lg font-medium text-xl shadow-lg inline-flex items-center w-full md:w-auto justify-center">
+                            <a href="#install" class="btn-primary px-8 py-4 rounded-lg font-medium text-xl shadow-lg inline-flex items-center w-full md:w-auto justify-center download-cta-btn">
                                 <i data-lucide="rocket" class="mr-2" style="width:18px;height:18px"></i>เริ่มใช้งาน
                             </a>
                             <div class="flex items-center bg-indigo-900/60 rounded-lg px-4 py-3 border border-indigo-400 w-full md:w-auto justify-center">
@@ -1517,7 +1776,7 @@
                 <div class="lg:w-[70%]">
                     <div class="glass-panel p-6 h-full">
                         <h2 class="text-2xl font-semibold text-center text-indigo-200 mb-4">ข้อมูลสำคัญเกี่ยวกับโปรแกรม</h2>
-                        <div class="text-gray-300 space-y-4">
+                        <div class="text-gray-300 space-y-4 legal-faq-text">
                             <p class="text-center text-lg font-medium text-indigo-100 mb-4">
                                 Magicite Babel - Dalamud Edition ทำงานผ่าน Dalamud Framework
                             </p>
@@ -1613,6 +1872,29 @@
     <!-- JAVASCRIPT                                         -->
     <!-- ═══════════════════════════════════════════════════ -->
     <script>
+    // ── Gallery Carousel (global scope — required for inline onclick) ──
+    var carouselIdx = 0;
+    function carouselNav(dir) {
+        var slides = document.querySelectorAll('#galleryCarousel .carousel-slide');
+        var dots = document.querySelectorAll('#carouselDots .carousel-dot');
+        if (!slides.length) return;
+        slides[carouselIdx].classList.remove('active');
+        if (dots[carouselIdx]) dots[carouselIdx].classList.remove('active');
+        carouselIdx = (carouselIdx + dir + slides.length) % slides.length;
+        slides[carouselIdx].classList.add('active');
+        if (dots[carouselIdx]) dots[carouselIdx].classList.add('active');
+    }
+    function carouselGoTo(i) {
+        var slides = document.querySelectorAll('#galleryCarousel .carousel-slide');
+        var dots = document.querySelectorAll('#carouselDots .carousel-dot');
+        if (!slides.length) return;
+        slides[carouselIdx].classList.remove('active');
+        if (dots[carouselIdx]) dots[carouselIdx].classList.remove('active');
+        carouselIdx = i;
+        slides[carouselIdx].classList.add('active');
+        if (dots[carouselIdx]) dots[carouselIdx].classList.add('active');
+    }
+
     // ── Accordion Stepper (global scope — required for inline onclick) ──
     function toggleStep(headerEl) {
         const step = headerEl.parentElement;
@@ -1733,6 +2015,19 @@
                 if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'});}
             });
         });
+
+        // ── Gallery Carousel Dots ──
+        var dotsContainer = document.getElementById('carouselDots');
+        var slideCount = document.querySelectorAll('#galleryCarousel .carousel-slide').length;
+        if (dotsContainer && slideCount) {
+            for (var i = 0; i < slideCount; i++) {
+                var dot = document.createElement('button');
+                dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
+                dot.setAttribute('aria-label', 'Slide ' + (i+1));
+                dot.setAttribute('onclick', 'carouselGoTo(' + i + ')');
+                dotsContainer.appendChild(dot);
+            }
+        }
 
         // ── Lucide Icons ──
         if(typeof lucide !== 'undefined') lucide.createIcons();
