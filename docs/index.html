@@ -1803,52 +1803,44 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- LEGAL / FAQ                                        -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <section class="py-16 dark-section">
-        <div class="container mx-auto px-4 md:px-8">
-            <div class="flex flex-col lg:flex-row gap-6">
-                <div class="lg:w-[70%]">
-                    <div class="glass-panel p-6 h-full">
-                        <h2 class="text-2xl font-semibold text-center text-indigo-200 mb-4">ข้อมูลสำคัญเกี่ยวกับโปรแกรม</h2>
-                        <div class="text-gray-300 space-y-4 legal-faq-text">
-                            <p class="text-center text-lg font-medium text-indigo-100 mb-4">
-                                Magicite Babel - Dalamud Edition ทำงานผ่าน Dalamud Framework
-                            </p>
-                            <p>โปรแกรม Magicite Babel - Dalamud Edition ทำงานผ่าน <strong class="text-indigo-200">Dalamud Plugin Framework</strong> ซึ่งเป็น third-party tool ที่ชุมชน FFXIV ใช้กันอย่างแพร่หลาย กระบวนการทำงานของ Plugin คือ:</p>
-                            <ol class="list-decimal pl-6 space-y-2">
-                                <li>Dalamud Plugin ดึงข้อความจากเกมผ่าน Text Hook (ไม่แก้ไขไฟล์เกม)</li>
-                                <li>ส่งข้อความไปยัง Python App ที่ทำงานแยกต่างหาก</li>
-                                <li>Python App ส่งข้อความไปแปลด้วย Gemini AI</li>
-                                <li>แสดงผลคำแปลในหน้าต่าง overlay แยกต่างหาก</li>
-                            </ol>
-                            <p class="mt-4">โปรแกรมนี้ <strong class="text-indigo-200">ไม่ได้ให้ความได้เปรียบในการเล่นเกม</strong> ไม่ดัดแปลง UI ของเกม และไม่ส่งข้อมูลใดๆ กลับไปยังเซิร์ฟเวอร์ของเกม — เป็นเพียงเครื่องมือช่วยอ่านและทำความเข้าใจเนื้อเรื่อง</p>
-                            <p class="mt-4 text-indigo-100">โปรแกรมนี้พัฒนาขึ้นด้วยความรักและชื่นชมในเกม Final Fantasy XIV เพื่อช่วยให้ผู้เล่นชาวไทยได้เข้าถึงเนื้อเรื่องอันลึกซึ้ง และสนับสนุนคอมมูนิตี้ FFXIV ในประเทศไทยให้เติบโตยิ่งขึ้น</p>
-                        </div>
-                    </div>
+    <section class="py-12 md:py-16 dark-section">
+        <div class="container mx-auto px-5 md:px-8 max-w-4xl">
+
+            <!-- About — compact -->
+            <div class="mb-6">
+                <p class="text-center text-xs text-gray-500 uppercase mb-5" style="letter-spacing:0.18em;">About This Program</p>
+                <div class="text-sm text-gray-400 leading-relaxed space-y-3 max-w-2xl mx-auto">
+                    <p>MBB ทำงานผ่าน <strong class="text-gray-300">Dalamud Plugin</strong> ดึงข้อความจากเกมด้วย Text Hook ส่งไปแปลผ่าน Gemini AI แล้วแสดงผลบน overlay แยกต่างหาก — <strong class="text-gray-300">ไม่แก้ไขไฟล์เกม ไม่ดัดแปลง UI ไม่ส่งข้อมูลกลับเซิร์ฟเวอร์</strong></p>
+                    <p class="text-gray-500">พัฒนาเพื่อช่วยผู้เล่นชาวไทยเข้าถึงเนื้อเรื่อง FFXIV ได้ลึกซึ้งยิ่งขึ้น</p>
                 </div>
-                <div class="lg:w-[30%]">
-                    <div class="glass-panel p-6 h-full">
-                        <h2 class="text-2xl font-semibold text-center text-indigo-200 mb-4">คำถามที่พบบ่อย</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <h4 class="text-indigo-300 font-semibold text-sm mb-1">Q: ต้องจ่ายเงินไหม?</h4>
-                                <p class="text-gray-400 text-sm">ไม่ ทั้ง Plugin และ App ฟรี — Gemini 3.1 Flash Lite มี free tier ใช้ได้ฟรี</p>
-                            </div>
-                            <div>
-                                <h4 class="text-indigo-300 font-semibold text-sm mb-1">Q: ต้องมี Python ไหม?</h4>
-                                <p class="text-gray-400 text-sm">ไม่ต้อง — MBB App เป็น standalone .exe (PyInstaller) พร้อมใช้ทันที</p>
-                            </div>
-                            <div>
-                                <h4 class="text-indigo-300 font-semibold text-sm mb-1">Q: รองรับเกมอื่นไหม?</h4>
-                                <p class="text-gray-400 text-sm">เวอร์ชัน Dalamud Edition ออกแบบเฉพาะ FFXIV — เวอร์ชัน OCR (เดิม) รองรับเกมอื่นด้วย</p>
-                            </div>
-                            <div>
-                                <h4 class="text-indigo-300 font-semibold text-sm mb-1">Q: Free tier ของ Gemini 3.1 Flash Lite พอไหม?</h4>
-                                <p class="text-gray-400 text-sm">สำหรับการเล่นเกม 2-4 ชม./วัน เพียงพอ — ถ้าไม่พอสามารถอัปเกรดแผนได้</p>
-                            </div>
-                        </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-white/[0.05] my-6"></div>
+
+            <!-- FAQ — compact grid -->
+            <div>
+                <p class="text-center text-xs text-gray-500 uppercase mb-5" style="letter-spacing:0.18em;">FAQ</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 max-w-2xl mx-auto">
+                    <div>
+                        <p class="text-xs text-indigo-300/80 font-medium mb-0.5">ต้องจ่ายเงินไหม?</p>
+                        <p class="text-xs text-gray-500">ฟรีทั้งหมด — Gemini 3.1 Flash Lite มี free tier</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-indigo-300/80 font-medium mb-0.5">ต้องมี Python ไหม?</p>
+                        <p class="text-xs text-gray-500">ไม่ต้อง — MBB เป็น standalone .exe พร้อมใช้ทันที</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-indigo-300/80 font-medium mb-0.5">รองรับเกมอื่นไหม?</p>
+                        <p class="text-xs text-gray-500">Dalamud Edition เฉพาะ FFXIV — เวอร์ชัน OCR รองรับเกมอื่น</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-indigo-300/80 font-medium mb-0.5">Free tier พอสำหรับเล่นทั้งวันไหม?</p>
+                        <p class="text-xs text-gray-500">เล่น 2-4 ชม./วัน เพียงพอ — อัปเกรดได้ถ้าต้องการเพิ่ม</p>
                     </div>
                 </div>
             </div>
+
         </div>
     </section>
 
