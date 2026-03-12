@@ -816,6 +816,61 @@
         }
 
         /* ══════════════════════════════════════════════════════ */
+        /* MOBILE PERFORMANCE: disable heavy GPU effects          */
+        /* backdrop-filter blur is the #1 jank cause on mobile   */
+        /* ══════════════════════════════════════════════════════ */
+        @media (hover: none) and (pointer: coarse) {
+            /* ── Kill backdrop-filter — use solid bg instead ── */
+            .card {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(15, 20, 35, 0.85) !important;
+            }
+            .glass-panel {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(15, 20, 35, 0.88) !important;
+            }
+            .thumbnails-container {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(6, 9, 22, 0.95) !important;
+            }
+            .nav-jump-btn {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(15, 20, 40, 0.85) !important;
+            }
+            .feature-icon {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            /* ── Disable hover transforms (no hover on touch) ── */
+            .card:hover { transform: none !important; }
+
+            /* ── Simplify particles ── */
+            .particle {
+                box-shadow: none !important;
+                transition: none !important;
+            }
+
+            /* ── Pause decorative animations by default ── */
+            .floating-image,
+            .banner-logo-group,
+            .pulse-badge,
+            .miqote-icon { animation-play-state: paused !important; }
+
+            /* ── Simpler banner glow ── */
+            .logo-glow { filter: none !important; background: rgba(99,102,241,0.12) !important; }
+
+            /* ── Reduce heavy drop-shadows ── */
+            .banner-logo { filter: drop-shadow(0 0 10px rgba(99,102,241,0.4)) !important; }
+            .ui-showcase-aura { filter: none !important; }
+            .ui-showcase-aura::before { display: none !important; }
+        }
+
+        /* ══════════════════════════════════════════════════════ */
         /* MOBILE RESPONSIVE OVERRIDES (max-width: 640px)        */
         /* ══════════════════════════════════════════════════════ */
         @media (max-width: 640px) {
@@ -1910,10 +1965,13 @@
 
     document.addEventListener('DOMContentLoaded', function() {
 
+        // ── Device detection ──
+        const isMobile = matchMedia('(hover:none) and (pointer:coarse)').matches;
+
         // ── Particles ──
         const pc = document.getElementById('particles-container');
         if (pc) {
-            const PARTICLE_COUNT = 80;
+            const PARTICLE_COUNT = isMobile ? 20 : 80;
             const style = document.createElement('style');
             style.innerHTML = `@keyframes float_particles{0%{transform:translate(0,0)}25%{transform:translate(var(--tx1),var(--ty1))}50%{transform:translate(var(--tx2),var(--ty2))}75%{transform:translate(var(--tx3),var(--ty3))}100%{transform:translate(0,0)}}`;
             document.head.appendChild(style);
@@ -1924,8 +1982,10 @@
                 const s = Math.random()*6+2.5, x = Math.random()*window.innerWidth, y = Math.random()*window.innerHeight;
                 const op = Math.random()*0.5+0.3, dur = Math.random()*50+50, del = Math.random()*25;
                 const c = `rgba(${139+Math.floor(Math.random()*40)},${Math.floor((139+Math.random()*40)*0.7+20)},255,${op})`;
-                const m = 80;
-                Object.assign(p.style,{width:`${s}px`,height:`${s}px`,left:`${x}px`,top:`${y}px`,backgroundColor:c,opacity:0,boxShadow:`0 0 ${s*3}px ${c.replace(/,[^,]+\)$/,',0.5)')}`});
+                const m = isMobile ? 40 : 80;
+                const styles = {width:`${s}px`,height:`${s}px`,left:`${x}px`,top:`${y}px`,backgroundColor:c,opacity:0};
+                if (!isMobile) styles.boxShadow = `0 0 ${s*3}px ${c.replace(/,[^,]+\)$/,',0.5)')}`;
+                Object.assign(p.style, styles);
                 p.style.setProperty('--tx1',`${Math.random()*m-m/2}px`);
                 p.style.setProperty('--ty1',`${Math.random()*m-m/2}px`);
                 p.style.setProperty('--tx2',`${Math.random()*m*1.5-m*.75}px`);
@@ -1937,7 +1997,9 @@
                 setTimeout(()=>{p.style.opacity=op;}, del*50+100);
             };
             for(let i=0;i<PARTICLE_COUNT;i++) createParticle();
-            window.addEventListener('resize',()=>{pc.innerHTML='';for(let i=0;i<PARTICLE_COUNT;i++) createParticle();});
+            if (!isMobile) {
+                window.addEventListener('resize',()=>{pc.innerHTML='';for(let i=0;i<PARTICLE_COUNT;i++) createParticle();});
+            }
         }
 
         // ── Image Modal ──
