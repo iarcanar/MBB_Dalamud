@@ -954,15 +954,8 @@ class Translated_UI(FontObserver):
 
         # ✅ เก็บ callback ที่ได้รับมา
         self.toggle_npc_manager_callback = toggle_npc_manager_callback
-        self.on_close_callback = on_close_callback  # ✅ เพิ่ม callback สำหรับการปิดหน้าต่าง
-        self.previous_dialog_callback = None  # ✅ เพิ่ม callback สำหรับ Previous Dialog System
-        
-        # 🔍 DEBUG: Log callback status
-        print(f"DEBUG: TranslatedUI initialized with toggle_npc_manager_callback: {toggle_npc_manager_callback is not None}")
-        if toggle_npc_manager_callback:
-            print(f"DEBUG: toggle_npc_manager_callback type: {type(toggle_npc_manager_callback)}")
-        else:
-            print(f"DEBUG: No NPC manager callback provided!")
+        self.on_close_callback = on_close_callback  # callback สำหรับการปิดหน้าต่าง
+        self.previous_dialog_callback = None  # callback สำหรับ Previous Dialog System
 
         self.font_settings = font_settings
         self.state = UIState()
@@ -1078,36 +1071,21 @@ class Translated_UI(FontObserver):
         logging.info("TranslatedUI initialized successfully")
 
     def _debug_character_click(self, event, character_name):
-        """DEBUG: Handle character name click with comprehensive logging"""
+        """Handle character name click on TUI → open NPC Manager focused on that name.
+        (Function name kept for backwards-compat with existing bind sites at line ~4433.)"""
         try:
-            print(f"🔍 DEBUG: Character clicked - Name: '{character_name}', Event: {event}")
-            print(f"🔍 DEBUG: Canvas coordinates - x: {event.x}, y: {event.y}")
-            print(f"🔍 DEBUG: toggle_npc_manager_callback exists: {self.toggle_npc_manager_callback is not None}")
-            
+            name = (character_name or "").strip()
+            if not name:
+                return
             if self.toggle_npc_manager_callback:
-                print(f"🔍 DEBUG: Calling toggle_npc_manager_callback with character: '{character_name}'")
-                result = self.toggle_npc_manager_callback(character_name)
-                print(f"🔍 DEBUG: toggle_npc_manager_callback returned: {result}")
+                self.toggle_npc_manager_callback(name)
+                if hasattr(self, 'logging_manager') and self.logging_manager:
+                    self.logging_manager.log_info(f"NPC Manager opened for: {name}")
             else:
-                print(f"🔍 DEBUG: No toggle_npc_manager_callback available!")
-                
-            # Also log to the logging manager if available
-            if hasattr(self, 'logging_manager') and self.logging_manager:
-                self.logging_manager.log_info(f"Character name clicked: {character_name}")
+                logging.warning("Character clicked but no toggle_npc_manager_callback wired")
                 
         except Exception as e:
-            print(f"❌ DEBUG ERROR: Error handling character click: {e}")
-            import traceback
-            print(f"❌ DEBUG TRACEBACK: {traceback.format_exc()}")
-            
-            # Try to show error with messagebox if available
-            try:
-                from tkinter import messagebox
-                messagebox.showerror("Character Click Error", f"Error handling character click: {e}")
-            except ImportError:
-                print(f"❌ DEBUG: Cannot import messagebox to show error dialog")
-            except Exception as inner_e:
-                print(f"❌ DEBUG: Error showing messagebox: {inner_e}")
+            logging.error(f"Error handling character click '{character_name}': {e}", exc_info=True)
 
     def _trigger_delayed_hover_force(self):
         """
@@ -1699,7 +1677,7 @@ class Translated_UI(FontObserver):
 
             # CRITICAL: Reconfigure text width to match new window size
             if hasattr(self.components, 'text_container') and self.components.text_container:
-                new_text_width = int(self.root.winfo_width() * 0.95)
+                new_text_width = max(100, self.root.winfo_width() - 20)
                 self.components.canvas.itemconfig(self.components.text_container, width=new_text_width)
                 logging.info(f"🔧 Reconfigured text width to: {new_text_width}px")
 
@@ -1809,13 +1787,13 @@ class Translated_UI(FontObserver):
             relief="flat",
         )
         self.components.canvas.pack(
-            side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 50), pady=(10, 20)
+            side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 15), pady=(10, 20)
         )
 
         # Initialize text properties (เหมือนเดิม)
         font_name = self.settings.get("font", "Anuphan")
         font_size = self.settings.get("font_size", 24)
-        text_width = int(self.root.winfo_width() * 0.95)
+        text_width = max(100, self.root.winfo_width() - 20)
 
         # สร้าง text container (เหมือนเดิม)
         self.components.text_container = self.components.canvas.create_text(
@@ -4105,7 +4083,7 @@ class Translated_UI(FontObserver):
                 name_bbox = self.components.canvas.bbox(name_text)
 
                 # ปรับความกว้างของพื้นที่แสดงข้อความภาษาไทย - ใช้ 95% ของความกว้างที่มี
-                thai_text_width = int(available_width * 0.95)
+                thai_text_width = available_width
 
                 # กำหนดตำแหน่งของข้อความบทสนทนา
                 dialogue_y = name_bbox[3] + (small_font[1] * 0.3)
@@ -4203,8 +4181,7 @@ class Translated_UI(FontObserver):
                 if hasattr(self, "names") and self.names:
                     dialogue = self.highlight_special_names(dialogue, self.names)
 
-                # ปรับความกว้างของพื้นที่แสดงข้อความภาษาไทย - ใช้ 95% ของความกว้างที่มี
-                thai_text_width = int(available_width * 0.95)
+                thai_text_width = available_width
 
                 # รีเซ็ต outline_container ก่อนสร้างเงาใหม่
                 self.components.outline_container = []
@@ -5519,9 +5496,7 @@ class Translated_UI(FontObserver):
             else:
                 available_width = event.get("width", 300) - 20
 
-            safe_width = max(
-                100, int(available_width * 0.95)
-            )  # Minimum width protection
+            safe_width = max(100, available_width)  # Minimum width protection
 
             # Cache width to avoid unnecessary updates
             if (
@@ -5593,7 +5568,7 @@ class Translated_UI(FontObserver):
             available_width = (
                 event.width - 20 if isinstance(event, tk.Event) else event["width"]
             )
-            safe_width = int(available_width * 0.95)
+            safe_width = max(100, available_width)
 
             if (
                 hasattr(self.components, "text_container")
@@ -5961,14 +5936,17 @@ class Translated_UI(FontObserver):
                 f"Calling NPC Manager to handle character: '{clean_name}' (verified: {is_verified})"
             )
 
-            # เรียกใช้ find_and_display_character แทน search_character_and_focus
-            # เพราะ find_and_display_character ถูกแก้ไขให้ทำงานตามที่ต้องการแล้ว
-            if hasattr(npc_manager, "find_and_display_character"):
+            # New PyQt6 panel uses open_with_character() — handles both pipelines:
+            #   A. existing → search + auto-select
+            #   B. missing → auto-add new entry → search + auto-select
+            if hasattr(npc_manager, "open_with_character"):
+                npc_manager.open_with_character(clean_name)
+            elif hasattr(npc_manager, "find_and_display_character"):
+                # Legacy Tkinter card API (kept for safety — should not hit in v1.7.8+)
                 npc_manager.find_and_display_character(clean_name, is_verified)
             else:
-                # Fallback ถ้าไม่มีฟังก์ชันที่แก้ไขใหม่
                 self.logging_manager.log_warning(
-                    "find_and_display_character not found, falling back to default behavior"
+                    f"NPC Manager has no character-open API (panel type={type(npc_manager).__name__})"
                 )
 
         except Exception as e:
@@ -7056,7 +7034,7 @@ class Translated_UI(FontObserver):
                 dialogue_y = start_y + small_font[1] + 5
 
             # กำหนดความกว้างของข้อความ
-            thai_text_width = int(available_width * 0.95)
+            thai_text_width = available_width
 
             # รีเซ็ต outline_container เพื่อเตรียมสร้างเงาใหม่สำหรับข้อความ
             # (เก็บเงาของชื่อที่มีอยู่แล้ว)
@@ -7336,6 +7314,81 @@ class Translated_UI(FontObserver):
 
         return text_objects
 
+    # ── Thai Word Segmentation (lightweight, no external deps) ──
+
+    _THAI_LEADING_VOWELS = set('เแโใไ')
+    _THAI_DEPENDENT = set(chr(c) for c in range(0x0E31, 0x0E3B)) | set(chr(c) for c in range(0x0E47, 0x0E4F))
+    _THAI_CONSONANTS = set(chr(c) for c in range(0x0E01, 0x0E2F))
+
+    def _split_for_wrap(self, text):
+        """Split text into wrappable units with proper spacing for Thai.
+
+        Returns list of (word, trailing_space) tuples.
+        Thai text is split at leading-vowel boundaries (เ แ โ ใ ไ) which
+        reliably indicate syllable/word starts.  No spaces are inserted
+        between Thai sub-parts; spaces are only preserved where the
+        original text had them.
+        """
+        if not text or not text.strip():
+            return [(text, False)]
+
+        has_thai = any('\u0e01' <= c <= '\u0e5b' for c in text)
+
+        if not has_thai:
+            words = text.split()
+            return [(w, i < len(words) - 1) for i, w in enumerate(words)]
+
+        result = []
+        space_parts = text.split(' ')
+
+        for part_idx, part in enumerate(space_parts):
+            if not part:
+                continue
+
+            part_has_thai = any('\u0e01' <= c <= '\u0e5b' for c in part)
+
+            # Short tokens or non-Thai — keep as-is
+            if not part_has_thai or len(part) <= 6:
+                trailing = part_idx < len(space_parts) - 1
+                result.append((part, trailing))
+                continue
+
+            # Segment Thai text at leading-vowel boundaries
+            chunks = []
+            current = ''
+
+            for i, ch in enumerate(part):
+                # Break before leading vowels (เ, แ, โ, ใ, ไ) — start of new syllable
+                if (i > 0 and ch in self._THAI_LEADING_VOWELS and current
+                        and part[i - 1] not in ' '
+                        and ('\u0e01' <= part[i - 1] <= '\u0e5b'
+                             or part[i - 1] in self._THAI_DEPENDENT)):
+                    chunks.append(current)
+                    current = ch
+                    continue
+
+                current += ch
+
+                # Force break very long runs (>14 Thai chars without a leading-vowel break)
+                if (len(current) > 14
+                        and i + 1 < len(part)
+                        and part[i + 1] in self._THAI_CONSONANTS
+                        and ch not in self._THAI_DEPENDENT
+                        and part[i + 1] not in self._THAI_LEADING_VOWELS):
+                    chunks.append(current)
+                    current = ''
+
+            if current:
+                chunks.append(current)
+
+            for chunk_idx, chunk in enumerate(chunks):
+                # Only add trailing space on the LAST chunk of this space-part
+                trailing = (chunk_idx == len(chunks) - 1
+                            and part_idx < len(space_parts) - 1)
+                result.append((chunk, trailing))
+
+        return result if result else [(text, False)]
+
     def create_rich_text_with_outlines(self, x: int, y: int, text: str, base_font_tuple,
                                      fill: str = "white", outline_color: str = "#000000",
                                      outline_offset: int = 1, width: int = None,
@@ -7387,13 +7440,13 @@ class Translated_UI(FontObserver):
                     font_tuple = (base_font_tuple[0], base_font_tuple[1], "bold")
                 logging.info(f"🔍 SEGMENT {i+1}: font_tuple={font_tuple}")
 
-                # Split long segments into words and process word by word
-                words = segment_text.split()
+                # Split segments into wrappable units (Thai-aware)
+                word_items = self._split_for_wrap(segment_text)
 
                 # Process each word in the segment
-                for word_idx, word in enumerate(words):
-                    # Add space after word except for last word
-                    word_to_measure = word + " " if word_idx < len(words) - 1 else word
+                for word_idx, (word, trailing_space) in enumerate(word_items):
+                    # Add space only where original text had spaces (not between Thai sub-parts)
+                    word_to_measure = word + " " if trailing_space else word
 
                     # Measure word width
                     temp_text = self.components.canvas.create_text(

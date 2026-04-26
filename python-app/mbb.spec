@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # MBB Dalamud Bridge - PyInstaller Specification
-# Version: 1.7.8
+# Version: 1.8.0
 # Build: 04032026-02
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules

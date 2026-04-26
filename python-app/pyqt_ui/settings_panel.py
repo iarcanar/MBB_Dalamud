@@ -8,16 +8,174 @@ import logging
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGraphicsDropShadowEffect, QCheckBox, QScrollArea, QFrame,
+    QSizePolicy,
 )
-from PyQt6.QtGui import QColor, QFont
-from PyQt6.QtCore import Qt, QPoint, QTimer
+from PyQt6.QtGui import QColor, QFont, QPainter, QBrush, QPen
+from PyQt6.QtCore import (
+    Qt, QPoint, QTimer, QPropertyAnimation, QEasingCurve,
+    pyqtProperty, pyqtSignal, QRectF, QSize,
+)
 
 from pyqt_ui.styles import FONT_PRIMARY, FONT_MONO, derive_palette
 
 log = logging.getLogger("mbb-qt")
 
-WIDTH = 300
-HEIGHT = 520
+WIDTH = 360    # bumped from 300 (+20%) for easier reading
+HEIGHT = 624   # bumped from 520 (+20%) — proportional to width
+
+
+# ────────────────────────────────────────────────────────────────────
+# ToggleSwitch — Modern iOS-style switch with sliding knob + animation
+# Replaces QCheckBox::indicator pill (which had no knob → unclear state).
+# Drop-in compatible API: isChecked(), setChecked(bool), toggled signal.
+# ────────────────────────────────────────────────────────────────────
+class ToggleSwitch(QWidget):
+    toggled = pyqtSignal(bool)
+    # Compat: emit a state-change signal mimicking QCheckBox.stateChanged
+    stateChanged = pyqtSignal(int)
+
+    # Visual constants — bumped 20% from 44×22 for the larger Settings UI
+    _W = 52
+    _H = 26
+    _KNOB_PAD = 4            # padding from track edge
+    _KNOB_DIAMETER = _H - 2 * _KNOB_PAD  # 18 px
+
+    def __init__(self, parent=None, palette=None):
+        super().__init__(parent)
+        self.setFixedSize(self._W, self._H)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+
+        self._checked = False
+        self._hover = False
+
+        # Animated knob X position
+        off_x = self._KNOB_PAD
+        on_x = self._W - self._KNOB_PAD - self._KNOB_DIAMETER
+        self._off_x = off_x
+        self._on_x = on_x
+        self._knob_x = off_x
+
+        self._anim = QPropertyAnimation(self, b"knob_x", self)
+        self._anim.setDuration(160)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Default palette (overridable via set_palette)
+        self._color_track_off = QColor("#3a3a3a")
+        self._color_track_off_border = QColor("#4a4a4a")
+        self._color_track_on = QColor("#2bb5ff")
+        self._color_knob = QColor("#f5f5f5")
+        self._color_knob_shadow = QColor(0, 0, 0, 90)
+        if palette:
+            self.set_palette(palette)
+
+    # ── Public API ──
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool):
+        checked = bool(checked)
+        if checked == self._checked:
+            return
+        self._checked = checked
+        self._animate_to_target()
+        self.toggled.emit(checked)
+        self.stateChanged.emit(2 if checked else 0)
+        self.update()
+
+    def set_palette(self, palette: dict):
+        """Apply theme colors. Expected keys: accent, bg_titlebar, border_subtle."""
+        self._color_track_on = QColor(palette.get("accent", "#2bb5ff"))
+        # Off = darker neutral so off-state is visually distinct from on-state
+        self._color_track_off = QColor(palette.get("bg_titlebar", "#2a2a2a")).darker(110)
+        self._color_track_off_border = QColor(palette.get("border_subtle", "#3a3a3a"))
+        self.update()
+
+    # ── Qt property for animation ──
+    def _get_knob_x(self) -> int:
+        return self._knob_x
+
+    def _set_knob_x(self, x: int):
+        self._knob_x = x
+        self.update()
+
+    knob_x = pyqtProperty(int, fget=_get_knob_x, fset=_set_knob_x)
+
+    def _animate_to_target(self):
+        target = self._on_x if self._checked else self._off_x
+        self._anim.stop()
+        self._anim.setStartValue(self._knob_x)
+        self._anim.setEndValue(target)
+        self._anim.start()
+
+    # ── Events ──
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.setChecked(not self._checked)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.setChecked(not self._checked)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
+
+    # ── Painting ──
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Track
+        track_rect = QRectF(0.5, 0.5, self._W - 1, self._H - 1)
+        radius = self._H / 2
+
+        if self._checked:
+            track_color = QColor(self._color_track_on)
+            border_color = QColor(self._color_track_on).darker(115)
+        else:
+            track_color = QColor(self._color_track_off)
+            border_color = QColor(self._color_track_off_border)
+
+        if self._hover:
+            track_color = track_color.lighter(108)
+
+        p.setBrush(QBrush(track_color))
+        p.setPen(QPen(border_color, 1))
+        p.drawRoundedRect(track_rect, radius, radius)
+
+        # Knob shadow (subtle, below knob)
+        shadow_rect = QRectF(
+            self._knob_x, self._KNOB_PAD + 1,
+            self._KNOB_DIAMETER, self._KNOB_DIAMETER
+        )
+        p.setBrush(QBrush(self._color_knob_shadow))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(shadow_rect)
+
+        # Knob
+        knob_rect = QRectF(
+            self._knob_x, self._KNOB_PAD,
+            self._KNOB_DIAMETER, self._KNOB_DIAMETER
+        )
+        p.setBrush(QBrush(self._color_knob))
+        p.setPen(QPen(QColor(0, 0, 0, 40), 1))
+        p.drawEllipse(knob_rect)
+
+        p.end()
 
 
 class SettingsPanel(QWidget):
@@ -40,7 +198,7 @@ class SettingsPanel(QWidget):
         self._font_panel = None
 
         # Toggle state tracking
-        self._toggles = {}       # key -> QCheckBox
+        self._toggles = {}       # key -> ToggleSwitch
         self._initial_values = {}
         self._has_changes = False
 
@@ -54,6 +212,13 @@ class SettingsPanel(QWidget):
 
         # Callbacks
         self.on_close_callback = None
+
+        # Palette must exist before _build_ui (ToggleSwitch needs it)
+        primary = self.am.get_accent_color()
+        secondary = self.am.get_theme_color("secondary", "#888888")
+        surface = self.am.get_theme_color("surface_override")
+        text_override = self.am.get_theme_color("text_override")
+        self.palette = derive_palette(primary, secondary, surface=surface, text_override=text_override)
 
         self._init_window()
         self._build_ui()
@@ -93,20 +258,20 @@ class SettingsPanel(QWidget):
         # ── Header ──
         header = QWidget()
         header.setObjectName("settings_header")
-        header.setFixedHeight(44)
+        header.setFixedHeight(52)  # +20% from 44
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(14, 0, 6, 0)
         h_layout.setSpacing(4)
 
         title = QLabel("SETTINGS")
         title.setObjectName("settings_title")
-        title.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
+        title.setFont(QFont(FONT_PRIMARY, 13, QFont.Weight.Bold))  # +20% from 11pt
         h_layout.addWidget(title)
         h_layout.addStretch()
 
         btn_close = QPushButton("\u2715")
         btn_close.setObjectName("settings_close")
-        btn_close.setFixedSize(28, 28)
+        btn_close.setFixedSize(34, 34)  # +20% from 28
         btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.clicked.connect(self.close_settings)
         h_layout.addWidget(btn_close)
@@ -132,23 +297,25 @@ class SettingsPanel(QWidget):
         c_layout.setContentsMargins(14, 10, 14, 14)
         c_layout.setSpacing(6)
 
-        # Section: Feature Toggles
+        # Section: Feature Toggles  (header stays English; toggle labels in Thai
+        # for clarity with our primarily-Thai userbase)
         self._add_section_label(c_layout, "Feature Toggles")
         self._add_toggle(c_layout, "enable_wasd_auto_hide",
-                         "Auto-hide UI (WASD)", False)
-        self._add_toggle(c_layout, "enable_cpu_monitoring",
-                         "Smart Performance", True)
+                         "ซ่อน UI เมื่อวิ่ง (WASD)", False)
+        # "Smart Performance" toggle removed 2026-04-25 (dead OCR-era CPU throttling)
         self._add_toggle(c_layout, "enable_tui_auto_show",
-                         "Auto Show TUI", True)
+                         "โชว์ TUI อัตโนมัติเมื่อแปล", True)
         self._add_toggle(c_layout, "enable_battle_chat_mode",
-                         "Battle Chat Mode", True)
+                         "แสดงคำแปลซีนต่อสู้", True)
         self._add_toggle(c_layout, "enable_conversation_logging",
-                         "Conversation Log", False)
+                         "บันทึกประวัติการแปล", False)
+        self._add_toggle(c_layout, "enable_starting_key_visual",
+                         "เริ่มโปรแกรมด้วยภาพ artwork", True)
 
         c_layout.addSpacing(4)
 
-        # Section: Advanced
-        self._add_section_label(c_layout, "Advanced")
+        # Section: Advanced → "ตั้งค่าอื่นๆ"
+        self._add_section_label(c_layout, "ตั้งค่าอื่นๆ")
         adv_row = QHBoxLayout()
         adv_row.setSpacing(6)
 
@@ -167,8 +334,8 @@ class SettingsPanel(QWidget):
         c_layout.addLayout(adv_row)
         c_layout.addSpacing(4)
 
-        # Section: Test Hook
-        self._add_section_label(c_layout, "Test Hook")
+        # Section: Test Hook → "ทดสอบการแปลรูปแบบต่างๆ"
+        self._add_section_label(c_layout, "ทดสอบการแปลรูปแบบต่างๆ")
         test_row = QHBoxLayout()
         test_row.setSpacing(6)
 
@@ -182,18 +349,18 @@ class SettingsPanel(QWidget):
         c_layout.addLayout(test_row)
         c_layout.addSpacing(4)
 
-        # Section: Shortcuts
-        self._add_section_label(c_layout, "Shortcuts")
+        # Section: Shortcuts → "ปุ่มลัด"
+        self._add_section_label(c_layout, "ปุ่มลัด")
         shortcuts_row = QHBoxLayout()
         shortcuts_row.setSpacing(8)
 
-        shortcuts_row.addWidget(self._make_shortcut_label("Toggle UI:"))
+        shortcuts_row.addWidget(self._make_shortcut_label("เปิด/ปิด UI:"))
         self._shortcut_toggle_lbl = self._make_shortcut_value(
             self.settings.get_shortcut("toggle_ui", "alt+l").upper()
         )
         shortcuts_row.addWidget(self._shortcut_toggle_lbl)
         shortcuts_row.addSpacing(8)
-        shortcuts_row.addWidget(self._make_shortcut_label("Start/Stop:"))
+        shortcuts_row.addWidget(self._make_shortcut_label("เริ่ม/หยุด:"))
         self._shortcut_start_lbl = self._make_shortcut_value(
             self.settings.get_shortcut("start_stop_translate", "f9").upper()
         )
@@ -206,7 +373,7 @@ class SettingsPanel(QWidget):
         from version import __version__
         ver_label = QLabel(f"MagicBabel Dalamud v{__version__} by iarcanar")
         ver_label.setObjectName("settings_version")
-        ver_label.setFont(QFont(FONT_PRIMARY, 8))
+        ver_label.setFont(QFont(FONT_PRIMARY, 10))  # +20% from 8pt
         ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         c_layout.addWidget(ver_label)
 
@@ -224,19 +391,27 @@ class SettingsPanel(QWidget):
 
         self._status_label = QLabel("")
         self._status_label.setObjectName("settings_status")
-        self._status_label.setFont(QFont(FONT_PRIMARY, 8))
+        self._status_label.setFont(QFont(FONT_PRIMARY, 10))  # +20% from 8pt
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         f_layout.addWidget(self._status_label)
 
         self._apply_btn = QPushButton("APPLY")
         self._apply_btn.setObjectName("settings_apply")
-        self._apply_btn.setFont(QFont(FONT_PRIMARY, 10, QFont.Weight.Bold))
-        self._apply_btn.setFixedHeight(34)
+        self._apply_btn.setFont(QFont(FONT_PRIMARY, 12, QFont.Weight.Bold))  # +20% from 10pt
+        self._apply_btn.setFixedHeight(40)  # +20% from 34
         self._apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_btn.setEnabled(False)
         self._apply_btn.setProperty("state", "inactive")
         self._apply_btn.clicked.connect(self._on_apply)
         f_layout.addWidget(self._apply_btn)
+
+        self._restart_btn = QPushButton("RESTART APP")
+        self._restart_btn.setObjectName("settings_restart")
+        self._restart_btn.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))  # +20% from 9pt
+        self._restart_btn.setFixedHeight(36)  # +20% from 30
+        self._restart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._restart_btn.clicked.connect(self._on_restart_clicked)
+        f_layout.addWidget(self._restart_btn)
 
         main.addWidget(footer)
 
@@ -245,7 +420,7 @@ class SettingsPanel(QWidget):
     def _add_section_label(self, layout, text):
         lbl = QLabel(text)
         lbl.setObjectName("settings_section")
-        lbl.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
+        lbl.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))  # +20% from 9pt — section labels
         layout.addWidget(lbl)
 
     def _add_toggle(self, layout, key, label, default):
@@ -254,14 +429,21 @@ class SettingsPanel(QWidget):
 
         lbl = QLabel(label)
         lbl.setObjectName("settings_toggle_label")
-        lbl.setFont(QFont(FONT_PRIMARY, 9))
+        lbl.setFont(QFont(FONT_PRIMARY, 11))  # +20% from 9pt — toggle label
         row.addWidget(lbl, stretch=1)
 
-        cb = QCheckBox()
-        cb.setObjectName("settings_toggle")
+        # Modern iOS-style switch with sliding knob (replaces QCheckBox pill)
+        cb = ToggleSwitch(palette=self.palette)
         cb.setChecked(self.settings.get(key, default))
-        cb.stateChanged.connect(lambda state, k=key: self._on_toggle_changed(k))
-        row.addWidget(cb)
+        cb.toggled.connect(lambda checked, k=key: self._on_toggle_changed(k))
+        row.addWidget(cb, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        # Make label clickable to toggle the switch (better UX)
+        lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+        def _label_click(event, switch=cb):
+            if event.button() == Qt.MouseButton.LeftButton:
+                switch.setChecked(not switch.isChecked())
+        lbl.mousePressEvent = _label_click
 
         layout.addLayout(row)
         self._toggles[key] = cb
@@ -269,8 +451,8 @@ class SettingsPanel(QWidget):
     def _make_section_btn(self, text):
         btn = QPushButton(text)
         btn.setObjectName("settings_section_btn")
-        btn.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
-        btn.setFixedHeight(30)
+        btn.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))  # +20% from 9pt
+        btn.setFixedHeight(36)  # +20% from 30
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         return btn
 
@@ -282,15 +464,15 @@ class SettingsPanel(QWidget):
 
         btn = QPushButton(text)
         btn.setObjectName("settings_test_btn")
-        btn.setFont(QFont(FONT_PRIMARY, 9))
-        btn.setFixedHeight(26)
+        btn.setFont(QFont(FONT_PRIMARY, 11))  # +20% from 9pt
+        btn.setFixedHeight(32)  # +20% from 26
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(handler)
         v.addWidget(btn)
 
         sub = QLabel(subtitle)
         sub.setObjectName("settings_test_subtitle")
-        sub.setFont(QFont(FONT_MONO, 7))
+        sub.setFont(QFont(FONT_MONO, 8))  # +20% from 7pt
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         v.addWidget(sub)
 
@@ -299,15 +481,15 @@ class SettingsPanel(QWidget):
     def _make_shortcut_label(self, text):
         lbl = QLabel(text)
         lbl.setObjectName("settings_shortcut_key")
-        lbl.setFont(QFont(FONT_PRIMARY, 8))
+        lbl.setFont(QFont(FONT_PRIMARY, 10))  # +20% from 8pt
         return lbl
 
     def _make_shortcut_value(self, text):
         lbl = QLabel(text)
         lbl.setObjectName("settings_shortcut_val")
-        lbl.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+        lbl.setFont(QFont(FONT_MONO, 10, QFont.Weight.Bold))  # +20% from 8pt
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setMinimumWidth(50)
+        lbl.setMinimumWidth(60)  # +20% from 50
         return lbl
 
     # ── Toggle Logic ──
@@ -376,6 +558,28 @@ class SettingsPanel(QWidget):
         self._apply_btn.setText("APPLY")
         self._update_apply_state()
         self._status_label.setText("")
+
+    # ── Restart ──
+
+    def _on_restart_clicked(self):
+        self._restart_btn.setEnabled(False)
+        self._restart_countdown = 3
+        self._restart_btn.setText(f"Restarting in {self._restart_countdown}...")
+        self._status_label.setStyleSheet("color: #FF8C00; background: transparent;")
+        self._status_label.setText("Application will restart shortly...")
+        self._restart_timer = QTimer()
+        self._restart_timer.timeout.connect(self._restart_tick)
+        self._restart_timer.start(1000)
+
+    def _restart_tick(self):
+        self._restart_countdown -= 1
+        if self._restart_countdown > 0:
+            self._restart_btn.setText(f"Restarting in {self._restart_countdown}...")
+        else:
+            self._restart_timer.stop()
+            self._restart_btn.setText("Restarting...")
+            if self.main_app and hasattr(self.main_app, 'restart_app'):
+                self.main_app.restart_app()
 
     def _snapshot_initial_values(self):
         self._initial_values = {k: cb.isChecked() for k, cb in self._toggles.items()}
@@ -457,30 +661,34 @@ class SettingsPanel(QWidget):
     # ── Test Message Pools (6 per type) ──
 
     _TEST_DIALOG = [
-        ("Tataru", "Welcome back, adventurer! How may I assist you today?"),
-        ("Alphinaud", "We must528 consider our next course of action carefully."),
-        ("Alisaie", "Enough talk. Let's get moving before they notice us."),
-        ("Thancred", "I've scouted ahead. The path through Garlemald is clear."),
-        ("Y'shtola", "The aether here is unusually dense. Pray, be on your guard."),
-        ("G'raha Tia", "This reminds me of a tale from the Crystal Tower archives."),
+        ("Tataru", "Oh, welcome back! I've been looking into some new business ventures while you were away. Don't worry, I'll handle all the paperwork!"),
+        ("Alphinaud", "We cannot afford to act in haste. Let us gather what intelligence we can before committing to a course of action."),
+        ("Alisaie", "Standing around deliberating won't save anyone. If you won't act, I will."),
+        ("Thancred", "I make no claims to heroism. I simply528 go where I'm needed and do what must be done."),
+        ("Y'shtola", "The aetherial currents here are... wrong. Something has disturbed the natural flow. We must tread carefully."),
+        ("G'raha Tia", "To think I would one day stand beside the Warrior of Light, not as an observer, but as a comrade. It is more than I ever dared dream."),
+        ("Estinien", "Save your sentiments for after the battle. The enemy will not wait for us to finish reminiscing."),
+        ("Urianger", "The stars foretell a confluence of fates. What was sundered shall be made whole, yet the path remaineth shrouded."),
+        ("Krile", "Grandfather always said that the truest measure of a person is not their strength, but their willingness to lend it to others."),
+        ("Wuk Lamat", "Everyone deserves to live with a smile on their face. That's the kind of leader I want to be!"),
     ]
 
     _TEST_BATTLE = [
-        ("Gaius", "The weak shall be consumed by the strong!"),
-        ("Zenos", "Yes! Finally, a foe worthy of my blade!"),
-        ("Nidhogg", "Thou shalt pay for the sins of Ishgard, mortal!"),
-        ("Emet-Selch", "Such devastation... this was not my intention."),
-        ("Sephirot", "I shall crush you beneath the weight of my power!"),
+        ("Zenos", "Yes! More! Show me your fury!"),
+        ("Nidhogg", "Thy sins shall be paid in blood!"),
+        ("Emet-Selch", "Such a disappointment."),
+        ("Sephirot", "Kneel before my might!"),
+        ("Thordan VII", "By Halone's grace, I shall strike you down!"),
         ("???", "You cannot escape your fate, Warrior of Light."),
     ]
 
     _TEST_CUTSCENE = [
-        ("Hydaelyn", "Hear... Feel... Think... Your journey has only just begun."),
-        ("Venat", "The future is not yet written. Walk ever forward, my friend."),
-        ("Meteion", "Why do people continue to live, knowing they will one day die?"),
-        ("Emet-Selch", "Remember us. Remember that we once lived."),
-        ("Hythlodaeus", "You remind me of someone I once knew. How very curious."),
-        ("Wuk Lamat", "I want to build a world where everyone can smile together!"),
+        ("", "Hear... Feel... Think... Crystal bearer, your journey has only just begun."),
+        ("", "The night sky stretched endlessly above the Source, a thousand thousand stars bearing silent witness to the tale about to unfold."),
+        ("", "And so it was that the Warrior of Light set forth once more, guided by hope and burdened by duty, into the unknown."),
+        ("", "In that moment, the weight of every sacrifice, every loss, every hard-won victory pressed upon your heart like a prayer."),
+        ("", "The crystal's light flickered, and with it, the last echo of a world that once was."),
+        ("", "Remember us. Remember that we once lived."),
     ]
 
     def _inject_test_dialog(self):
@@ -546,7 +754,15 @@ class SettingsPanel(QWidget):
     def _apply_theme(self):
         primary = self.am.get_accent_color()
         secondary = self.am.get_theme_color("secondary", "#888888")
-        p = derive_palette(primary, secondary)
+        surface = self.am.get_theme_color("surface_override")
+        text_override = self.am.get_theme_color("text_override")
+        p = derive_palette(primary, secondary, surface=surface, text_override=text_override)
+        self.palette = p
+
+        # Update toggle switch colors to match new theme (if rebuilt)
+        for sw in self._toggles.values():
+            if hasattr(sw, "set_palette"):
+                sw.set_palette(p)
 
         qss = f"""
             QWidget#settings_bg {{
@@ -591,21 +807,7 @@ class SettingsPanel(QWidget):
                 color: {p['text']};
                 background: transparent;
             }}
-            QCheckBox#settings_toggle {{
-                background: transparent;
-                spacing: 0px;
-            }}
-            QCheckBox#settings_toggle::indicator {{
-                width: 36px;
-                height: 18px;
-                border-radius: 9px;
-                border: 1px solid {p['border_subtle']};
-                background: {p['bg_titlebar']};
-            }}
-            QCheckBox#settings_toggle::indicator:checked {{
-                background: {p['accent']};
-                border: 1px solid {p['accent']};
-            }}
+            /* QCheckBox#settings_toggle styling removed — replaced by ToggleSwitch widget */
             QPushButton#settings_section_btn {{
                 background: {p['btn_bg']};
                 color: {p['text']};
@@ -672,6 +874,22 @@ class SettingsPanel(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 6px;
+            }}
+            QPushButton#settings_restart {{
+                background: transparent;
+                color: {p['text_dim']};
+                border: 1px solid {p['border_subtle']};
+                border-radius: 6px;
+            }}
+            QPushButton#settings_restart:hover {{
+                background: rgba(204, 68, 68, 0.15);
+                color: #ff6b6b;
+                border: 1px solid rgba(204, 68, 68, 0.5);
+            }}
+            QPushButton#settings_restart:disabled {{
+                background: {p['bg_titlebar']};
+                color: #FF8C00;
+                border: 1px solid rgba(255, 140, 0, 0.4);
             }}
         """
         self.setStyleSheet(qss)

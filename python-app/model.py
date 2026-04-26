@@ -370,7 +370,7 @@ class ModelSettings:
         self.model_combo = ttk.Combobox(
             model_combo_frame,
             textvariable=self.model_var,
-            values=["gemini-2.0-flash"],
+            values=["gemini-3.1-flash-lite-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash"],
             state="readonly",
             font=("Segoe UI", 11),
         )

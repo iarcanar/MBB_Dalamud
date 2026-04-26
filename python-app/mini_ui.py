@@ -1,18 +1,85 @@
 import logging
 import tkinter as tk
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageDraw, ImageOps, ImageTk
 from appearance import appearance_manager
 from resource_utils import resource_path
 
-# ── MBB Monochrome Dark Palette ──
-_BG_DARK = "#1a1a1a"
-_BG_DEEPER = "#141414"
-_BG_HOVER = "#2a2a2a"
-_BORDER_SUBTLE = "#2a2a2a"
-_TEXT_SECONDARY = "#888888"
-_STATUS_IDLE = "#555555"
-_STATUS_ACTIVE = "#4CAF50"
-_HIGHLIGHT_COLOR = "#e0e0e0"
+
+def _invert_rgb_keep_alpha(img: "Image.Image") -> "Image.Image":
+    """Invert R/G/B channels while preserving alpha.
+    Used to flip white-line PNG icons to dark for light themes
+    (icons ship as white-on-transparent and would vanish on light bg)."""
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+    r, g, b, a = img.split()
+    rgb = Image.merge("RGB", (r, g, b))
+    inverted = ImageOps.invert(rgb)
+    ir, ig, ib = inverted.split()
+    return Image.merge("RGBA", (ir, ig, ib, a))
+
+
+def _bg_is_light(hex_color: str) -> bool:
+    """Quick luminance check — match PyQt6 styles.is_light_theme threshold."""
+    h = (hex_color or "#000000").lstrip("#")
+    if len(h) < 6:
+        return False
+    r = int(h[0:2], 16) / 255.0
+    g = int(h[2:4], 16) / 255.0
+    b = int(h[4:6], 16) / 255.0
+    # Relative luminance (sRGB) — light if > 0.5
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.5
+
+
+# ── Theme integration (added 2026-04-25) ──
+# Mini UI is a tiny Tkinter Toplevel. Pulls colors from PyQt6 theme system.
+_THEME_CACHE = None
+
+def _themed(role: str) -> str:
+    """Get themed color (cached)."""
+    global _THEME_CACHE
+    if _THEME_CACHE is None:
+        try:
+            from pyqt_ui.styles import derive_palette
+            primary = appearance_manager.get_accent_color()
+            secondary = appearance_manager.get_theme_color("secondary", "#888888")
+            surface = appearance_manager.get_theme_color("surface_override")
+            text_o = appearance_manager.get_theme_color("text_override")
+            p = derive_palette(primary, secondary, surface=surface, text_override=text_o)
+            _THEME_CACHE = {
+                "bg":            p["bg"],
+                "bg_deeper":     p["bg_deeper"],
+                "border":        p["border_subtle"],
+                "text":          p["text"],
+                "text_dim":      p["text_dim"],
+                "accent":        p["accent"],
+                "medium":        p["bg_medium"],
+            }
+        except Exception:
+            _THEME_CACHE = {
+                "bg": "#1a1a1a", "bg_deeper": "#141414", "border": "#2a2a2a",
+                "text": "#e0e0e0", "text_dim": "#888888",
+                "accent": "#007AFF", "medium": "#2a2a2a",
+            }
+    return _THEME_CACHE.get(role, "#888888")
+
+
+def _refresh_mini_theme():
+    """Invalidate theme cache. Call after user changes theme."""
+    global _THEME_CACHE
+    _THEME_CACHE = None
+
+
+# Status colors are SEMANTIC (not theme-specific) — kept fixed
+_STATUS_IDLE = "#555555"   # gray dot when not translating
+_STATUS_ACTIVE = "#4CAF50" # green dot when translating
+
+# Legacy constants (some functions reference these directly — pull live from theme)
+def _bg_dark(): return _themed("bg")
+def _bg_deeper(): return _themed("bg_deeper")
+def _bg_hover(): return _themed("medium")
+def _border_subtle(): return _themed("border")
+def _text_secondary(): return _themed("text_dim")
+def _highlight_color(): return _themed("text")
 
 
 class MiniUI:
@@ -62,43 +129,53 @@ class MiniUI:
 
     def load_icons(self):
         icon_size = (15, 15)
+        # Status dots — semantic colors, never inverted
         self.blink_icon = ImageTk.PhotoImage(
             Image.open(resource_path("assets/red_icon.png")).resize(icon_size)
         )
         self.black_icon = ImageTk.PhotoImage(
             Image.open(resource_path("assets/black_icon.png")).resize(icon_size)
         )
+
+        # White-line icons (expand / play / pause) — invert RGB on light themes
+        # so they remain visible against the bright background.
+        invert = _bg_is_light(_themed("bg"))
+
+        def _load_iconable(path: str, size: tuple) -> "ImageTk.PhotoImage":
+            img = Image.open(resource_path(path)).convert("RGBA").resize(size)
+            if invert:
+                img = _invert_rgb_keep_alpha(img)
+            return ImageTk.PhotoImage(img)
+
         toggle_icon_size = (32, 32)
-        self.expand_icon = ImageTk.PhotoImage(
-            Image.open(resource_path("assets/expand.png")).resize(toggle_icon_size)
-        )
+        self.expand_icon = _load_iconable("assets/expand.png", toggle_icon_size)
         play_pause_size = (22, 22)
-        self.play_icon = ImageTk.PhotoImage(
-            Image.open(resource_path("assets/play.png")).resize(play_pause_size)
-        )
-        self.pause_icon = ImageTk.PhotoImage(
-            Image.open(resource_path("assets/pause.png")).resize(play_pause_size)
-        )
+        self.play_icon = _load_iconable("assets/play.png", play_pause_size)
+        self.pause_icon = _load_iconable("assets/pause.png", play_pause_size)
 
     def create_mini_ui(self):
-        """Create vertical Mini UI with MBB monochrome dark theme"""
+        """Create vertical Mini UI with MBB monochrome dark theme.
+        Also reloads icons each time so theme changes (dark↔light) re-invert
+        the white-line icons (play/pause/expand) for proper contrast."""
         if self.mini_ui and self.mini_ui.winfo_exists():
             self.mini_ui.destroy()
+        # Re-detect light/dark and reload icons with the right inversion state
+        self.load_icons()
 
         self.mini_ui = tk.Toplevel(self.root)
         self.mini_ui.geometry("50x176")
         self.mini_ui.overrideredirect(True)
         self.mini_ui.attributes("-topmost", True)
-        self.mini_ui.configure(bg=_BG_DARK)
+        self.mini_ui.configure(bg=_themed("bg"))
         self.mini_ui.withdraw()
 
         # Main frame — 1px subtle border
         main_frame = tk.Frame(
             self.mini_ui,
-            bg=_BG_DARK,
+            bg=_themed("bg"),
             highlightthickness=1,
-            highlightbackground=_BORDER_SUBTLE,
-            highlightcolor=_BORDER_SUBTLE,
+            highlightbackground=_themed("border"),
+            highlightcolor=_themed("border"),
         )
         main_frame.pack(expand=True, fill=tk.BOTH, padx=0, pady=0)
 
@@ -107,8 +184,8 @@ class MiniUI:
             main_frame,
             image=self.expand_icon,
             command=self.show_main_ui_callback,
-            bg=_BG_DARK,
-            activebackground=_BG_HOVER,
+            bg=_themed("bg"),
+            activebackground=_themed("medium"),
             bd=0,
             highlightthickness=0,
             cursor="hand2",
@@ -120,8 +197,8 @@ class MiniUI:
             main_frame,
             image=self.play_icon,
             command=self._handle_toggle_translation,
-            bg=_BG_DARK,
-            activebackground=_BG_HOVER,
+            bg=_themed("bg"),
+            activebackground=_themed("medium"),
             bd=0,
             highlightthickness=0,
             cursor="hand2",
@@ -132,8 +209,8 @@ class MiniUI:
         self.mini_loading_label = tk.Label(
             main_frame,
             text="",
-            bg=_BG_DARK,
-            fg=_TEXT_SECONDARY,
+            bg=_themed("bg"),
+            fg=_themed("text_dim"),
             font=("Consolas", 8, "bold"),
         )
         self.mini_loading_label.pack(side=tk.TOP, pady=(0, 0))
@@ -142,7 +219,7 @@ class MiniUI:
         self._dot_label = tk.Label(
             main_frame,
             image=self._dot_idle_img,
-            bg=_BG_DARK,
+            bg=_themed("bg"),
             bd=0,
         )
         self._dot_label.pack(side=tk.TOP, pady=(12, 16))
@@ -152,10 +229,10 @@ class MiniUI:
 
         # ── Hover effects ──
         def on_hover_enter(widget):
-            widget.config(bg=_BG_HOVER)
+            widget.config(bg=_themed("medium"))
 
         def on_hover_leave(widget):
-            widget.config(bg=_BG_DARK)
+            widget.config(bg=_themed("bg"))
 
         self.play_pause_button.bind("<Enter>", lambda e: on_hover_enter(self.play_pause_button))
         self.play_pause_button.bind("<Leave>", lambda e: on_hover_leave(self.play_pause_button))
@@ -301,14 +378,14 @@ class MiniUI:
                 original_thickness = main_frame.cget("highlightthickness")
 
                 main_frame.configure(
-                    highlightthickness=2, highlightbackground=_HIGHLIGHT_COLOR
+                    highlightthickness=2, highlightbackground=_themed("text")
                 )
 
                 self.mini_ui.after(
                     1200,
                     lambda: main_frame.configure(
                         highlightthickness=1,
-                        highlightbackground=_BORDER_SUBTLE,
+                        highlightbackground=_themed("border"),
                     ),
                 )
         except Exception as e:
@@ -317,7 +394,7 @@ class MiniUI:
     def update_theme(self, accent_color=None, highlight_color=None):
         """Update MiniUI with MBB monochrome theme"""
         try:
-            bg_c = _BG_DARK
+            bg_c = _themed("bg")
 
             if not self.mini_ui or not self.mini_ui.winfo_exists():
                 return
@@ -329,14 +406,14 @@ class MiniUI:
                     main_frame = child
                     main_frame.configure(
                         bg=bg_c,
-                        highlightbackground=_BORDER_SUBTLE,
+                        highlightbackground=_themed("border"),
                     )
                     break
 
             if main_frame:
                 for widget in main_frame.winfo_children():
                     if isinstance(widget, tk.Button):
-                        widget.configure(bg=bg_c, activebackground=_BG_HOVER)
+                        widget.configure(bg=bg_c, activebackground=_themed("medium"))
                     elif isinstance(widget, tk.Label):
                         widget.configure(bg=bg_c)
 
@@ -345,7 +422,7 @@ class MiniUI:
                 self.play_pause_button.unbind("<Enter>")
                 self.play_pause_button.unbind("<Leave>")
                 self.play_pause_button.bind(
-                    "<Enter>", lambda e: self.play_pause_button.config(bg=_BG_HOVER)
+                    "<Enter>", lambda e: self.play_pause_button.config(bg=_themed("medium"))
                 )
                 self.play_pause_button.bind(
                     "<Leave>", lambda e: self.play_pause_button.config(bg=bg_c)
@@ -355,7 +432,7 @@ class MiniUI:
                 self._toggle_button.unbind("<Enter>")
                 self._toggle_button.unbind("<Leave>")
                 self._toggle_button.bind(
-                    "<Enter>", lambda e: self._toggle_button.config(bg=_BG_HOVER)
+                    "<Enter>", lambda e: self._toggle_button.config(bg=_themed("medium"))
                 )
                 self._toggle_button.bind(
                     "<Leave>", lambda e: self._toggle_button.config(bg=bg_c)

@@ -70,6 +70,60 @@ def _adjust_lightness(hex_color: str, factor: float) -> str:
     return _rgb_to_hex(r2, g2, b2)
 
 
+def _shift_lightness(hex_color: str, delta: float) -> str:
+    """Additively shift lightness by `delta` in HLS (better for very dark colors).
+    delta in range [-1, +1]; +0.05 = slightly lighter, -0.05 = slightly darker."""
+    r, g, b = _hex_to_rgb(hex_color)
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    l = max(0.0, min(1.0, l + delta))
+    r2, g2, b2 = colorsys.hls_to_rgb(h, l, s)
+    return _rgb_to_hex(r2, g2, b2)
+
+
+def _desaturate(hex_color: str, factor: float) -> str:
+    """Multiply saturation by factor (0..1 desaturates, >1 saturates)."""
+    r, g, b = _hex_to_rgb(hex_color)
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    s = max(0.0, min(1.0, s * factor))
+    r2, g2, b2 = colorsys.hls_to_rgb(h, l, s)
+    return _rgb_to_hex(r2, g2, b2)
+
+
+def invert_pixmap(pixmap):
+    """RGB-invert a QPixmap (white → black, light → dark) while preserving alpha.
+    Used to make white PNG icons visible on light theme backgrounds.
+    Returns a new QPixmap. Original is not modified."""
+    from PyQt6.QtGui import QImage, QPixmap
+    if pixmap is None or pixmap.isNull():
+        return pixmap
+    img = pixmap.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    img.invertPixels(QImage.InvertMode.InvertRgb)  # alpha untouched
+    return QPixmap.fromImage(img)
+
+
+def tint_pixmap(pixmap, color: str):
+    """Replace all visible (alpha>0) pixels of pixmap with a single color, keeping alpha.
+    Useful when invert_pixmap doesn't give enough contrast (e.g. light-gray icons).
+    Uses CompositionMode_SourceIn for clean color replacement."""
+    from PyQt6.QtGui import QPixmap, QPainter, QColor
+    from PyQt6.QtCore import Qt
+    if pixmap is None or pixmap.isNull():
+        return pixmap
+    result = QPixmap(pixmap.size())
+    result.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(result)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(result.rect(), QColor(color))
+    painter.end()
+    return result
+
+
+def is_light_theme(bg_hex: str) -> bool:
+    """Return True if the given background color is light (icons should be inverted)."""
+    return _luminance(bg_hex) > 0.5
+
+
 def _luminance(hex_color: str) -> float:
     """WCAG relative luminance (0=black, 1=white)."""
     r, g, b = _hex_to_rgb(hex_color)
@@ -80,38 +134,82 @@ def _luminance(hex_color: str) -> float:
     return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
 
 
-def derive_palette(primary: str, secondary: str) -> dict:
+def derive_palette(primary: str, secondary: str,
+                   surface: str = None, text_override: str = None) -> dict:
     """Derive a full UI palette from primary (background) + secondary (accent) colors.
 
+    Args:
+        primary: Background base color (#RRGGBB)
+        secondary: Accent/highlight color
+        surface: Optional override for button/card surface color
+        text_override: Optional override for primary text color
+
+    Uses ADDITIVE lightness shifts (better than multiplicative for very dark themes).
+    On dark bg → surfaces lighten; on light bg → surfaces darken.
     Returns a dict matching get_main_window_qss() keyword arguments.
     """
-    # ── Background family (from primary) ──
+    r, g, b = _hex_to_rgb(primary)
+    _, primary_l, _ = colorsys.rgb_to_hls(r, g, b)
+    is_dark = primary_l < 0.5
+
+    # ── Background family (proportional shifts → consistent perceived elevation) ──
+    # Very dark themes (Carbon l=0.07) need SMALLER shifts so surfaces don't pop
+    # bright. Light themes need LARGER shifts so surfaces are visible vs near-white bg.
     bg = primary
-    bg_deeper = _adjust_lightness(primary, 0.7)
-    bg_titlebar = _adjust_lightness(primary, 0.6)
-    bg_surface = _adjust_lightness(primary, 1.15)
-    bg_medium = _adjust_lightness(primary, 1.4)
-
-    # ── Borders ──
-    border_subtle = _adjust_lightness(primary, 1.3)
-    border_active = _adjust_lightness(primary, 1.6)
-    separator = _adjust_lightness(primary, 1.2)
-
-    # ── Text (auto-contrast via WCAG luminance) ──
-    lum = _luminance(primary)
-    if lum > 0.35:
-        text = "#1a1a1a"
-        text_dim = "#555555"
+    if is_dark:
+        # Scale shift with starting lightness — keeps perceived elevation consistent
+        # at l=0.07 (Carbon): base ~0.020;  at l=0.18 (Dimmed): base ~0.045
+        base = max(0.018, min(0.045, primary_l * 0.32))
+        bg_deeper   = _shift_lightness(primary, -base * 0.6)
+        bg_titlebar = _shift_lightness(primary, -base * 0.4)
+        bg_surface  = _shift_lightness(primary, +base)
+        bg_medium   = _shift_lightness(primary, +base * 1.7)
+        border_subtle = _shift_lightness(primary, +base * 1.3)
+        border_active = _shift_lightness(primary, +base * 2.2)
+        separator     = _shift_lightness(primary, +base * 1.1)
     else:
-        text = "#e0e0e0"
-        text_dim = "#888888"
+        # Light mode: aggressive negative shifts so surfaces clearly visible vs near-white bg.
+        bg_deeper     = _shift_lightness(primary, +0.015)
+        bg_titlebar   = _shift_lightness(primary, -0.022)
+        bg_surface    = _shift_lightness(primary, -0.075)   # was -0.04 → too subtle
+        bg_medium     = _shift_lightness(primary, -0.115)
+        border_subtle = _shift_lightness(primary, -0.130)   # strong border for visibility
+        border_active = _shift_lightness(primary, -0.200)
+        separator     = _shift_lightness(primary, -0.085)
+
+    # User-provided surface override
+    if surface:
+        bg_surface = surface
+
+    # ── Text (auto-contrast via WCAG luminance, or user override) ──
+    if text_override:
+        text = text_override
+        # Derive dim text from primary text (60% luminance shift)
+        if is_dark:
+            text_dim = _shift_lightness(text, -0.20)
+        else:
+            text_dim = _shift_lightness(text, +0.30)
+    else:
+        if is_dark:
+            text = "#e6edf3"   # warm off-white (GitHub Dark style)
+            text_dim = "#8b939d"  # slightly brighter than before for better readability
+        else:
+            # Light bg: dark slate text + darker dim for AAA contrast on white
+            text = "#1f2328"   # GitHub Light text
+            text_dim = "#4a5560"  # was #656d76 — deeper for better contrast
 
     # ── Accent (from secondary) ──
+    # Trust the theme designer — no auto-desaturation. Themes that want subtlety
+    # (Carbon/Graphite) ship desaturated values; vivid themes (Neon/Synthwave/Forge)
+    # ship full-saturation. User can also tweak via the 4-color picker.
     accent = secondary
-    accent_light = _adjust_lightness(secondary, 1.3)
+    accent_light = _shift_lightness(accent, +0.10) if is_dark else _shift_lightness(accent, -0.08)
 
-    # ── Toggle active text (auto-contrast vs secondary) ──
-    toggled_text = "#1a1a1a" if _luminance(secondary) > 0.35 else "#ffffff"
+    # ── Toggle active text (WCAG-correct contrast vs accent) ──
+    # WCAG sweet spot: at L=0.179, white-on-color and black-on-color both give ~4.5:1.
+    # Below this lum, white text wins; above, dark text wins.
+    # Old threshold (0.5) caused light accents like #58a6ff to use white text → 2.4:1 contrast.
+    toggled_text = "#ffffff" if _luminance(accent) < 0.179 else "#0d1117"
 
     # ── Button surface ──
     btn_bg = bg_surface
@@ -274,8 +372,8 @@ def get_main_window_qss(accent="#ffffff", accent_light="#ffffff",
         /* ── Toggle Buttons (TUI/LOG/MINI) ── */
         QPushButton#toggle_btn {{
             background: {btn_bg};
-            color: {text_dim};
-            border: 1px solid {border_subtle};
+            color: {text};
+            border: 1px solid {border_active};
             border-radius: 4px;
             font-family: '{FONT_PRIMARY}';
             font-size: 10pt;
@@ -285,7 +383,7 @@ def get_main_window_qss(accent="#ffffff", accent_light="#ffffff",
         QPushButton#toggle_btn:hover {{
             background: {bg_medium};
             color: {text};
-            border: 1px solid {border_active};
+            border: 1px solid {accent};
         }}
         QPushButton#toggle_btn[toggled="true"] {{
             background: {accent};
@@ -297,7 +395,7 @@ def get_main_window_qss(accent="#ffffff", accent_light="#ffffff",
         QPushButton#utility_btn {{
             background: {btn_bg};
             color: {text};
-            border: 1px solid {border_subtle};
+            border: 1px solid {border_active};
             border-radius: 4px;
             font-family: '{FONT_PRIMARY}';
             font-size: 9pt;
@@ -306,7 +404,7 @@ def get_main_window_qss(accent="#ffffff", accent_light="#ffffff",
         QPushButton#utility_btn:hover {{
             background: {bg_medium};
             color: {text};
-            border: 1px solid {border_active};
+            border: 1px solid {accent};
         }}
         QPushButton#utility_btn[toggled="true"] {{
             background: {accent};

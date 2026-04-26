@@ -94,9 +94,9 @@ class BottomBar(QWidget):
         self.btn_theme.setFixedSize(30, 30)
         self.btn_theme.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_theme.setToolTip("Theme")
-        theme_path = self._asset_path("assets/theme.png")
-        if os.path.exists(theme_path):
-            self.btn_theme.setIcon(QIcon(theme_path))
+        self._theme_icon_path = self._asset_path("assets/theme.png")
+        if os.path.exists(self._theme_icon_path):
+            self.btn_theme.setIcon(QIcon(self._theme_icon_path))
             self.btn_theme.setIconSize(QSize(18, 18))
         else:
             self.btn_theme.setText("\U0001f3a8")
@@ -111,9 +111,9 @@ class BottomBar(QWidget):
         self.btn_settings.setFixedSize(30, 30)
         self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_settings.setToolTip("Settings")
-        setting_path = self._asset_path("assets/setting.png")
-        if os.path.exists(setting_path):
-            self.btn_settings.setIcon(QIcon(setting_path))
+        self._setting_icon_path = self._asset_path("assets/setting.png")
+        if os.path.exists(self._setting_icon_path):
+            self.btn_settings.setIcon(QIcon(self._setting_icon_path))
             self.btn_settings.setIconSize(QSize(18, 18))
         else:
             self.btn_settings.setText("\u2699")
@@ -163,3 +163,20 @@ class BottomBar(QWidget):
 
     def update_theme(self, qss: str = ""):
         pass
+
+    def update_icon_theme(self, invert: bool):
+        """Called by main window after theme change. Inverts icon colors when bg is light
+        so white PNG icons stay visible on light backgrounds."""
+        from PyQt6.QtGui import QPixmap
+        from pyqt_ui.styles import invert_pixmap
+        for btn, path in [
+            (self.btn_theme, getattr(self, "_theme_icon_path", "")),
+            (self.btn_settings, getattr(self, "_setting_icon_path", "")),
+        ]:
+            if not btn or not path or not os.path.exists(path):
+                continue
+            pix = QPixmap(path)
+            if invert:
+                pix = invert_pixmap(pix)
+            btn.setIcon(QIcon(pix))
+            btn.setIconSize(QSize(18, 18))

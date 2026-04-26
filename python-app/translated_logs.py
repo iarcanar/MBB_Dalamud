@@ -22,6 +22,52 @@ import time
 import hashlib
 from appearance import appearance_manager
 
+
+# ── Theme integration (added 2026-04-25) ──
+# Tkinter Logs UI pulls colors from PyQt6 theme system. Replaces hardcoded
+# `_themed("bg")` (which is a fixed init constant, not theme-aware).
+_THEME_CACHE = None
+
+def _themed(role: str) -> str:
+    """Get themed color from cached palette. Roles: bg, surface, border,
+    border_active, text, text_dim, accent, accent_light, titlebar, medium."""
+    global _THEME_CACHE
+    if _THEME_CACHE is None:
+        try:
+            from pyqt_ui.styles import derive_palette
+            primary = appearance_manager.get_accent_color()
+            secondary = appearance_manager.get_theme_color("secondary", _themed("text_dim"))
+            surface = appearance_manager.get_theme_color("surface_override")
+            text_o = appearance_manager.get_theme_color("text_override")
+            p = derive_palette(primary, secondary, surface=surface, text_override=text_o)
+            _THEME_CACHE = {
+                "bg":            p["bg"],
+                "surface":       p["btn_bg"],
+                "border":        p["border_subtle"],
+                "border_active": p["border_active"],
+                "text":          p["text"],
+                "text_dim":      p["text_dim"],
+                "accent":        p["accent"],
+                "accent_light":  p["accent_light"],
+                "titlebar":      p["bg_titlebar"],
+                "medium":        p["bg_medium"],
+            }
+        except Exception:
+            _THEME_CACHE = {
+                "bg": "#1a1a1a", "surface": "#222222", "border": "#2a2a2a",
+                "border_active": "#3a3a3a",
+                "text": "#FFFFFF", "text_dim": "#888888",
+                "accent": "#007AFF", "accent_light": "#0A84FF",
+                "titlebar": "#0e0e0e", "medium": "#252525",
+            }
+    return _THEME_CACHE.get(role, "#888888")
+
+
+def _refresh_logs_theme():
+    """Invalidate theme cache. Call after user changes theme."""
+    global _THEME_CACHE
+    _THEME_CACHE = None
+
 # เพิ่ม import สำหรับการจัดการ monitor position
 try:
     import win32api
@@ -37,7 +83,7 @@ logging.basicConfig(level=logging.ERROR)
 # --- Design System Constants ---
 # Fallback font สำหรับ UI elements ใน translated_logs (ตัวอักษรใน bubble โหลดจาก settings)
 FONT_FAMILY = "Anuphan"
-SINGLE_BUBBLE_COLOR = "#1C1C1C"
+SINGLE_BUBBLE_COLOR = _themed("surface")
 
 # Window size defaults
 DEFAULT_LOG_WIDTH = 300
@@ -239,7 +285,7 @@ class Translated_Logs:
         self.root.attributes("-topmost", True)
 
         self.content_frame = tk.Frame(
-            self.root, bg=appearance_manager.bg_color, bd=0, highlightthickness=0
+            self.root, bg=_themed("bg"), bd=0, highlightthickness=0
         )
         self.content_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -256,13 +302,13 @@ class Translated_Logs:
     def setup_header(self):
         """Create header with font size controls"""
         header_frame = tk.Frame(
-            self.content_frame, bg=appearance_manager.bg_color, height=35
+            self.content_frame, bg=_themed("bg"), height=35
         )
         header_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
         header_frame.pack_propagate(False)
 
         # pack RIGHT ก่อน LEFT เพื่อให้ controls_frame ได้พื้นที่เสมอ
-        controls_frame = tk.Frame(header_frame, bg=appearance_manager.bg_color)
+        controls_frame = tk.Frame(header_frame, bg=_themed("bg"))
         controls_frame.pack(side=tk.RIGHT, padx=8)
 
         self.title_label = tk.Label(
@@ -270,7 +316,7 @@ class Translated_Logs:
             text="💬 บทสนทนา",
             font=(FONT_FAMILY, 10, "bold"),
             fg="#38bdf8",
-            bg=appearance_manager.bg_color,
+            bg=_themed("bg"),
         )
         self.title_label.pack(side=tk.LEFT, padx=(8, 4), pady=8)
 
@@ -280,7 +326,7 @@ class Translated_Logs:
             command=self.hide_window,
             font=("Tahoma", 10, "bold"),
             fg="#ff6b6b",
-            bg=appearance_manager.bg_color,
+            bg=_themed("bg"),
             bd=0,
             padx=6,
             pady=2,
@@ -295,12 +341,12 @@ class Translated_Logs:
             hide_btn.configure(bg="#ff6b6b", fg="white")
 
         def on_hide_leave(e):
-            hide_btn.configure(bg=appearance_manager.bg_color, fg="#ff6b6b")
+            hide_btn.configure(bg=_themed("bg"), fg="#ff6b6b")
 
         hide_btn.bind("<Enter>", on_hide_enter)
         hide_btn.bind("<Leave>", on_hide_leave)
 
-        font_frame = tk.Frame(controls_frame, bg=appearance_manager.bg_color)
+        font_frame = tk.Frame(controls_frame, bg=_themed("bg"))
         font_frame.pack(side=tk.LEFT, padx=(0, 5))
 
         font_minus_btn = tk.Button(
@@ -308,8 +354,8 @@ class Translated_Logs:
             text="−",
             command=self._decrease_font_size,
             font=(FONT_FAMILY, 14, "bold"),
-            fg=appearance_manager.fg_color,
-            bg=appearance_manager.bg_color,
+            fg=_themed("text"),
+            bg=_themed("bg"),
             bd=0,
             padx=6,
             pady=0,
@@ -317,9 +363,9 @@ class Translated_Logs:
             width=2,
             highlightthickness=0,
             activebackground=appearance_manager.darken_color(
-                appearance_manager.bg_color, 0.3
+                _themed("bg"), 0.3
             ),
-            activeforeground="#B0B0B0",
+            activeforeground=_themed("text_dim"),
         )
         font_minus_btn.pack(side=tk.LEFT, padx=(0, 1))
         self._add_hover_effect(font_minus_btn)
@@ -328,8 +374,8 @@ class Translated_Logs:
             font_frame,
             text=str(self.current_font_size),
             font=(FONT_FAMILY, 9),
-            fg=appearance_manager.get_theme_color("text_dim", "#888888"),
-            bg=appearance_manager.bg_color,
+            fg=appearance_manager.get_theme_color("text_dim", _themed("text_dim")),
+            bg=_themed("bg"),
             width=3,
         )
         self.font_size_label.pack(side=tk.LEFT, padx=1)
@@ -339,8 +385,8 @@ class Translated_Logs:
             text="+",
             command=self._increase_font_size,
             font=(FONT_FAMILY, 12, "bold"),
-            fg=appearance_manager.fg_color,
-            bg=appearance_manager.bg_color,
+            fg=_themed("text"),
+            bg=_themed("bg"),
             bd=0,
             padx=6,
             pady=0,
@@ -348,9 +394,9 @@ class Translated_Logs:
             width=2,
             highlightthickness=0,
             activebackground=appearance_manager.darken_color(
-                appearance_manager.bg_color, 0.3
+                _themed("bg"), 0.3
             ),
-            activeforeground="#B0B0B0",
+            activeforeground=_themed("text_dim"),
         )
         font_plus_btn.pack(side=tk.LEFT, padx=(1, 0))
         self._add_hover_effect(font_plus_btn)
@@ -365,13 +411,13 @@ class Translated_Logs:
 
         def on_enter(e):
             button.configure(
-                bg=appearance_manager.darken_color(appearance_manager.bg_color, 0.3),
-                fg="#B0B0B0",
+                bg=_themed("medium"),
+                fg=_themed("text_dim"),
             )
 
         def on_leave(e):
             button.configure(
-                bg=appearance_manager.bg_color, fg=appearance_manager.fg_color
+                bg=_themed("bg"), fg=_themed("text")
             )
 
         button.bind("<Enter>", on_enter)
@@ -460,14 +506,14 @@ class Translated_Logs:
 
     def setup_chat_area(self):
         """สร้างพื้นที่ chat พร้อม custom scrollbar และ mouse wheel - flat design"""
-        chat_frame = tk.Frame(self.content_frame, bg=appearance_manager.bg_color)
+        chat_frame = tk.Frame(self.content_frame, bg=_themed("bg"))
         chat_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.canvas = tk.Canvas(
-            chat_frame, bg=appearance_manager.bg_color, highlightthickness=0, bd=0
+            chat_frame, bg=_themed("bg"), highlightthickness=0, bd=0
         )
         self.setup_custom_scrollbar(chat_frame)
-        self.scrollable_frame = tk.Frame(self.canvas, bg=appearance_manager.bg_color)
+        self.scrollable_frame = tk.Frame(self.canvas, bg=_themed("bg"))
         self.canvas.configure(yscrollcommand=self.scrollbar_update)
 
         self.scrollbar_canvas.pack(side="right", fill="y", padx=(2, 0))
@@ -505,12 +551,12 @@ class Translated_Logs:
             parent,
             width=scrollbar_width,
             height=100,
-            bg=appearance_manager.bg_color,
+            bg=_themed("bg"),
             highlightthickness=0,
             bd=0,
         )
 
-        thumb_color = "#555555"
+        thumb_color = _themed("text_dim")
         self.scrollbar_thumb = self.scrollbar_canvas.create_rectangle(
             1, 0, scrollbar_width - 1, 50, fill=thumb_color, outline="", tags=("thumb",)
         )
@@ -519,7 +565,7 @@ class Translated_Logs:
         self.scrollbar_canvas.bind("<B1-Motion>", self._on_scrollbar_drag)
 
         def on_scroll_enter(e):
-            self.scrollbar_canvas.itemconfig(self.scrollbar_thumb, fill="#777777")
+            self.scrollbar_canvas.itemconfig(self.scrollbar_thumb, fill=_themed("text_dim"))
 
         def on_scroll_leave(e):
             self.scrollbar_canvas.itemconfig(self.scrollbar_thumb, fill=thumb_color)
@@ -563,14 +609,14 @@ class Translated_Logs:
     def setup_bottom_controls(self):
         """สร้าง controls ด้านล่างพร้อมไอคอน — ซ่อนเริ่มต้น, แสดงเมื่อ hover"""
         bottom_frame = tk.Frame(
-            self.content_frame, bg=appearance_manager.bg_color, height=30
+            self.content_frame, bg=_themed("bg"), height=30
         )
         # ไม่ pack/place เริ่มต้น — ใช้ place_forget/place ผ่าน hover events
         bottom_frame.pack_propagate(False)
         self._bottom_frame = bottom_frame
         self._controls_visible = False
 
-        left_frame = tk.Frame(bottom_frame, bg=appearance_manager.bg_color)
+        left_frame = tk.Frame(bottom_frame, bg=_themed("bg"))
         left_frame.pack(side=tk.LEFT, padx=5)
 
         self.setup_lock_button(left_frame)  # เพิ่มปุ่ม lock ก่อน
@@ -595,7 +641,7 @@ class Translated_Logs:
                     parent,
                     image=self.unlock_icon,
                     command=self.toggle_position_lock,
-                    bg=appearance_manager.bg_color,
+                    bg=_themed("bg"),
                     bd=0,
                     padx=4,
                     cursor="hand2",
@@ -608,8 +654,8 @@ class Translated_Logs:
                     text="🔓",
                     command=self.toggle_position_lock,
                     font=("Arial", 11),
-                    fg="#888888",
-                    bg=appearance_manager.bg_color,
+                    fg=_themed("text_dim"),
+                    bg=_themed("bg"),
                     bd=0,
                     padx=4,
                     cursor="hand2",
@@ -631,8 +677,8 @@ class Translated_Logs:
                 text="🔓",
                 command=self.toggle_position_lock,
                 font=("Arial", 11),
-                fg="#888888",
-                bg=appearance_manager.bg_color,
+                fg=_themed("text_dim"),
+                bg=_themed("bg"),
                 bd=0,
                 padx=4,
                 cursor="hand2",
@@ -661,7 +707,7 @@ class Translated_Logs:
                 if hasattr(self, "unlock_icon") and self.unlock_icon:
                     self.lock_button.config(image=self.unlock_icon)
                 else:
-                    self.lock_button.config(text="🔓", fg="#888888")
+                    self.lock_button.config(text="🔓", fg=_themed("text_dim"))
 
         except Exception as e:
             logging.error(f"Error updating lock button state: {e}")
@@ -715,7 +761,7 @@ class Translated_Logs:
                     parent,
                     image=self.swap_icon,
                     command=self.toggle_reverse_mode,
-                    bg=appearance_manager.bg_color,
+                    bg=_themed("bg"),
                     bd=0,
                     padx=4,
                     cursor="hand2",
@@ -728,7 +774,7 @@ class Translated_Logs:
                     command=self.toggle_reverse_mode,
                     font=("Arial", 11),
                     fg=self._get_reverse_color(),
-                    bg=appearance_manager.bg_color,
+                    bg=_themed("bg"),
                     bd=0,
                     padx=4,
                     cursor="hand2",
@@ -745,7 +791,7 @@ class Translated_Logs:
                 command=self.toggle_reverse_mode,
                 font=("Arial", 11),
                 fg=self._get_reverse_color(),
-                bg=appearance_manager.bg_color,
+                bg=_themed("bg"),
                 bd=0,
                 padx=4,
                 cursor="hand2",
@@ -763,15 +809,15 @@ class Translated_Logs:
                 command=self.toggle_smart_replacement,
                 font=("Arial", 10, "bold"),
                 fg=self._get_smart_color_flat(),
-                bg=appearance_manager.bg_color,
+                bg=_themed("bg"),
                 bd=1,
                 padx=6,
                 pady=2,
                 cursor="hand2",
                 highlightthickness=0,
                 relief="solid",
-                highlightcolor="#666666",
-                highlightbackground="#666666",
+                highlightcolor=_themed("text_dim"),
+                highlightbackground=_themed("text_dim"),
             )
             smart_btn.pack(side=tk.LEFT, padx=2)
             self.smart_button = smart_btn
@@ -785,7 +831,7 @@ class Translated_Logs:
                 command=self.toggle_smart_replacement,
                 font=("Tahoma", 10),
                 fg=self._get_smart_color_flat(),
-                bg=appearance_manager.bg_color,
+                bg=_themed("bg"),
                 bd=1,
                 padx=4,
                 cursor="hand2",
@@ -800,13 +846,13 @@ class Translated_Logs:
 
     def _get_smart_color_flat(self):
         """ส่งคืนสีข้อความปุ่ม smart ตามสถานะ - flat design"""
-        return "#FFFFFF" if self.enable_smart_replacement else "#888888"
+        return "#FFFFFF" if self.enable_smart_replacement else _themed("text_dim")
 
     def setup_font_button(self, parent):
         """สร้างปุ่ม font manager - minimal flat design"""
         try:
             # ใช้ข้อความ "Font" แทนตัว F
-            _dim = appearance_manager.get_theme_color("text_dim", "#888888")
+            _dim = appearance_manager.get_theme_color("text_dim", _themed("text_dim"))
             _border = appearance_manager.get_theme_color("border", "#444444")
             font_btn = tk.Button(
                 parent,
@@ -814,7 +860,7 @@ class Translated_Logs:
                 command=self.open_font_manager,
                 font=(FONT_FAMILY, 9, "bold"),
                 fg=_dim,
-                bg=appearance_manager.bg_color,
+                bg=_themed("bg"),
                 bd=1,
                 padx=4,
                 pady=2,
@@ -835,8 +881,8 @@ class Translated_Logs:
                 text="Font",
                 command=self.open_font_manager,
                 font=("Tahoma", 9),
-                fg=appearance_manager.get_theme_color("text_dim", "#888888"),
-                bg=appearance_manager.bg_color,
+                fg=appearance_manager.get_theme_color("text_dim", _themed("text_dim")),
+                bg=_themed("bg"),
                 bd=1,
                 padx=3,
                 cursor="hand2",
@@ -905,7 +951,7 @@ class Translated_Logs:
                     parent,
                     image=self.trans_icon,
                     command=self.toggle_transparency,
-                    bg=appearance_manager.bg_color,
+                    bg=_themed("bg"),
                     bd=0,
                     padx=4,
                     cursor="hand2",
@@ -917,8 +963,8 @@ class Translated_Logs:
                     text="👁",
                     command=self.toggle_transparency,
                     font=("Segoe UI Symbol", 12),
-                    fg=appearance_manager.fg_color,
-                    bg=appearance_manager.bg_color,
+                    fg=_themed("text"),
+                    bg=_themed("bg"),
                     bd=0,
                     padx=4,
                     cursor="hand2",
@@ -934,8 +980,8 @@ class Translated_Logs:
                 text="T",
                 command=self.toggle_transparency,
                 font=("Tahoma", 10),
-                fg=appearance_manager.fg_color,
-                bg=appearance_manager.bg_color,
+                fg=_themed("text"),
+                bg=_themed("bg"),
                 bd=0,
                 padx=4,
                 cursor="hand2",
@@ -944,7 +990,7 @@ class Translated_Logs:
 
     def setup_resize_handle(self):
         """สร้าง resize handle — ซ่อนเริ่มต้น, แสดงเมื่อ hover ตรงตำแหน่ง"""
-        bg = appearance_manager.bg_color
+        bg = _themed("bg")
         try:
             self.resize_icon = AssetManager.load_icon("resize.png", (16, 16))
 
@@ -986,7 +1032,7 @@ class Translated_Logs:
                 else:
                     self.resize_handle.config(
                         fg=appearance_manager.darken_color(
-                            appearance_manager.fg_color, 0.6
+                            _themed("text"), 0.6
                         ),
                         cursor="sizing",
                     )
@@ -1050,7 +1096,7 @@ class Translated_Logs:
                 pass
 
     def _get_reverse_color(self):
-        return "#00BFFF" if self.reverse_mode.get() else appearance_manager.fg_color
+        return "#00BFFF" if self.reverse_mode.get() else _themed("text")
 
     def _on_window_configure(self, event):
         """จัดการการเปลี่ยนขนาดหน้าต่าง - บันทึกขนาดใหม่เมื่อ lock"""
@@ -1392,7 +1438,7 @@ class Translated_Logs:
         if is_lore_text:
             speaker = "Lore"
             message = text.strip()
-            speaker_color = "#a0a0a0"  # สีเทาอ่อนสำหรับ Lore
+            speaker_color = _themed("text_dim")  # สีเทาอ่อนสำหรับ Lore
             return speaker, message, speaker_color
         # --- [ จบส่วนที่แก้ไข ] ---
 
@@ -1851,13 +1897,13 @@ class Translated_Logs:
         self.ghost_frame.attributes("-topmost", True)
 
         # ใช้สีเทาเข้มเหมือน UI พร้อม border ที่เห็นชัด
-        ghost_bg = appearance_manager.darken_color(appearance_manager.bg_color, 0.2)
+        ghost_bg = appearance_manager.darken_color(_themed("bg"), 0.2)
         self.ghost_frame.configure(bg=ghost_bg, cursor="sizing")
 
         # สร้าง border frame ภายใน เพื่อให้เห็นขอบเขตชัด
         self.ghost_border = tk.Frame(
             self.ghost_frame,
-            bg=appearance_manager.fg_color,
+            bg=_themed("text"),
             bd=0,
             highlightthickness=2,
             highlightcolor="#60A5FA",  # สีฟ้าอ่อนสำหรับ border
@@ -2045,7 +2091,7 @@ class Translated_Logs:
                 if hasattr(self, "unlock_icon") and self.unlock_icon:
                     self.lock_button.config(image=self.unlock_icon)
                 else:
-                    self.lock_button.config(text="🔓", fg="#888888")
+                    self.lock_button.config(text="🔓", fg=_themed("text_dim"))
             logging.info("Initial state: UNLOCKED (always start unlocked)")
 
         except Exception as e:
@@ -2116,7 +2162,7 @@ class Translated_Logs:
             self.smart_button.config(
                 text=self._get_smart_icon(),
                 fg=self._get_smart_color_flat(),
-                bg=appearance_manager.bg_color,
+                bg=_themed("bg"),
             )
 
         logging.info(f"Smart replacement: {status}")

@@ -96,11 +96,21 @@ class HeaderBar(QWidget):
         icon_name = "assets/pin.png" if self._is_pinned else "assets/unpin.png"
         icon_path = self._asset_path(icon_name)
         if os.path.exists(icon_path):
-            self.btn_pin.setIcon(QIcon(icon_path))
+            from PyQt6.QtGui import QPixmap
+            from pyqt_ui.styles import invert_pixmap
+            pix = QPixmap(icon_path)
+            if getattr(self, "_invert_icons", False):
+                pix = invert_pixmap(pix)
+            self.btn_pin.setIcon(QIcon(pix))
             self.btn_pin.setIconSize(QSize(18, 18))
             self.btn_pin.setText("")
         else:
             self.btn_pin.setText("\U0001f4cc" if self._is_pinned else "\U0001f4cd")
+
+    def update_icon_theme(self, invert: bool):
+        """Called by main window after theme change. Inverts icon colors when bg is light."""
+        self._invert_icons = invert
+        self._update_pin_icon()
 
     def _on_glass_click(self):
         callback = self.callbacks.get("toggle_glass")

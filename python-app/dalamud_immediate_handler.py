@@ -7,6 +7,7 @@ import logging
 from typing import Dict, Any, Optional
 import time
 import threading
+from collections import OrderedDict
 
 # 🎯 Text Hook Filtering - ALLOW LIST APPROACH (v1.5.4)
 # Changed from Block List to Allow List for better control and simpler maintenance
@@ -67,7 +68,10 @@ class DalamudImmediateHandler:
         self.translation_start_time = None  # Track when translation started
 
         # Translation cache for speed
-        self.translation_cache = {}
+        # >>> AUDIT_FIX_H1: use OrderedDict for explicit FIFO eviction
+        # REVERT: change to `self.translation_cache = {}`
+        self.translation_cache = OrderedDict()
+        # <<< AUDIT_FIX_H1
         self.cache_max_size = 100
 
         # Store original text for force translate
@@ -78,6 +82,12 @@ class DalamudImmediateHandler:
         self.current_translation_thread = None
         self.translating_messages = set()  # Track messages being translated
         self.current_chat_type = None  # Track current chat type for display mode switching
+
+        # >>> AUDIT_FIX_H2: lock for translation_cache + translating_messages
+        # (worker threads spawn from process_message, can race on cache state)
+        # REVERT: remove self._cache_lock and `with self._cache_lock:` blocks below
+        self._cache_lock = threading.Lock()
+        # <<< AUDIT_FIX_H2
 
         # Statistics
         self.stats = {
@@ -228,25 +238,45 @@ class DalamudImmediateHandler:
                 return
 
             self.stats['messages_received'] += 1
-            cache_key = hash(message_text)
+            # >>> AUDIT_FIX_H4: use raw message text as key (no hash collisions).
+            # Memory cost is negligible (cache capped at 100 entries).
+            # REVERT: change `cache_key = message_text` back to `cache_key = hash(message_text)`
+            cache_key = message_text
+            # <<< AUDIT_FIX_H4
 
-            self.logger.info(f"[รับข้อความ] #{self.stats['messages_received']}: {message_text[:50]}...")
+            # >>> AUDIT_FIX_M1: hot-path logger.info → debug to reduce I/O during long sessions
+            # REVERT: change debug→info on lines below
+            self.logger.debug(f"[รับข้อความ] #{self.stats['messages_received']}: {message_text[:50]}...")
 
-            # Check cache first - if found, show IMMEDIATELY
-            if cache_key in self.translation_cache:
-                self.logger.info(f"[CACHE HIT] แสดงคำแปลจาก cache ทันที!")
+            # >>> AUDIT_FIX_H2: atomic check + reserve under lock to prevent
+            # double-translation race when same message arrives twice rapidly
+            with self._cache_lock:
+                cached_translation = self.translation_cache.get(cache_key)
+                if cached_translation is not None:
+                    # Move to end (most recent) for LRU semantics
+                    self.translation_cache.move_to_end(cache_key)
+                already_translating = cache_key in self.translating_messages
+                if cached_translation is None and not already_translating:
+                    # Reserve atomically so second arrival sees `already_translating`
+                    self.translating_messages.add(cache_key)
+                    reserved_for_translate = True
+                else:
+                    reserved_for_translate = False
+            # <<< AUDIT_FIX_H2
+
+            if cached_translation is not None:
+                self.logger.debug(f"[CACHE HIT] แสดงคำแปลจาก cache ทันที!")
                 self.stats['cache_hits'] += 1
-                self._show_immediately(self.translation_cache[cache_key], chat_type)
+                self._show_immediately(cached_translation, chat_type)
                 return
 
-            # Check if already translating this message
-            if cache_key in self.translating_messages:
-                self.logger.info(f"[กำลังแปล] ข้อความนี้กำลังแปลอยู่")
+            if not reserved_for_translate:
+                # Already in flight — handler will display it when ready
+                self.logger.debug(f"[กำลังแปล] ข้อความนี้กำลังแปลอยู่")
                 return
 
-            # Start immediate translation
-            self.logger.info(f"[เริ่มแปล] เริ่มแปลข้อความใหม่...")
-            self.translating_messages.add(cache_key)
+            self.logger.debug(f"[เริ่มแปล] เริ่มแปลข้อความใหม่...")
+            # <<< AUDIT_FIX_M1
 
             def translate_and_show_immediately():
                 try:
@@ -301,7 +331,11 @@ class DalamudImmediateHandler:
                     if is_warmup:
                         self.logger.info(f"🔥 [WARMUP] First translation: {translation_time:.2f}s")
                     else:
-                        self.logger.info(f"[แปลเสร็จ] ใช้เวลา {translation_time:.2f}s: {translated_text[:50]}...")
+                        # >>> AUDIT_FIX_M1: keep timing as info (useful), drop the body to debug
+                        # REVERT: change debug→info or restore original line
+                        self.logger.info(f"[แปลเสร็จ] {translation_time:.2f}s")
+                        self.logger.debug(f"[แปลผล] {translated_text[:80]}")
+                        # <<< AUDIT_FIX_M1
 
                     # 📝 CONVERSATION LOGGER: เติมคำแปลที่ได้
                     if self.conversation_logger:
@@ -312,17 +346,22 @@ class DalamudImmediateHandler:
                         except Exception:
                             pass
 
-                    # Cache result
-                    self.translation_cache[cache_key] = translated_text
-                    if len(self.translation_cache) > self.cache_max_size:
-                        first_key = next(iter(self.translation_cache))
-                        del self.translation_cache[first_key]
+                    # >>> AUDIT_FIX_H2: cache write under lock, plus FIFO eviction with cap.
+                    # REVERT: replace block with original 4-line dict insert + len-check
+                    with self._cache_lock:
+                        self.translation_cache[cache_key] = translated_text
+                        self.translation_cache.move_to_end(cache_key)
+                        while len(self.translation_cache) > self.cache_max_size:
+                            self.translation_cache.popitem(last=False)
+                    # <<< AUDIT_FIX_H2
 
                     self.stats['messages_translated'] += 1
 
                     # CRITICAL: Show IMMEDIATELY if still translating
                     if self.is_translating and self.is_running:
-                        self.logger.info(f"[แสดงทันที] แสดงคำแปลทันที (ChatType {chat_type})!")
+                        # >>> AUDIT_FIX_M1: hot-path info → debug
+                        self.logger.debug(f"[แสดงทันที] แสดงคำแปลทันที (ChatType {chat_type})!")
+                        # <<< AUDIT_FIX_M1
                         self._show_immediately(translated_text, chat_type)
 
                         # *** ADD TO HISTORY: เพิ่มข้อความแปลจริงลงใน history สำหรับ Previous Dialog ***
@@ -337,7 +376,9 @@ class DalamudImmediateHandler:
                                         speaker=speaker,
                                         chat_type=message_data.get('ChatType')
                                     )
-                                    self.logger.info(f"📄 [REAL HISTORY] Added real translation for '{speaker}'")
+                                    # >>> AUDIT_FIX_M1: hot-path info → debug
+                                    self.logger.debug(f"📄 [REAL HISTORY] Added real translation for '{speaker}'")
+                                    # <<< AUDIT_FIX_M1
                             except Exception as e:
                                 self.logger.error(f"❌ [REAL HISTORY] Error adding to history: {e}")
 
@@ -363,8 +404,10 @@ class DalamudImmediateHandler:
                     self.stats['errors'] += 1
                     self.logger.error(f"Translation error: {e}")
                 finally:
-                    # Clean up tracking
-                    self.translating_messages.discard(cache_key)
+                    # >>> AUDIT_FIX_H2: cleanup under lock (in-flight set)
+                    with self._cache_lock:
+                        self.translating_messages.discard(cache_key)
+                    # <<< AUDIT_FIX_H2
 
                     # 🔧 ENSURE CLEANUP: Always clear translating status on completion
                     if hasattr(self, 'main_app_ref') and self.main_app_ref:

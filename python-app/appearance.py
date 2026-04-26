@@ -180,20 +180,20 @@ class AppearanceManager:
         return "Theme1"
         
     def create_default_theme(self):
-        """สร้างธีมเริ่มต้นกรณีไม่มีธีมใด ๆ - Cyberpunk Theme"""
+        """Hard-coded fallback theme — Carbon (GitHub Dark inspired). 2026-04-25"""
         self.themes["Theme1"] = {
-            "name": "Magicite Babel - Cyberpunk",
-            "accent": "#00FFFF",        # Bright Cyan (primary buttons, highlights)
-            "accent_light": "#33FFFF",  # Lighter cyan (hover states)
-            "highlight": "#00FFFF",     # Cyan highlight
-            "secondary": "#FF00FF",     # Magenta (secondary accents)
-            "text": "#FFFFFF",          # White text
-            "text_dim": "#B0B0B0",      # Dimmed gray text
-            "button_bg": "#1a1a2e",     # Dark blue-tinted background for buttons
-            "bg": "#0a0a0f",            # Very dark background (almost black)
-            "border": "#00FFFF",        # Cyan borders
-            "success": "#00FF88",       # Green-cyan for success states
-            "error": "#FF1493"          # Deep pink for errors
+            "name": "Carbon",
+            "accent": "#0d1117",        # bg base (used as `primary` in derive_palette)
+            "accent_light": "#65b3ff",  # accent hover
+            "highlight": "#58a6ff",     # highlight color
+            "secondary": "#58a6ff",     # actual accent / button highlight
+            "text": "#e6edf3",          # primary text (~14:1 contrast on #0d1117)
+            "text_dim": "#7d8590",      # secondary text
+            "button_bg": "#161b22",     # surface tier
+            "bg": "#0d1117",            # window background
+            "border": "#21262d",        # subtle border
+            "success": "#3fb950",       # GitHub-style green
+            "error": "#f85149",         # GitHub-style red
         }
         
     def get_theme_colors(self):
@@ -786,52 +786,74 @@ class AppearanceManager:
                 self.settings = settings
                 custom_themes = settings.get("custom_themes", {})
 
-                # จัดการกรณีไม่มีธีมผู้ใช้หรือมีน้อยกว่า 5 ธีม
-                if not custom_themes or len(custom_themes) < 5:
-                    # สร้างธีมเริ่มต้นสำหรับส่วนที่ขาด
-                    default_themes = [
-                        {
-                            "name": "ธีมเริ่มต้น",
-                            "accent": "#6c5ce7",
-                            "secondary": "#00c2cb",
-                        },
-                        {"name": "ธีมฟ้า", "accent": "#1E88E5", "secondary": "#03A9F4"},
-                        {"name": "ธีมเขียว", "accent": "#2E7D32", "secondary": "#00BFA5"},
-                        {"name": "ธีมแดง", "accent": "#C62828", "secondary": "#FF5252"},
-                        {"name": "ธีมดำ", "accent": "#333333", "secondary": "#888888"},
-                    ]
+                # ── 12 Theme Palettes (redesigned 2026-04-25) ──
+                # 6 Modern Dark + 3 Vivid + 3 Light
+                # NOTE: "accent" field = BACKGROUND base; "secondary" = actual highlight.
+                # Optional "surface" + "text" override derived values for fine-tuning.
+                default_themes = [
+                    # — Modern Dark (1-6) —
+                    {"name": "Carbon",    "accent": "#0d1117", "secondary": "#58a6ff"},
+                    {"name": "Graphite",  "accent": "#16181c", "secondary": "#7c8aed"},
+                    {"name": "Slate",     "accent": "#0f172a", "secondary": "#38bdf8"},
+                    {"name": "Mocha",     "accent": "#1e1e2e", "secondary": "#cba6f7"},
+                    {"name": "Tokyo",     "accent": "#1a1b26", "secondary": "#7aa2f7"},
+                    {"name": "Dimmed",    "accent": "#22272e", "secondary": "#6cb6ff"},
+                    # — Vivid / Bold (7-9) —
+                    {"name": "Neon",      "accent": "#0a0e1a", "secondary": "#00d9ff"},   # cyberpunk cyan
+                    {"name": "Synthwave", "accent": "#1a0d2e", "secondary": "#ff5599"},   # 80s pink
+                    {"name": "Forge",     "accent": "#1a0f0a", "secondary": "#ff8c42"},   # ember orange
+                    # — Light (10-12) —
+                    {"name": "Snow",      "accent": "#ffffff", "secondary": "#0969da"},   # GitHub Light
+                    {"name": "Cream",     "accent": "#faf6ed", "secondary": "#c2410c"},   # warm paper + rust
+                    {"name": "Mint",      "accent": "#f0fdf4", "secondary": "#15803d"},   # fresh + forest green
+                ]
 
-                    # สร้างเฉพาะธีมที่ขาด
+                # ── MIGRATION: force-replace old defaults (legacy + first-redesign rounds) ──
+                LEGACY_ACCENTS = {
+                    # original 5 themes (pre-redesign)
+                    "#6c5ce7", "#1E88E5", "#1e88e5",
+                    "#2E7D32", "#2e7d32",
+                    "#C62828", "#c62828",
+                    "#333333",
+                }
+                # Detect first-redesign 6-theme set so we expand to 12
+                FIRST_REDESIGN_NAMES = {"Carbon", "Graphite", "Slate", "Mocha", "Tokyo", "Dimmed"}
+                LEGACY_NAMES = {"ธีมเริ่มต้น", "ธีมฟ้า", "ธีมเขียว", "ธีมแดง", "ธีมดำ"}
+                if custom_themes:
+                    for tid, tdata in list(custom_themes.items()):
+                        name = tdata.get("name", "")
+                        accent = tdata.get("accent", "").strip()
+                        # Wipe legacy themes completely
+                        if accent in LEGACY_ACCENTS or name in LEGACY_NAMES:
+                            custom_themes.pop(tid, None)
+
+                # จัดการกรณีไม่มีธีมผู้ใช้หรือมีน้อยกว่า 12 ธีม
+                if not custom_themes or len(custom_themes) < 12:
+                    # หาเลข Theme ที่มีอยู่แล้ว (กันชนกัน)
                     existing_numbers = set()
                     for theme_id in custom_themes:
                         if theme_id.startswith("Theme"):
                             try:
-                                num = int(theme_id[5:])
-                                existing_numbers.add(num)
+                                existing_numbers.add(int(theme_id[5:]))
                             except ValueError:
                                 pass
 
-                    # เติมธีมที่ขาด
-                    for i in range(1, 6):
-                        if i not in existing_numbers and len(custom_themes) < 5:
+                    # เติมธีมที่ขาดให้ครบ 12 ธีม
+                    for i in range(1, 13):
+                        if i not in existing_numbers and len(custom_themes) < 12:
                             theme_id = f"Theme{i}"
                             theme_data = default_themes[i - 1]
-
-                            # สร้างธีมใหม่
-                            accent_light = self.lighten_color(theme_data["accent"], 1.3)
-                            new_theme = {
+                            accent_light = self.lighten_color(theme_data["secondary"], 1.15)
+                            custom_themes[theme_id] = {
                                 "name": theme_data["name"],
-                                "accent": theme_data["accent"],
+                                "accent": theme_data["accent"],         # bg base
                                 "accent_light": accent_light,
-                                "highlight": theme_data["accent"],
-                                "secondary": theme_data["secondary"],
-                                "text": "#ffffff",
-                                "text_dim": "#b2b2b2",
-                                "button_bg": "#262637",
+                                "highlight": theme_data["secondary"],
+                                "secondary": theme_data["secondary"],   # actual accent
+                                "text": "#e6edf3",
+                                "text_dim": "#7d8590",
+                                "button_bg": theme_data["accent"],
                             }
-
-                            # เพิ่มธีมใหม่ลงในคลังธีม
-                            custom_themes[theme_id] = new_theme
 
                     # บันทึกการเปลี่ยนแปลง
                     settings.set("custom_themes", custom_themes)
@@ -936,11 +958,17 @@ class AppearanceManager:
         if color_value is None and default is not None:
             color_value = default
 
-        # 3. ถ้ายังไม่มี ให้ใช้ default จาก default_colors
+        # 3. Caller ส่ง default=None แบบตั้งใจ (เช่น optional override fields like
+        #    "surface_override"/"text_override") → ไม่ใช้ fg_color fallback,
+        #    คืน None ตามที่ caller คาดหวัง.
+        #    เก่า: fall through เป็น self.fg_color ("#FFFFFF") → ทำให้ derive_palette
+        #    คิดว่ามี override สีขาว → ปุ่มทั้งหมดกลายเป็นสีขาว (bug 2026-04-25)
+        if color_value is None and default is None:
+            return None
+
+        # 4. ถ้ายังไม่มี (caller ส่ง default ค่าอื่น) ให้ใช้ default_colors / fg_color
         if color_value is None:
-            color_value = default_colors.get(
-                color_name, self.fg_color
-            )  # ใช้ fg_color เป็น fallback สุดท้าย
+            color_value = default_colors.get(color_name, self.fg_color)
 
         return color_value
 

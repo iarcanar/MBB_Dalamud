@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.7.8
+**Version:** 1.8.0
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -44,9 +44,210 @@ C:\MBB_Dalamud/
 
 - [x] Codebase migrated to C:\MBB_Dalamud
 - [x] API Key removed from .env (security)
-- [ ] Code cleanup (Phase 1)
+- [x] Code cleanup Phase 1 — dead-code purge + theme system v2 (2026-04-25)
+- [x] NPC Manager polish + word_fixes deprecated (2026-04-26)
+- [x] Translated Logs PyQt6 rewrite + Settings polish (v1.8.0, 2026-04-26)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
+
+---
+
+## Changelog — v1.8.0 (2026-04-26)
+
+### Translated Logs UI — PyQt6 Rewrite
+- **New file**: [pyqt_ui/translated_logs.py](python-app/pyqt_ui/translated_logs.py) (~1100 LOC) — replaces legacy 2230-LOC Tkinter `translated_logs.py`. Same public API + compatibility shims (`root`, `winfo_exists`, `state`, `withdraw`, `is_visible`, `message_cache`) so MBB.py needed minimal changes
+- **LINE-style bubbles**: `ChatBubble(QFrame)` paints ONE rounded rectangle background; speaker label color-coded (`???` purple, dialogue choice gold, Lore dim, normal cyan) + wrapping message label. Multi-line text never breaks the bubble shape
+- **Thai-aware soft-wrap** ([translated_logs.py:99-167](python-app/pyqt_ui/translated_logs.py#L99-L167)): Qt's `QLabel.wordWrap` only breaks at whitespace, but Thai has none. `_insert_thai_breakpoints()` injects ZWSP (U+200B) at Thai leading-vowel boundaries (เ แ โ ใ ไ) — algorithm ported from `translated_ui.py:_split_for_wrap`
+- **QSS-driven font family** ([translated_logs.py:251-289](python-app/pyqt_ui/translated_logs.py#L251-L289)): Qt stylesheets override `setFont()` for QLabels inside styled widgets — bubble labels apply `font-family` + `font-size` via QSS so FontPanel font changes actually take effect
+- **Bubble width constraint via eventFilter on viewport** + cap on inner QLabel maxWidth — fixes overflow caused by `setWidgetResizable(True)` letting children grow past viewport. `setHeightForWidth(True)` + `MinimumExpanding` policy + override `heightForWidth(w)` on bubble — Qt layout uses heightForWidth instead of naive sizeHint, so wordWrap actually wraps
+- **Background-only opacity**: `setWindowOpacity()` would fade text + bubbles too. Replaced with rgba in QSS for `QFrame#logs_bg` driven by 10-100 slider — bubbles paint solid colors and stay 100% opaque
+- **No animation**: `QGraphicsOpacityEffect` on a frameless+`WA_TranslucentBackground` parent left ghost paint trails on drag. Removed fade entirely — bubbles appear instantly
+- **App-wide hover detection**: default Qt widgets only emit `mouseMoveEvent` when a button is pressed. Solution: enable `mouseTracking` + `WA_Hover` recursive on all children + `app.installEventFilter(self)` to catch `MouseMove`/`HoverMove`/`HoverEnter`/`Enter` events anywhere in the panel. Throttled `_save_geometry` (500ms QTimer) so disk writes don't starve the hover poll
+- **Smart positioning**: right-edge anchor (or left if MBB on right), vertically centered, never blocks gameplay area. Lock mode session-only (always starts unlocked)
+- **Asset icons**: `assets/clear.png` (broom — clear button), `assets/lock.png`/`unlock.png` (lock toggle), `assets/resize.png` (resize grip) — auto-inverted on light themes via `invert_pixmap()`
+- **Smart Replacement disabled** in this rewrite — `is_force_retranslation` flag kept as no-op for API compatibility
+
+### Settings Persistence Decoupling
+- **Bug fix** ([MBB.py:apply_saved_settings](python-app/MBB.py#L3288)): when `font_target_mode = "logs"`, MBB startup pushed TUI's `font_size` onto logs UI, overwriting whatever the user had set. Now `apply_saved_settings` calls `translated_ui.update_font` + `adjust_font_size` directly — bypasses `update_font_settings` which respects `font_target_mode`. Logs UI loads its own `logs_ui.font_size` independently
+- **Settings**: added `transparency_value` parameter to `set_logs_settings()` (replaces legacy `transparency_mode` A/B/C/D mapping)
+
+### Settings Panel Polish
+- **Scale +20%**: panel 300×520 → 360×624; ToggleSwitch 44×22 → 52×26; all fonts bumped (11pt→13, 9pt→11, 8pt→10, 7pt→8); button heights bumped proportionally
+- **Section headers in Thai**: "Advanced" → "ตั้งค่าอื่นๆ", "Test Hook" → "ทดสอบการแปลรูปแบบต่างๆ", "Shortcuts" → "ปุ่มลัด"
+- **Toggle labels in Thai**: "Auto-hide UI (WASD)" → "ซ่อน UI เมื่อวิ่ง (WASD)"; "Auto Show TUI" → "โชว์ TUI อัตโนมัติเมื่อแปล"; "Battle Chat Mode" → "แสดงคำแปลซีนต่อสู้"; "Conversation Log" → "บันทึกประวัติการแปล"; "Starting Key Visual" → "เริ่มโปรแกรมด้วยภาพ artwork"
+- **Shortcut labels**: "Toggle UI:" → "เปิด/ปิด UI:", "Start/Stop:" → "เริ่ม/หยุด:"
+
+### FontPanel Polish
+- **Bigger by default**: 340×520 → **470×600** — old size clipped Thai/EN preview lines
+- **Thai labels**: section labels (Font Family/Size/Apply To/Preview) → ฟอนต์/ขนาด/ใช้กับ/ตัวอย่าง; target buttons (TUI/TUI Log/Both) → "หน้าจอแปล"/"บทสนทนา"/"ทั้งสอง"; APPLY → "นำไปใช้"
+- **Dynamic title context** ([font_panel.py:91-104 + 269-279](python-app/pyqt_ui/font_panel.py#L91-L104)): header shows `Font Settings · บทสนทนา` (target-aware, accent-colored) — user sees which UI they're tuning without scrolling
+
+### Mini UI Light-Theme Fix
+- **Icon inversion on light themes** ([mini_ui.py:1-37 + 105-130](python-app/mini_ui.py#L1-L37)): added `_invert_rgb_keep_alpha()` (PIL) + `_bg_is_light()` luminance check. White-line icons (play/pause/expand) auto-invert to dark when bg is light. `create_mini_ui()` now reloads icons on every rebuild so theme changes propagate
+
+---
+
+## Changelog — 2026-04-26 (early)
+
+### NPC Manager Polish
+- **TUI character click pipeline** ([translated_ui.py:5939](python-app/translated_ui.py#L5939) + [npc_manager_panel.py:827](python-app/pyqt_ui/npc_manager_panel.py#L827)): clicking a name on TUI now opens NPC Manager with two pipelines —
+  - A. existing → switch tab MAIN, fill search box, auto-select row
+  - B. missing → auto-add `{firstName: name}` → autosave with toast `"✓ เพิ่ม 'X' แล้ว"` → fall through to A
+  - Fixed: TUI was calling old Tkinter API `find_and_display_character` (no-op) → now calls `open_with_character`
+  - Fixed: `open_with_character` used QListWidget API on a QTreeWidget (`.item()`/`.setCurrentRow()`) → switched to `topLevelItem()`/`setCurrentItem()`
+- **Gender chips per-color** ([npc_manager_panel.py:1289](python-app/pyqt_ui/npc_manager_panel.py#L1289)): details panel chips now use the same colors as the filter bar — Male `#58a6ff` blue, Female `#f06292` pink, Neutral `#8e8e93` grey (via `gender_chip[active="true"][gender="..."]` QSS)
+- **Search clear button moved inside QLineEdit** ([npc_manager_panel.py:584](python-app/pyqt_ui/npc_manager_panel.py#L584)): X button is now child of `_search_input`, positioned at right edge via `resizeEvent` patch + `setTextMargins(0,0,32,0)`. Visible whenever search has text — including auto-fill from TUI click (signals NOT blocked)
+- **Gender filter "ไม่ระบุ" inclusive** ([npc_manager_panel.py:1464](python-app/pyqt_ui/npc_manager_panel.py#L1464)): now matches anything that's not exactly `Male` or `Female` (covers Neutral, Unknown, None, missing — was 5 → ~10 entries)
+
+### word_fixes Deprecated
+- **Cleared 80 OCR-era entries** from `npc.json` → `word_fixes: {}` (key kept for backwards-compat, prevents `KeyError` on access)
+- **Backup**: `python-app/backups/word_fixes_backup_20260426.json` with metadata (count, reason, restore path)
+- **Why**: text hook from server doesn't have OCR character errors (`1↔i`, `0↔o`, `|↔I`, `xxxl↔xxx!`) that word_fixes was built to correct. Name preservation already handles FFXIV proper nouns via 2-layer system (`_mark_names_in_text` + `_restore_names_in_translation`)
+- **WORD FIX tab hidden** ([npc_manager_panel.py:783-786](python-app/pyqt_ui/npc_manager_panel.py#L783-L786)): button created but `setVisible(False)` and not added to layout. WordFixesTab page + DictTabBase logic + `_stack` page index still intact (re-enable by adding back to layout)
+
+### ROLES Tab Merged → MAIN
+- **TABS reduced 5→3**: ROLES tab removed entirely; personality (`character_roles[firstName]`) now editable inline in MAIN details panel
+- **`character_roles` dict in npc.json unchanged** — only the editing UI consolidated. Same `dm.set_character_role()` / `dm.delete_character_role()` API
+- **Personality field** ([npc_manager_panel.py:1568-1599](python-app/pyqt_ui/npc_manager_panel.py#L1568-L1599)): `QTextEdit` between Name and Gender, starts at 1 line (`fm.height() + 22`), drag bottom-right grip to expand up to 420px max
+- **Custom `_TextEditResizeGrip` class** ([npc_manager_panel.py:386-481](python-app/pyqt_ui/npc_manager_panel.py#L386-L481)): triangle paint at bottom-right corner (`SizeVerCursor`); on drag, BOTH the textarea AND the panel window grow by the same delta — prevents textarea overflow into widgets below
+- **Auto-save behavior**: `_on_primary` after `add_main_character`/`update_main_character` calls `set_character_role(first, text)` if textarea has content, `delete_character_role(first)` if empty (keeps dict tidy)
+- **Removed**: `btn_personality` + `_on_open_personality` + `_update_personality_button` + `panel.open_role_for_character()` (cross-tab nav no longer needed)
+
+### MAIN Layout Polish
+- **List/details ratio**: list `stretch=3→2`, details `stretch=2→3` + `list_widget.setMinimumWidth(380→280)` — more room for the details panel
+- **Avatar 80→120 px** ([npc_manager_panel.py:279](python-app/pyqt_ui/npc_manager_panel.py#L279)): placeholder font auto-scales `max(20, int(SIZE * 0.35))`. "Main Characters Details" title removed — redundant with the tab title in tab bar
+- **UPDATE + Delete same row** ([npc_manager_panel.py:1664-1685](python-app/pyqt_ui/npc_manager_panel.py#L1664-L1685)): `action_row` HBox (UPDATE stretch=4, Delete stretch=1, both height=40) — saves ~32px vertical
+- **Tab description repositioned** ([npc_manager_panel.py:790-814](python-app/pyqt_ui/npc_manager_panel.py#L790-L814)): moved from below search bar to inside tab bar, centered in remaining space (`stretch | title body | stretch`). Two-tone — title 13pt bold (text), body 11pt light (text_dim)
+- **TABS now 4-tuple**: `(id, label, title, body)` — title and body styled separately
+
+### Bug Fixes
+- **Light theme white headers** ([npc_manager_panel.py:91-94](python-app/pyqt_ui/npc_manager_panel.py#L91-L94)): `_build_list_header` had hardcoded `rgba(255,255,255,160)` → switched to `setObjectName("npc_list_header")` so QSS theming covers it (uses `text_dim`). Same fix for `_PlaceholderTab`
+- **Custom `confirm_delete()` helper** ([npc_manager_panel.py:100-237](python-app/pyqt_ui/npc_manager_panel.py#L100-L237)): replaces 4 `QMessageBox.question` calls (delete main char / avatar / NPC / dict entry). Frameless dialog, 14pt title + 12pt message, **red "ใช่ ลบ" button** (`#d23030`), theme-aware via parent panel's palette
+
+---
+
+## 🆕 Major Refactor — 2026-04-25
+
+### Dead-Code Purge (~10,000 LOC removed)
+
+**Files deleted entirely:**
+- `simple_monitor.py` — Smart Performance / CPU throttling (OCR-era)
+- `performance_analysis.py` — 0 imports
+- `ui_manager.py` — 1861 LOC, 0 imports (Tkinter UI manager superseded)
+- `style_preview.py` — standalone dev tool
+- `advance_ui.py` — 1044 LOC AdvanceUI class never instantiated
+- `control_ui.py` — 3444 LOC OCR area-manager UI never shown
+- `Legacy/` folder
+
+**Major code removed from MBB.py + settings.py:**
+- `SettingsUI` Tkinter class (settings.py 1370 LOC) — superseded by PyQt6
+- `area_detection_stability_system` + 4 related funcs (350 LOC)
+- 6 dead callback methods: `restart_control_ui`, `on_control_close`,
+  `trigger_temporary_area_display`, `toggle_control`, `set_cpu_limit`,
+  body of `handle_control_ui_event`
+- 7 OCR-era area switching: `test_area_switching`, `explain_area_switching`,
+  `smart_switch_area`, `switch_area_using_preset`, `find_appropriate_preset`,
+  `switch_area_directly`, `update_detection_history`
+- Click-to-translate (~95 LOC across `control_ui.py` + `MBB.py`)
+- `translation_loop` simplified — removed CPU throttling + dead unreachable code
+- 5 orphan settings keys: `bg_swatch_mode`, `bg_swatch_transparency`,
+  `line_spacing`, `text_transparency`, `tui_sizes`, `buffer_settings`
+- `enable_cpu_monitoring` + 5 cpu_* keys
+- `enable_auto_area_switch`, `enable_click_translate` settings keys
+
+**Settings.py: 2433 → 1053 lines  | MBB.py: 7458 → 6543 lines**
+
+### Audit Fixes (translator + handler) — markers `AUDIT_FIX_*`
+
+- **C2** API retry backoff (translator_gemini.py:~1149) — gracefully fail on rate limits
+- **C3** `winfo_exists()` guard in `exit_program` (MBB.py) — eliminates 6-month TclError
+- **H1** Bound `last_translations` (200 entries FIFO) + `translation_cache` (100, OrderedDict)
+- **H2** `threading.Lock` around shared cache state (translator + handler)
+- **H4** Raw text as cache key (no hash collisions)
+- **M1+M3** Hot-path `logger.info` → `debug`, `print()` → `logging`
+
+### Theme System v2 — `pyqt_ui/styles.py` + `appearance.py`
+
+**12 modern theme palettes** (replaced old 5):
+
+| # | Theme | bg | accent | Style |
+|---|-------|-----|--------|-------|
+| 1 | Carbon | `#0d1117` | `#58a6ff` | GitHub Dark |
+| 2 | Graphite | `#16181c` | `#7c8aed` | Linear-style |
+| 3 | Slate | `#0f172a` | `#38bdf8` | Tailwind |
+| 4 | Mocha | `#1e1e2e` | `#cba6f7` | Catppuccin |
+| 5 | Tokyo | `#1a1b26` | `#7aa2f7` | Tokyo Night |
+| 6 | Dimmed | `#22272e` | `#6cb6ff` | GitHub Dimmed |
+| 7 | Neon | `#0a0e1a` | `#00d9ff` | Cyberpunk |
+| 8 | Synthwave | `#1a0d2e` | `#ff5599` | 80s Pink |
+| 9 | Forge | `#1a0f0a` | `#ff8c42` | Ember Orange |
+| 10 | Snow | `#ffffff` | `#0969da` | GitHub Light |
+| 11 | Cream | `#faf6ed` | `#c2410c` | Warm paper |
+| 12 | Mint | `#f0fdf4` | `#15803d` | Cool fresh |
+
+**`derive_palette(primary, secondary, surface=None, text_override=None)` improvements:**
+- Proportional surface elevation: `base = max(0.018, min(0.045, primary_l * 0.32))`
+  → very dark themes use small shifts so surfaces don't pop bright; lighter themes use more
+- Light-theme branch (bg luminance > 0.5): aggressive negative shifts (-0.075 surface, -0.130 border) for visibility on near-white bg
+- WCAG-correct `toggled_text` threshold: `< 0.179 → white text, else dark text`
+  (was 0.5 → caused light accents like #58a6ff to use white text → 2.4:1 contrast)
+- Helpers added: `_shift_lightness()`, `_desaturate()`, `invert_pixmap()`, `is_light_theme()`
+
+**Migration logic** in `appearance.py` `load_custom_themes`:
+- Detect old default theme accents (`#6c5ce7`, `#1E88E5`, etc.) + Thai names
+  (`ธีมเริ่มต้น`, `ธีมฟ้า`, etc.) → wipe + re-create with new design
+- Backwards-compat: if user customized colors, keep their version
+
+### Critical Bug Fix — `appearance.py:get_theme_color()`
+
+**Symptom:** All buttons in main window appeared WHITE on every theme.
+
+**Root cause (after v2 redesign):** When `derive_palette` was extended to accept
+optional `surface_override` / `text_override` parameters, callers used
+`am.get_theme_color("surface_override")` (with default=None). But
+`get_theme_color()` had a fallthrough that returned `self.fg_color = "#FFFFFF"`
+when key was missing AND no default was provided. So the "optional" overrides
+were always being filled with white. `derive_palette` interpreted these as user
+overrides and made `bg_surface = #FFFFFF`, `text = #FFFFFF` → invisible buttons.
+
+**Fix:** Added `if color_value is None and default is None: return None` —
+respect the caller's explicit None default.
+
+### Theme Manager UI — `pyqt_ui/theme_panel.py`
+
+- New `ThemeSwatch(QWidget)` — custom paint with **5 color dots** showing actual palette
+  (bg_titlebar, surface, border, accent, text) instead of old 2-color gradient
+- Panel: 400×520, **4 cols × 3 rows** grid for 12 themes
+- **Instant apply** — clicking a swatch applies immediately, no APPLY button
+- **4-color picker** (was 2): Background, Accent, Surface (auto if not set), Text (auto if not set)
+- "Auto" state shows diagonal stripe pattern + dashed border
+- Removed APPLY button + status label entirely
+- All edits (color picks, name input) auto-apply via `_apply_instant()`
+
+### Modern Toggle Switch — `pyqt_ui/settings_panel.py:ToggleSwitch`
+
+iOS-style switch widget replacing QCheckBox pill:
+- 44×22px track with 16px sliding knob
+- 160ms OutCubic animation via `QPropertyAnimation`
+- Hover state, keyboard support (Tab + Space/Enter)
+- Drop-in API: `isChecked()`, `setChecked()`, `toggled` signal,
+  `stateChanged` signal (compat)
+- `set_palette(palette)` — theme-aware
+
+### White-Icon Inversion for Light Themes
+
+`pyqt_ui/styles.py:invert_pixmap()` — RGB-invert preserving alpha
+(uses `QImage.invertPixels(InvertMode.InvertRgb)`).
+
+`header_bar.py` + `bottom_bar.py` have `update_icon_theme(invert: bool)`
+called by `main_window._apply_theme()` based on bg luminance:
+- Dark bg → keep white icons
+- Light bg (Snow/Cream/Mint) → invert pin/theme/settings icons to dark
+
+### Splash Screen
+
+`MBB.py:638` — `corner_r = 4` (was `max(12, target_w // 40)`)
+Almost-square corners per user preference.
 
 ## Development Notes
 
@@ -995,6 +1196,103 @@ pos_x = int(sg.width() * 0.10)       # 10% จากซ้าย
 pos_y = sg.top() + (sg.height() - win_h) // 2  # กึ่งกลางแนวตั้ง
 self.qt_main_window.move(pos_x, pos_y)
 ```
+
+---
+
+## Splash Screen — `MBB.py`
+
+### สถาปัตยกรรม
+
+Splash screen แสดงตอนเริ่มโปรแกรม ใช้ Tkinter Toplevel + PIL rendering
+
+### ขนาดและรูปแบบ
+
+| Property | ค่า |
+|----------|-----|
+| ขนาด | 40% ของความกว้างหน้าจอ, รักษา aspect ratio |
+| มุมโค้ง | PIL rounded mask + `transparentcolor` (ไม่มีขอบ) |
+| Corner radius | `max(12, target_w // 40)` |
+| Image | `assets/splash.png` (fallback `assets/MBBvisual.png`) |
+
+### แถบล่าง (Bottom Bar)
+
+```
+┌──────────────────────────────────────────────────┐
+│                   (ภาพ splash)                    │
+│                                                  │
+│▓▓ ☐ ไม่แสดงอีกในวันนี้    MBB v1.7.8 ▓▓│ ← แถบดำ 80%
+└──────────────────────────────────────────────────┘
+```
+
+- **แถบดำ**: PIL `alpha_composite` สีดำ `(0,0,0,204)` ≈ 80% opacity
+- **Version text** (ขวา): `Magicite Babel Bridge v{__version__}` — อ่านจาก `version.py` อัตโนมัติ
+- **Checkbox** (ซ้าย): Tkinter `Checkbutton` วางบน Canvas ด้วย `create_window()`
+- **Font**: Anuphan, size = `max(12, target_w // 50)`
+
+### ระบบควบคุมการแสดง (2 ชั้น)
+
+| ชั้น | Setting Key | ผล |
+|------|------------|-----|
+| **Master toggle** | `enable_starting_key_visual` (Settings panel) | `False` → ไม่แสดงเลย |
+| **Daily skip** | `splash_skip_date` (Checkbox บน splash) | ตรงกับวันนี้ → ข้าม |
+
+> **สำคัญ:** ทั้งสอง setting อ่าน/เขียน `settings.json` โดยตรงด้วย `json.load()`/`json.dump()`
+> เพราะ splash สร้างที่ line ~549 ก่อน `self.settings = Settings()` ที่ line ~698
+
+### Timing
+
+| Phase | Duration | วิธี |
+|-------|----------|------|
+| Fade-in | 20 steps × 20ms = 400ms | blocking loop ใน `show_splash()` |
+| แสดงค้าง | อย่างน้อย 5 วินาที | `_splash_start_time` + `_complete_startup()` เช็คเวลา |
+| Fade-out | 20 steps × 25ms = 500ms | non-blocking `_fade_splash_step()` ด้วย QTimer |
+
+**ประวิงเวลา:** ถ้าระบบพร้อมเร็วกว่า 5 วินาที `_complete_startup()` จะ reschedule ตัวเอง
+ด้วย `QTimer.singleShot(remaining_ms)` จนครบ 5 วิแล้วค่อย fade-out
+
+### Call Flow
+
+```
+__init__()
+  └→ show_splash()           ← สร้าง + fade-in (blocking)
+  └→ _splash_start_time      ← บันทึกเวลาเริ่ม
+  └→ ... (init ระบบอื่นๆ) ...
+  └→ QTimer.singleShot(2000, _complete_startup)
+       └→ เช็คเวลา: ครบ 5 วิ?
+            ├→ ยังไม่ครบ → QTimer.singleShot(remaining, _complete_startup)
+            └→ ครบแล้ว → _fade_splash_step() → _finish_startup_tasks()
+```
+
+---
+
+## Solution File Fix — `MBB_Dalamud.sln`
+
+### การเปลี่ยนแปลง
+
+หลังย้ายโฟลเดอร์ `dalamud-plugin/DalamudMBBBridge/` → `DalamudMBBBridge/` ต้องอัพเดต `.sln`:
+
+| ก่อน | หลัง |
+|------|------|
+| `dalamud-plugin\DalamudMBBBridge\DalamudMBBBridge.csproj` | `DalamudMBBBridge\DalamudMBBBridge.csproj` |
+| Solution folder `dalamud-plugin` + NestedProjects mapping | ลบออก (ไม่ต้องการแล้ว) |
+
+> **อาการ:** VS Code แสดง `error MSB3202: The project file ... was not found`
+> **สาเหตุ:** `.sln` ยังอ้างอิง path เก่าหลังย้ายโฟลเดอร์
+
+---
+
+## Test Message System — `pyqt_ui/settings_panel.py`
+
+### ชุดข้อความ (อัพเดต มีนาคม 2026)
+
+| Pool | ChatType | จำนวน | Speakers |
+|------|----------|-------|----------|
+| `_TEST_DIALOG` | 61 | 10 | Tataru, Alphinaud, Alisaie, Thancred, Y'shtola, G'raha Tia, Estinien, Urianger, Krile, Wuk Lamat |
+| `_TEST_BATTLE` | 68 | 6 | Zenos, Nidhogg, Emet-Selch, Sephirot, Thordan VII, ??? |
+| `_TEST_CUTSCENE` | 71 | 6 | ไม่มี speaker (narration) — `speaker=""` |
+
+> **Cutscene = narration เสมอ** — ไม่มีชื่อผู้พูด
+> **TODO:** เมื่อมีประวัติ conversation log จริง ให้คัดเลือกข้อความที่แปลได้ดีมาแทนที่
 
 ---
 

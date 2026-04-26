@@ -10,6 +10,8 @@ import json
 import difflib
 import time
 import logging
+import threading
+from collections import OrderedDict
 from enum import Enum
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
@@ -176,7 +178,12 @@ class TranslatorGemini:
         self.model = genai_model
 
         self.cache = DialogueCache()
-        self.last_translations = {}
+        # >>> AUDIT_FIX_H1: bound last_translations cache to prevent unbounded growth.
+        # Use OrderedDict for FIFO eviction. Cache eviction = re-translate (same quality).
+        # REVERT: change back to `self.last_translations = {}` and remove _MAX_LAST_TRANSLATIONS
+        self._MAX_LAST_TRANSLATIONS = 200
+        self.last_translations = OrderedDict()
+        # <<< AUDIT_FIX_H1
         self.character_names_cache = set()
         self._character_lookup = {}  # O(1) lookup for get_character_info()
         self.use_verbose_prompt = False  # True = v1 (verbose), False = v2 (optimized)
@@ -190,6 +197,13 @@ class TranslatorGemini:
         self.max_session_names = 50        # Prevent memory growth
         self.cache_hits = 0                # Track cache performance
         self.cache_misses = 0              # Track cache performance
+
+        # >>> AUDIT_FIX_H2: thread lock for shared cache state (last_translations,
+        # session_character_names). translate() is called from a worker thread while
+        # UI thread reads stats. Without lock: race on dict mutation.
+        # REVERT: remove self._cache_lock and `with self._cache_lock:` blocks
+        self._cache_lock = threading.Lock()
+        # <<< AUDIT_FIX_H2
 
         # ดูว่าสามารถใช้ EnhancedNameDetector ได้หรือไม่
         self.enhanced_detector = None
@@ -307,6 +321,7 @@ class TranslatorGemini:
 
             if model is not None:
                 valid_models = [
+                    "gemini-3.1-flash-lite-preview",
                     "gemini-2.5-flash",
                     "gemini-2.5-flash-lite",
                     "gemini-2.5-pro",
@@ -833,12 +848,16 @@ class TranslatorGemini:
                 dialogue = content
 
                 # ตรวจสอบ cache สำหรับการแปล
-                if (
-                    dialogue in self.last_translations
-                    and character_name == self.cache.get_last_speaker()
-                ):
-                    translated_dialogue = self.last_translations[dialogue]
-                    return f"{character_name}: {translated_dialogue}"
+                # >>> AUDIT_FIX_H2: read under lock to prevent race during FIFO eviction
+                with self._cache_lock:
+                    cached = (
+                        self.last_translations.get(dialogue)
+                        if character_name == self.cache.get_last_speaker()
+                        else None
+                    )
+                if cached is not None:
+                    return f"{character_name}: {cached}"
+                # <<< AUDIT_FIX_H2
 
                 # 1. ดึงข้อมูลพื้นฐานของตัวละคร
                 character_info = self.get_character_info(character_name)
@@ -928,11 +947,11 @@ class TranslatorGemini:
                     "top_p": self.top_p,
                 }
 
-                # แสดงข้อความเริ่มการแปลในคอนโซล
-                print(
-                    f"                                            ", end="\r"
-                )  # เคลียร์บรรทัด
-                print(f"[Gemini API] Translating: {dialogue[:40]}...", end="\r")
+                # >>> AUDIT_FIX_M3: replaced blocking print() with logging.debug
+                # to avoid stdout stalls when terminal not attached (PyInstaller bundle).
+                # REVERT: restore the two print() calls below
+                logging.debug(f"[Gemini API] Translating: {dialogue[:40]}...")
+                # <<< AUDIT_FIX_M3
 
                 # บันทึกเวลาเริ่มต้น
                 start_time = time.time()
@@ -962,14 +981,13 @@ class TranslatorGemini:
                 short_model = (
                     self.model_name if hasattr(self, "model_name") else "gemini"
                 )
-                # แสดงชื่อเต็มของโมเดลให้ชัดเจน
-                print(f"[Gemini API] Translation complete                ", end="\r")
-                print(
-                    f"[{short_model.upper()}] : {dialogue[:30]}... -> ~{total_tokens} tokens ({elapsed_time:.2f}s)"
-                )
+                # >>> AUDIT_FIX_M3: replaced print() with logging. Single info log
+                # carries the same info; hot-path stdout no longer blocks.
+                # REVERT: restore the two print() calls
                 logging.info(
-                    f"[Gemini API] Estimated tokens: ~{input_tokens} (input) + ~{output_tokens} (output) = ~{total_tokens} tokens in {elapsed_time:.2f}s"
+                    f"[{short_model.upper()}] {dialogue[:30]}... -> ~{total_tokens} tokens in {elapsed_time:.2f}s"
                 )
+                # <<< AUDIT_FIX_M3
 
                 # ดึงข้อความจาก response และตรวจสอบอย่างปลอดภัย
                 if hasattr(response, "text") and response.text:
@@ -1077,7 +1095,14 @@ class TranslatorGemini:
                                     final_translation = translated_dialogue
 
                 # บันทึกลง cache เฉพาะคำแปลที่สมบูรณ์
-                self.last_translations[dialogue] = translated_dialogue
+                # >>> AUDIT_FIX_H1+H2: bound last_translations + lock-protect shared mutations
+                # REVERT: replace whole block with the original 3 unprotected dict writes
+                with self._cache_lock:
+                    self.last_translations[dialogue] = translated_dialogue
+                    # FIFO eviction when over cap (popitem(last=False) removes oldest)
+                    while len(self.last_translations) > self._MAX_LAST_TRANSLATIONS:
+                        self.last_translations.popitem(last=False)
+
                 if character_name:
                     self.cache.add_validated_name(character_name)  # เพิ่มชื่อเข้า cache
 
@@ -1087,23 +1112,25 @@ class TranslatorGemini:
                         # Normalize speaker key for better matching - EXACT MATCH ONLY
                         normalized_speaker = speaker.lower().strip()
 
-                        # Only store if translation actually occurred or if it's a new entry
-                        # CRITICAL: This prevents substring conflicts by using exact string matches
-                        if (normalized_speaker not in self.session_character_names or
-                            self.session_character_names[normalized_speaker] != character_name):
+                        with self._cache_lock:
+                            # Only store if translation actually occurred or if it's a new entry
+                            # CRITICAL: This prevents substring conflicts by using exact string matches
+                            if (normalized_speaker not in self.session_character_names or
+                                self.session_character_names[normalized_speaker] != character_name):
 
-                            self.session_character_names[normalized_speaker] = character_name
-                            self.session_speaker_count += 1
+                                self.session_character_names[normalized_speaker] = character_name
+                                self.session_speaker_count += 1
 
-                            # Memory management - cleanup old entries using FIFO
-                            if len(self.session_character_names) > self.max_session_names:
-                                # Remove oldest entries (FIFO approach)
-                                keys_to_remove = list(self.session_character_names.keys())[:len(self.session_character_names) // 4]
-                                for key in keys_to_remove:
-                                    del self.session_character_names[key]
-                                logging.debug(f"[NAME CACHE] Cleaned {len(keys_to_remove)} old entries")
+                                # Memory management - cleanup old entries using FIFO
+                                if len(self.session_character_names) > self.max_session_names:
+                                    # Remove oldest entries (FIFO approach)
+                                    keys_to_remove = list(self.session_character_names.keys())[:len(self.session_character_names) // 4]
+                                    for key in keys_to_remove:
+                                        del self.session_character_names[key]
+                                    logging.debug(f"[NAME CACHE] Cleaned {len(keys_to_remove)} old entries")
 
-                            logging.debug(f"[NAME CACHE] Stored: {speaker} -> {character_name} (normalized: {normalized_speaker})")
+                                logging.debug(f"[NAME CACHE] Stored: {speaker} -> {character_name} (normalized: {normalized_speaker})")
+                # <<< AUDIT_FIX_H1+H2
                 except Exception as e:
                     logging.warning(f"Cache storage error: {e}")
 
@@ -1111,6 +1138,20 @@ class TranslatorGemini:
 
             except Exception as api_error:
                 logging.error(f"Gemini API error: {str(api_error)}")
+                # >>> AUDIT_FIX_C2: skip identical retry on rate-limit/quota errors,
+                # apply small backoff for transient errors. Original code retried
+                # immediately with identical params → tight loop on persistent errors.
+                # REVERT: remove this block (keep `try:` below) and the `time.sleep(...)`
+                err_str = str(api_error).lower()
+                is_rate_limit = any(kw in err_str for kw in ('429', 'rate limit', 'quota', 'resource_exhausted'))
+                is_invalid = any(kw in err_str for kw in ('invalid', 'permission', 'unauthorized', 'api key'))
+                if is_rate_limit or is_invalid:
+                    # Identical retry won't help — bail out fast and let caller handle.
+                    logging.warning(f"[AUDIT_FIX_C2] Skip retry on permanent error: {err_str[:120]}")
+                    raise
+                # Transient error (timeout/network) — back off briefly before identical retry
+                time.sleep(1.0)
+                # <<< AUDIT_FIX_C2
                 # ลองใช้วิธีเรียก API อีกแบบหนึ่ง (กรณี model เก่า)
                 try:
                     response = self.model.generate_content(

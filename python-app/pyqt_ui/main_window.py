@@ -300,14 +300,26 @@ class MBBMainWindow(QWidget):
 
         primary = am.get_accent_color()       # สีหลัก → พื้นหลัง
         secondary = am.get_theme_color("secondary", "#888888")  # สีรอง → ไฮไลท์
+        # Optional fine-tune overrides from theme dict (set via Theme Manager 4-color picker)
+        surface = am.get_theme_color("surface_override")
+        text_override = am.get_theme_color("text_override")
 
-        palette = derive_palette(primary, secondary)
+        palette = derive_palette(primary, secondary, surface=surface, text_override=text_override)
         qss = get_main_window_qss(**palette)
 
         if self._is_glass:
             qss += get_glass_overrides()
 
         self.setStyleSheet(qss)
+
+        # Invert white PNG icons (pin/theme/settings) when running a LIGHT theme
+        # so they stay visible on light backgrounds.
+        from pyqt_ui.styles import is_light_theme
+        invert_icons = is_light_theme(palette["bg"])
+        if self.header_bar and hasattr(self.header_bar, "update_icon_theme"):
+            self.header_bar.update_icon_theme(invert_icons)
+        if self.bottom_bar and hasattr(self.bottom_bar, "update_icon_theme"):
+            self.bottom_bar.update_icon_theme(invert_icons)
 
         if self.shadow:
             if self._is_glass:

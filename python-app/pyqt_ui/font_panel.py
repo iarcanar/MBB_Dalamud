@@ -15,9 +15,9 @@ from pyqt_ui.styles import FONT_PRIMARY, FONT_MONO, derive_palette
 
 log = logging.getLogger("mbb-qt")
 
-WIDTH = 340
-MIN_HEIGHT = 400
-DEFAULT_HEIGHT = 520
+WIDTH = 470            # bumped from 340 — old size clipped Thai/EN preview lines
+MIN_HEIGHT = 480       # bumped from 400 to match the wider layout
+DEFAULT_HEIGHT = 600   # bumped from 520 — preview area gets extra breathing room
 
 PREVIEW_LINE1 = "ตัวอย่างข้อความภาษาไทย"
 PREVIEW_LINE2 = "Sample English ABC 123"
@@ -90,8 +90,16 @@ class FontPanel(QWidget):
 
         title = QLabel("Font Settings")
         title.setObjectName("font_title")
-        title.setFont(QFont(FONT_PRIMARY, 10, QFont.Weight.Bold))
+        title.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
         h_layout.addWidget(title)
+        # Context label — updated by _set_target() to show which UI the font
+        # change will affect (e.g. "· บทสนทนา"). Helps the user remember
+        # which target is selected without having to scroll down to the
+        # target buttons.
+        self._title_context = QLabel("")
+        self._title_context.setObjectName("font_title_context")
+        self._title_context.setFont(QFont(FONT_PRIMARY, 10))
+        h_layout.addWidget(self._title_context)
         h_layout.addStretch()
 
         btn_close = QPushButton("\u2715")
@@ -111,7 +119,7 @@ class FontPanel(QWidget):
         c.setSpacing(8)
 
         # Font Family
-        sec_family = QLabel("Font Family")
+        sec_family = QLabel("ฟอนต์")
         sec_family.setObjectName("font_section")
         sec_family.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
         c.addWidget(sec_family)
@@ -129,7 +137,7 @@ class FontPanel(QWidget):
 
         # ── Size Control ──
         c.addSpacing(4)
-        sec_size = QLabel("Size")
+        sec_size = QLabel("ขนาด")
         sec_size.setObjectName("font_section")
         sec_size.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
         c.addWidget(sec_size)
@@ -165,7 +173,7 @@ class FontPanel(QWidget):
 
         # ── Target ──
         c.addSpacing(4)
-        sec_target = QLabel("Apply To")
+        sec_target = QLabel("ใช้กับ")
         sec_target.setObjectName("font_section")
         sec_target.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
         c.addWidget(sec_target)
@@ -174,7 +182,8 @@ class FontPanel(QWidget):
         target_row.setSpacing(6)
         target_row.setContentsMargins(0, 0, 0, 0)
 
-        for key, label in [("tui", "TUI"), ("logs", "TUI Log"), ("both", "Both")]:
+        # Target labels in Thai — clearer for the user (was: TUI / TUI Log / Both)
+        for key, label in [("tui", "หน้าจอแปล"), ("logs", "บทสนทนา"), ("both", "ทั้งสอง")]:
             btn = QPushButton(label)
             btn.setObjectName("font_target_btn")
             btn.setCheckable(True)
@@ -188,7 +197,7 @@ class FontPanel(QWidget):
 
         # ── Preview ──
         c.addSpacing(4)
-        sec_preview = QLabel("Preview")
+        sec_preview = QLabel("ตัวอย่าง")
         sec_preview.setObjectName("font_section")
         sec_preview.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
         c.addWidget(sec_preview)
@@ -223,7 +232,7 @@ class FontPanel(QWidget):
         self._status_label.setFont(QFont(FONT_PRIMARY, 8))
         btn_row.addWidget(self._status_label, stretch=1)
 
-        btn_apply = QPushButton("APPLY")
+        btn_apply = QPushButton("นำไปใช้")
         btn_apply.setObjectName("font_apply")
         btn_apply.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
         btn_apply.setFixedHeight(32)
@@ -243,12 +252,22 @@ class FontPanel(QWidget):
 
     # ── Size Controls ──
 
+    # Target → Thai display name (used in title context + apply status)
+    _TARGET_LABEL = {
+        "tui":  "หน้าจอแปล",
+        "logs": "บทสนทนา",
+        "both": "ทั้งสอง",
+    }
+
     def _set_target(self, key: str):
         """Toggle target mode and load font/size for that target."""
         self._target_mode = key
         for k, btn in self._target_btns.items():
             btn.setChecked(k == key)
         self.settings.set("font_target_mode", key)
+        # Update header context label so user can see which UI they're tuning
+        if hasattr(self, "_title_context"):
+            self._title_context.setText(f"·  {self._TARGET_LABEL.get(key, '')}")
 
         # Load font settings for the selected target
         font_name, font_size = self._get_font_for_target(key)
@@ -367,8 +386,8 @@ class FontPanel(QWidget):
             "target": self._target_mode,
         })
 
-        target_label = {"tui": "TUI", "logs": "TUI Log", "both": "Both"}.get(self._target_mode, "")
-        self._show_status(f"Applied: {font_name} {font_size}px → {target_label}")
+        target_label = self._TARGET_LABEL.get(self._target_mode, "")
+        self._show_status(f"นำไปใช้แล้ว: {font_name} {font_size}px  →  {target_label}")
 
     def _show_status(self, text, error=False):
         if self._status_label:
@@ -405,6 +424,11 @@ class FontPanel(QWidget):
             QLabel#font_title {{
                 color: {p['text']};
                 background: transparent;
+            }}
+            QLabel#font_title_context {{
+                color: {p['accent']};
+                background: transparent;
+                padding-left: 4px;
             }}
             QPushButton#font_close {{
                 background: transparent;

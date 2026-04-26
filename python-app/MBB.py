@@ -48,11 +48,11 @@ from datetime import datetime
 from text_corrector import TextCorrector
 import translated_ui
 from text_corrector import DialogueType
-from control_ui import Control_UI
+# control_ui import removed 2026-04-25 — Control_UI was OCR area-manager UI, never shown.
 from translator_gemini import TranslatorGemini
 from settings import Settings
 from pyqt_ui.settings_panel import SettingsPanel
-from advance_ui import AdvanceUI
+# advance_ui import removed 2026-04-25 — AdvanceUI never instantiated (OCR-era).
 from mini_ui import MiniUI
 from loggings import LoggingManager
 # DISABLED - Rainbow progress bar causes tkinter errors
@@ -63,7 +63,11 @@ from appearance import appearance_manager
 import importlib.util
 import warnings
 import webbrowser
-from translated_logs import Translated_Logs
+# PyQt6 rewrite (v1.7.9). Old Tkinter `translated_logs.py` is kept on disk but
+# no longer imported. The new class exposes the same public API + compatibility
+# shims (`root`, `winfo_exists`, `state`, `withdraw`, `is_visible`,
+# `message_cache`) so MBB.py needs no further changes.
+from pyqt_ui.translated_logs import Translated_Logs
 from font_manager import FontSettings, initialize_font_manager
 from asset_manager import AssetManager
 from resource_utils import resource_path
@@ -83,16 +87,9 @@ logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Import npc_manager_card - use normal import for PyInstaller compatibility
-print("[MBB] Attempting to import NPC Manager...")
-try:
-    from npc_manager_card import NPCManagerCard
-    print(f"[MBB] NPCManagerCard imported successfully: {NPCManagerCard}")
-except Exception as e:
-    print(f"[MBB] NPC Manager import failed: {e}")
-    import traceback
-    traceback.print_exc()
-    NPCManagerCard = None
+# NPC Manager — replaced 2026-04-25 with PyQt6 NPCManagerPanel.
+# Lazy-imported in toggle_npc_manager() to avoid circular issues at startup.
+NPCManagerCard = None  # legacy alias, kept None for any old code that checks it
 
 
 def create_rounded_rectangle(self, x1, y1, x2, y2, radius=25, **kwargs):
@@ -634,15 +631,8 @@ class MagicBabelApp:
                 "psutil not available - CPU monitoring disabled"
             )
 
-        # Initialize CPU Monitor
-        try:
-            from simple_monitor import SimpleCPUMonitor
-
-            self.cpu_monitor = SimpleCPUMonitor(self.settings)
-            print("CPU performance monitor initialized")
-        except ImportError:
-            self.cpu_monitor = None
-            self.logging_manager.log_warning("SimpleCPUMonitor not available")
+        # Smart Performance / CPU Monitor REMOVED 2026-04-25
+        # Was legacy OCR-era throttling. Dalamud uses pipe push, not poll loop.
         self.font_manager = initialize_font_manager(None, self.settings)
         appearance_manager.settings = (
             self.settings
@@ -710,28 +700,8 @@ class MagicBabelApp:
         self.create_translated_logs()
         self.create_settings_ui()
 
-        # *** แก้ไขจุดนี้: ตอนสร้าง Control_UI ให้ส่ง callback ใหม่ไปด้วย ***
-        control_root = tk.Toplevel(self.root)
-        control_root.protocol("WM_DELETE_WINDOW", lambda: self.on_control_close())
-        self.control_ui = Control_UI(
-            control_root,
-            self.show_previous_dialog,
-            self.switch_area,
-            self.settings,
-            parent_callback=self.handle_control_ui_event,  # Add parent callback for event handling
-            trigger_temporary_area_display_callback=self.trigger_temporary_area_display,  # ส่งเมธอดนี้เป็น callback
-            on_close_callback=self.on_control_close,
-        )
-        if hasattr(self.control_ui, "set_cpu_limit_callback"):
-            self.control_ui.set_cpu_limit_callback(self.set_cpu_limit)
-            self.logging_manager.log_info(
-                "CPU limit callback registered with Control UI."
-            )
-        else:
-            self.logging_manager.log_warning(
-                "Control UI does not have set_cpu_limit_callback method."
-            )
-        control_root.withdraw()
+        # Control_UI instantiation removed 2026-04-25 — was OCR area manager (never shown).
+        self.control_ui = None  # legacy attribute, kept None for safety on old refs
         # *** จบส่วนสร้าง UI Components ***
 
         # --- ลำดับใหม่: ตั้งค่า Theme และ Callback ---
@@ -953,59 +923,7 @@ class MagicBabelApp:
         self._active_temp_area_widgets.clear()
         # logging.debug("Active temporary areas cleared.")
 
-    def trigger_temporary_area_display(self, area_string):
-        """Callback ที่ถูกเรียกโดย Control_UI เพื่อแสดงพื้นที่ของ Preset ปัจจุบันชั่วคราว"""
-        try:
-            # 1. ตรวจสอบว่าฟังก์ชัน Show Area แบบ manual กำลังทำงานอยู่หรือไม่
-            if self.is_area_shown:
-                logging.info(
-                    "Manual 'Show Area' is active, skipping temporary display."
-                )
-                # อาจจะพิจารณาอัพเดท label บนพื้นที่ manual แทน ถ้าต้องการ
-                return
-
-            # 2. ตรวจสอบการสลับ Preset อย่างรวดเร็ว
-            current_time = time.time()
-            time_since_last = current_time - self._last_preset_switch_display_time
-            # logging.debug(f"Time since last temp display: {time_since_last:.2f}s")
-
-            # 3. ล้าง Area ชั่วคราวที่อาจค้างอยู่ก่อนแสดงผลใหม่
-            self._clear_active_temp_areas()
-
-            # 4. แยกพื้นที่จาก string
-            areas_to_display = sorted(
-                [a for a in area_string.split("+") if a in ["A", "B", "C"]]
-            )
-            if not areas_to_display:
-                logging.warning(f"No valid areas in area_string: '{area_string}'")
-                return
-
-            # 5. ตัดสินใจว่าจะแสดงผลแบบไหน
-            if time_since_last < self._min_preset_display_interval:
-                # --- สลับเร็วกว่ากำหนด: แสดงแบบเร็ว ไม่มี Animation ---
-                logging.info(
-                    f"Rapid preset switch detected (interval {time_since_last:.2f}s < {self._min_preset_display_interval:.2f}s). Showing quick area display."
-                )
-                self._show_quick_area(areas_to_display, duration=1000)  # แสดง 1 วินาที
-            else:
-                # --- สลับปกติ: แสดงแบบ Animation ---
-                logging.info(
-                    f"Showing animated area display for areas: {areas_to_display}"
-                )
-                self._show_animated_area(
-                    areas_to_display, duration=1800, fade_duration=300
-                )  # แสดง 1.8 วินาที, fade 0.3 วิ
-
-            # 6. อัพเดทเวลาล่าสุดที่แสดงผล
-            self._last_preset_switch_display_time = current_time
-
-        except Exception as e:
-            self.logging_manager.log_error(
-                f"Error in trigger_temporary_area_display: {e}"
-            )
-            import traceback
-
-            traceback.print_exc()
+    # trigger_temporary_area_display() removed 2026-04-25 — Control_UI dead UI cleanup.
 
     def _show_animated_area(self, areas_to_display, duration=1800, fade_duration=300):
         """แสดงพื้นที่ที่ระบุพร้อม Animation Fade-in/Fade-out และ Label"""
@@ -1350,54 +1268,8 @@ class MagicBabelApp:
     # ============================================================================
     # Callback Handler for Control UI Events
     # ============================================================================
-    def handle_control_ui_event(self, event_name, value):
-        """
-        จัดการ Event ที่ส่งมาจาก Control UI (เช่น การเปลี่ยนโหมด Click Translate)
-
-        Args:
-            event_name (str): ชื่อของ event ที่เกิดขึ้น (เช่น "click_translate_mode_changed")
-            value: ค่าที่เกี่ยวข้องกับ event (เช่น True/False สำหรับ click_translate)
-        """
-        if event_name == "click_translate_mode_changed":
-            # ตรวจสอบว่า translation_event ถูกสร้างหรือยัง
-            # ควรจะถูกสร้างใน init_variables หรือ init_ocr_and_translation
-            if not hasattr(self, "translation_event") or not isinstance(
-                self.translation_event, threading.Event
-            ):
-                logging.error("Translation event not initialized or invalid type.")
-                # อาจจะแจ้งเตือนผู้ใช้หรือพยายามสร้างใหม่ แต่ตอนนี้แค่ log error
-                return
-
-            logging.info(f"Received click_translate_mode_changed event: {value}")
-
-            # อัพเดทสถานะ UI ทันที
-            if value:
-                self._update_status_line(
-                    "🖱️ 1-Click Mode: ON (Use FORCE button or right-click to translate)"
-                )
-            else:
-                self._update_status_line("")  # No default status message
-
-            # จัดการการทำงานของลูปแปลภาษา
-            if value:
-                # ถ้า Click Translate เปิด: ให้ลูปหยุดรอ (โดยการ clear event)
-                # การ clear จะทำให้ wait() ในลูป block จนกว่าจะมีการ set()
-                self.translation_event.clear()
-                logging.debug(
-                    "Translation event cleared (Click Translate ON). Loop will wait."
-                )
-            else:
-                # ถ้า Click Translate ปิด: ปลุกให้ลูปทำงานต่อ (โดยการ set event)
-                # การ set จะทำให้ wait() ในลูปที่กำลัง block อยู่หลุดออกมาทำงานต่อ
-                self.translation_event.set()
-                logging.debug(
-                    "Translation event set (Click Translate OFF). Loop will resume."
-                )
-
-            # หมายเหตุ: เราไม่จำเป็นต้องเปลี่ยนค่า self.is_translating ที่นี่
-            # เพราะการ Start/Stop การแปลโดยรวมยังคงควบคุมด้วยปุ่ม Start/Stop หลัก
-            # Click Translate เป็นเพียงการควบคุมว่าจะให้ลูปทำงาน *อัตโนมัติ* หรือไม่
-            # เมื่อ is_translating เป็น False ลูปจะไม่ทำงานอยู่แล้ว ไม่ว่า Click Translate จะเป็นอะไรก็ตาม
+    # handle_control_ui_event removed 2026-04-25 — Control_UI dead UI cleanup.
+    # The only event ('click_translate_mode_changed') was OCR-era 1-click mode.
 
     def _get_mbb_geometry(self):
         """Get MBB main window position and size (PyQt6 window)."""
@@ -1427,115 +1299,13 @@ class MagicBabelApp:
             on_theme_applied=self._apply_theme_update,
         )
 
-        # ตำแหน่งหน้าต่าง (ด้านขวาของ MBB main window)
-        mx, my, mw, mh = self._get_mbb_geometry()
-        self._theme_panel.move(mx + mw + 10, my)
-        self._theme_panel.show()
+        # ตำแหน่ง: ขวาของ MBB + center vertical (uniform กับ Settings/NPC Manager)
+        self._theme_panel.show()  # show first so size() is computed
+        self._position_panel_next_to_mbb(self._theme_panel)
 
         self.logging_manager.log_info("เปิดหน้าต่างจัดการธีม (PyQt6)")
 
-    def restart_control_ui(self):
-        """รีสตาร์ท Control UI เพื่อใช้ธีมใหม่"""
-        try:
-            # ตรวจสอบว่ามี control_ui หรือไม่
-            if not hasattr(self, "control_ui") or not self.control_ui:
-                self.logging_manager.log_info(
-                    "Control UI not found, nothing to restart"
-                )
-                return False
-
-            # เก็บข้อมูลสถานะปัจจุบันไว้
-            current_areas = self.current_area
-            current_preset = (
-                self.control_ui.current_preset
-                if hasattr(self.control_ui, "current_preset")
-                else 1
-            )
-            was_visible = False
-            control_ui_pos = None
-
-            # ตรวจสอบตำแหน่งและสถานะการแสดงผลปัจจุบัน
-            if hasattr(self.control_ui, "root") and self.control_ui.root.winfo_exists():
-                was_visible = self.control_ui.root.state() != "withdrawn"
-                # เก็บตำแหน่งปัจจุบัน
-                if was_visible:
-                    control_ui_pos = (
-                        self.control_ui.root.winfo_x(),
-                        self.control_ui.root.winfo_y(),
-                    )
-                # ปิดหน้าต่างเดิม
-                self.control_ui.root.destroy()
-
-            # บันทึกข้อมูลเกี่ยวกับการรีสตาร์ท
-            self.logging_manager.log_info("Restarting Control UI with current theme")
-            self.logging_manager.log_info(
-                f"Current areas: {current_areas}, Preset: {current_preset}"
-            )
-
-            # สร้าง Control UI ใหม่
-            control_root = tk.Toplevel(self.root)
-            control_root.protocol("WM_DELETE_WINDOW", lambda: self.on_control_close())
-            self.control_ui = Control_UI(
-                control_root,
-                self.show_previous_dialog,
-                self.switch_area,
-                self.settings,
-                parent_callback=self.handle_control_ui_event,  # Add parent callback for event handling
-                on_close_callback=self.on_control_close,
-            )
-
-            # เพิ่มบรรทัดนี้เพื่อตั้งค่า callback สำหรับ CPU limit
-            self.control_ui.set_cpu_limit_callback(self)
-
-            # คืนค่าสถานะเดิม
-            areas = (
-                current_areas.split("+")
-                if isinstance(current_areas, str)
-                else current_areas
-            )
-            for area in ["A", "B", "C"]:
-                self.control_ui.area_states[area] = area in areas
-
-            # คืนค่า preset
-            self.control_ui.current_preset = current_preset
-            self.control_ui.update_preset_display()
-            self.control_ui.update_button_highlights()
-
-            # คืนค่าตำแหน่งหน้าต่าง (ถ้ามี)
-            if control_ui_pos and control_root.winfo_exists():
-                control_root.geometry(f"+{control_ui_pos[0]}+{control_ui_pos[1]}")
-
-            # เปิดหน้าต่างหากเดิมเปิดอยู่
-            if was_visible:
-                self.control_ui.show_window()
-                # CON button removed - no UI update needed
-            else:
-                control_root.withdraw()
-
-            self.logging_manager.log_info("Control UI restarted successfully")
-            return True
-
-        except Exception as e:
-            self.logging_manager.log_error(f"Error restarting Control UI: {e}")
-            # ถ้าเกิดข้อผิดพลาดให้พยายามสร้าง Control UI ใหม่แบบพื้นฐาน
-            try:
-                if not hasattr(self, "control_ui") or not self.control_ui:
-                    control_root = tk.Toplevel(self.root)
-                    control_root.protocol(
-                        "WM_DELETE_WINDOW", lambda: self.on_control_close()
-                    )
-                    self.control_ui = Control_UI(
-                        control_root,
-                        self.show_previous_dialog,
-                        self.switch_area,
-                        self.settings,
-                        parent_callback=self.handle_control_ui_event,  # Add parent callback for event handling
-                        on_close_callback=self.on_control_close,
-                    )
-                    control_root.withdraw()
-            except:
-                pass
-            return False
+    # restart_control_ui() removed 2026-04-25 — Control_UI dead UI cleanup.
 
     def close_theme_manager(self):
         """ปิดหน้าต่าง Theme Manager"""
@@ -1566,6 +1336,66 @@ class MagicBabelApp:
                     log_func("SettingsPanel theme updated.")
                 except Exception as e:
                     logging.error(f"Error updating SettingsPanel theme: {e}")
+
+            # ── Refresh themed Tkinter UIs ──
+            # Tkinter widgets bake colors at creation time. Cache invalidation alone
+            # won't update widgets that were created with the previous theme. So for
+            # any of these UIs that's currently OPEN, destroy it + reset the instance.
+            # Next time user toggles it on, it'll be recreated fresh with the new theme.
+            #
+            # NPC Manager (PyQt6 panel — supports in-place theme refresh via QSS)
+            try:
+                if self._npc_manager_alive() and hasattr(self.npc_manager, "_apply_theme"):
+                    self.npc_manager._apply_theme()
+                    log_func("NPC Manager theme updated.")
+            except Exception as e:
+                logging.debug(f"NPC Manager theme refresh skipped: {e}")
+            # Translated Logs (PyQt6 since v1.7.9 — supports live theme refresh)
+            try:
+                from pyqt_ui.translated_logs import _refresh_logs_theme
+                _refresh_logs_theme()
+                if hasattr(self, "translated_logs_instance") and self.translated_logs_instance:
+                    try:
+                        inst = self.translated_logs_instance
+                        if hasattr(inst, "_apply_theme"):
+                            inst._apply_theme()
+                            log_func("Translated Logs theme updated.")
+                    except Exception as e2:
+                        logging.debug(f"Logs theme refresh skipped: {e2}")
+            except Exception as e:
+                logging.debug(f"Translated Logs theme refresh skipped: {e}")
+            # Mini UI — destroy+rebuild path (Tkinter widgets bake colors at
+            # creation; refresh-in-place doesn't work reliably). We capture
+            # the live geometry BEFORE destroy and restore it after rebuild
+            # so the user doesn't see the mini UI "bounce" to default
+            # position when changing theme while in mini mode.
+            try:
+                from mini_ui import _refresh_mini_theme
+                _refresh_mini_theme()
+                if hasattr(self, "mini_ui") and self.mini_ui:
+                    try:
+                        m = self.mini_ui.mini_ui
+                        if hasattr(self.mini_ui, "mini_ui") and m and m.winfo_exists():
+                            was_visible = m.state() != "withdrawn"
+                            # Snapshot position (and topmost flag) BEFORE destroy
+                            saved_x = m.winfo_x()
+                            saved_y = m.winfo_y()
+                            saved_topmost = bool(m.attributes("-topmost"))
+                            # Rebuild with new theme
+                            self.mini_ui.create_mini_ui()
+                            new_m = self.mini_ui.mini_ui
+                            if was_visible and new_m and new_m.winfo_exists():
+                                # Restore exact geometry BEFORE deiconify so
+                                # the window never paints at default location
+                                new_m.geometry(f"+{saved_x}+{saved_y}")
+                                if saved_topmost:
+                                    new_m.attributes("-topmost", True)
+                                new_m.deiconify()
+                                new_m.lift()
+                    except Exception as e2:
+                        logging.debug(f"Mini UI position restore skipped: {e2}")
+            except Exception as e:
+                logging.debug(f"Mini UI theme refresh skipped: {e}")
 
             log_func("Theme update applied successfully.")
 
@@ -1924,10 +1754,7 @@ class MagicBabelApp:
         if hasattr(self, "bottom_bar") and self.bottom_bar:
             self.bottom_bar.set_toggle_state("log", False)
 
-    def on_control_close(self):
-        """เรียกเมื่อหน้าต่าง Control UI ถูกปิด"""
-        # CON button removed - no UI update needed
-        pass
+    # on_control_close() removed 2026-04-25 — Control_UI dead UI cleanup.
 
     def on_mini_ui_close(self):
         """เรียกเมื่อหน้าต่าง Mini UI ถูกปิด"""
@@ -1941,31 +1768,22 @@ class MagicBabelApp:
 
     def create_translated_logs(self):
         try:
-            logging.info("Creating translated logs window...")
+            logging.info("Creating translated logs window (PyQt6)...")
 
-            # สร้าง window
-            self.translated_logs_window = tk.Toplevel(self.root)
-
-            # เพิ่ม protocol handler
-            self.translated_logs_window.protocol(
-                "WM_DELETE_WINDOW", lambda: self.on_translated_logs_close()
-            )
-
-            # สร้างและเก็บ instance
+            # PyQt6 panel — no parent Toplevel needed (frameless top-level window).
+            # The instance exposes `.root`, `winfo_exists`, `state`, `withdraw`
+            # shims so the rest of MBB.py works without further changes.
             self.translated_logs_instance = Translated_Logs(
-                self.translated_logs_window, self.settings, main_app=self
+                self.settings,
+                main_app=self,
+                on_close_callback=lambda: self.on_translated_logs_close(),
             )
-
-            # *** อัปเดต reference เพื่อให้ MBB.py ใช้ window ที่ถูกต้อง ***
-            self.translated_logs_window = self.translated_logs_instance.root
-
-            # ไม่ต้อง withdraw() ที่นี่ เพราะ Translated_Logs จะเริ่มในสถานะซ่อนเองแล้ว
+            self.translated_logs_window = self.translated_logs_instance  # alias for legacy code paths
             self.logging_manager.log_info("Translated logs created successfully")
 
         except Exception as e:
             self.logging_manager.log_error(f"Error creating translated logs: {e}")
             logging.exception("Detailed error in create_translated_logs:")
-            # *** เพิ่มบรรทัดนี้: กำหนดค่าเป็น None หากเกิดข้อผิดพลาด ***
             self.translated_logs_instance = None
 
     def load_shortcuts(self):
@@ -2511,103 +2329,7 @@ class MagicBabelApp:
                 self.translated_logs_instance.is_visible = False
                 self._sync_log_button_state(False)
 
-    def toggle_control(self):
-        """Toggle the control UI window visibility and sync its state."""
-        # แสดง immediate feedback ผ่าน button_state_manager
-        if hasattr(self, "button_state_manager"):
-            self.button_state_manager.toggle_button_immediate("con")
-
-        try:
-            # ตรวจสอบว่า control_ui instance และ หน้าต่างของมันมีอยู่หรือไม่
-            if (
-                hasattr(self, "control_ui")
-                and self.control_ui
-                and hasattr(self.control_ui, "root")
-                and self.control_ui.root.winfo_exists()
-            ):
-                # ถ้ามีอยู่แล้ว และกำลังซ่อนอยู่
-                if self.control_ui.root.state() == "withdrawn":
-                    # *** สั่งให้ Control UI อัพเดทการแสดงผลตาม state ปัจจุบันของ MBB ก่อนแสดง ***
-                    current_preset_num = self.settings.get("current_preset", 1)
-                    self.control_ui.update_display(
-                        self.current_area, current_preset_num
-                    )
-                    logging.info(
-                        f"Syncing Control UI before showing: areas='{self.current_area}', preset={current_preset_num}"
-                    )
-
-                    # กำหนดให้ control_ui มีการอ้างอิงถึง root window ของ main UI
-                    if (
-                        hasattr(self.control_ui, "parent_root")
-                        and self.control_ui.parent_root != self.root
-                    ):
-                        self.control_ui.parent_root = self.root
-
-                    # ลบค่าตำแหน่งที่บันทึกไว้เพื่อบังคับให้คำนวณตำแหน่งใหม่ตามที่ต้องการ
-                    self.control_ui.ui_cache["position_x"] = None
-                    self.control_ui.ui_cache["position_y"] = None
-
-                    # แสดงหน้าต่าง Control UI
-                    self.control_ui.show_window()  # เมธอดนี้จะเรียก position_right_of_main_ui ให้เอง
-
-                    # CON button removed - no state management needed
-
-                # ถ้ามีอยู่แล้ว และกำลังแสดงอยู่
-                else:
-                    # ซ่อนหน้าต่าง Control UI
-                    self.control_ui.close_window()  # เมธอดนี้อาจจะจัดการ withdraw
-
-                    # CON button removed - no state management needed
-
-            # ถ้ายังไม่มี control_ui instance หรือหน้าต่างถูกทำลายไปแล้ว
-            else:
-                logging.info("Creating new Control UI instance.")
-                control_root = tk.Toplevel(self.root)
-                control_root.protocol(
-                    "WM_DELETE_WINDOW", lambda: self.on_control_close()
-                )
-
-                # สร้าง instance ใหม่
-                self.control_ui = Control_UI(
-                    control_root,
-                    self.show_previous_dialog,
-                    self.switch_area,
-                    self.settings,
-                    parent_callback=self.handle_control_ui_event,  # Add parent callback for event handling
-                    on_close_callback=self.on_control_close,
-                )
-
-                # กำหนดให้ control_ui มีการอ้างอิงถึง root window ของ main UI
-                self.control_ui.parent_root = self.root
-
-                # ลงทะเบียน callback สำหรับ CPU limit
-                if hasattr(self.control_ui, "set_cpu_limit_callback"):
-                    self.control_ui.set_cpu_limit_callback(self.set_cpu_limit)
-                    logging.info("CPU limit callback registered with new Control UI.")
-                else:
-                    logging.warning(
-                        "Newly created Control UI does not have set_cpu_limit_callback method."
-                    )
-
-                # *** สั่งให้ Control UI อัพเดทการแสดงผลตาม state ปัจจุบันของ MBB ทันทีหลังสร้าง ***
-                current_preset_num = self.settings.get("current_preset", 1)
-                self.control_ui.update_display(self.current_area, current_preset_num)
-                logging.info(
-                    f"Syncing new Control UI after creation: areas='{self.current_area}', preset={current_preset_num}"
-                )
-
-                # แสดงหน้าต่าง Control UI ที่สร้างใหม่
-                self.control_ui.show_window()
-
-                # NOTE: CON button removed - no state management needed
-
-        except Exception as e:
-            self.logging_manager.log_error(f"Error in toggle_control: {e}")
-            import traceback
-
-            traceback.print_exc()
-            # อาจจะแสดง messagebox แจ้งผู้ใช้
-            messagebox.showerror("Error", f"Could not toggle Control Panel: {e}")
+    # toggle_control() removed 2026-04-25 — Control_UI dead UI cleanup.
 
     def add_message(self, text):
         if hasattr(self, "translated_logs_instance"):
@@ -3055,102 +2777,63 @@ class MagicBabelApp:
         pin_button._is_pinned = is_pinned
 
     def toggle_npc_manager(self, character_name=None):
-        """Toggle NPC Manager window
+        """Toggle NPC Manager window. Now uses the new PyQt6 NPCManagerPanel.
 
         Args:
-            character_name (str, optional): Character name that was clicked (for character click flow)
+            character_name: If provided (e.g. user clicked a name in translated_ui),
+                the panel switches to MAIN tab, filters by that name, and either
+                auto-selects the matching entry or pre-fills firstName for quick add.
         """
-        # 🐛 DEBUG: Log the character name parameter
-        if character_name:
-            self.logging_manager.log_info(f"🔍 [TOGGLE CALLED] Character name: '{character_name}'")
-        else:
-            self.logging_manager.log_info("🔍 [TOGGLE CALLED] No character name (manual toggle)")
-
-        if NPCManagerCard is None:
-            logging.warning("NPC Manager is not available (import failed)")
-            messagebox.showwarning("Warning", "NPC Manager is not available.")
-            return
-
         try:
-            # 🎯 UI INDEPENDENCE: เปิด NPC Manager โดยไม่หยุดการแปล
-
-            # ซ่อน TUI ทันที
+            # Hide TUI while NPC Manager is open
             try:
-                if hasattr(self, 'translated_ui_window') and self.translated_ui_window is not None and self.translated_ui_window.winfo_exists():
-                    if self.translated_ui_window.state() != "withdrawn":
-                        self.translated_ui_window.withdraw()
-                        self.logging_manager.log_info("NPC Manager: TUI hidden automatically")
-            except (tk.TclError, AttributeError) as e:
-                logging.warning(f"Error hiding TUI for NPC Manager: {e}")
-
-            # Sync TUI button to off (TUI hidden for NPC Manager)
+                if (hasattr(self, 'translated_ui_window') and self.translated_ui_window
+                    and self.translated_ui_window.winfo_exists()
+                    and self.translated_ui_window.state() != "withdrawn"):
+                    self.translated_ui_window.withdraw()
+            except (tk.TclError, AttributeError):
+                pass
             self._sync_tui_button_state(False, "NPC Manager auto-hide TUI")
 
-            # ล็อค UI ระหว่างทำงานหนัก
-            self.lock_ui_movement()
+            # Lazy import to avoid circular issues at startup
+            from pyqt_ui.npc_manager_panel import NPCManagerPanel
 
-            # แสดงไอคอนกำลังโหลด - ปิดเพื่อลบ white window แว้บ
-            # self.show_loading_indicator()  # ปิดเพื่อลบ white window
-
-            # กรณีที่ยังไม่มี instance
-            if self.npc_manager is None:
-                self.npc_manager = NPCManagerCard(
-                    self.root,
-                    reload_callback=self.reload_npc_data,
-                    logging_manager=self.logging_manager,
-                    stop_translation_callback=self.stop_translation,
-                    parent_app=self,  # ส่ง main app instance
+            # Create instance if none / destroyed
+            if self.npc_manager is None or not self._npc_manager_alive():
+                self.npc_manager = NPCManagerPanel(
+                    appearance_manager=appearance_manager,
+                    on_close_callback=lambda: self._sync_npc_button_state(False),
+                    on_save_callback=self.reload_npc_data,
                 )
-                self.npc_manager.on_close_callback = self.on_npc_manager_close
-                self.npc_manager.show_window()
+                if self.qt_main_window:
+                    self._position_npc_manager()
+                self.npc_manager.show()
                 self._sync_npc_button_state(True)
-                self._finish_npc_manager_loading()
+                if character_name:
+                    self.npc_manager.open_with_character(character_name)
                 return
 
-            # กรณีที่ window ถูกทำลายหรือไม่มีอยู่
-            if (
-                not hasattr(self.npc_manager, "window")
-                or not self.npc_manager.window.winfo_exists()
-            ):
-                self.npc_manager = NPCManagerCard(
-                    self.root,
-                    reload_callback=self.reload_npc_data,
-                    logging_manager=self.logging_manager,
-                    stop_translation_callback=self.stop_translation,
-                    parent_app=self,  # ส่ง main app instance
-                )
-                self.npc_manager.on_close_callback = self.on_npc_manager_close
-                self.npc_manager.show_window()
-                self._sync_npc_button_state(True)
-                self._finish_npc_manager_loading()
-                return
-
-            # กรณีที่ window มีอยู่แล้ว
-            window_state = self.npc_manager.window.state()
-            window_viewable = self.npc_manager.window.winfo_viewable()
-            is_visible = (
-                window_state != "withdrawn"
-                and window_viewable
-            )
-
-            # 🐛 DEBUG: Log window state for debugging immediate hiding issue
-            self.logging_manager.log_info(f"🔍 [NPC TOGGLE] Window state: '{window_state}', viewable: {window_viewable}, is_visible: {is_visible}")
-
-            # 🐛 FIX: ถ้ามี character_name หมายความว่าเป็น character click flow - ให้แสดง NPC Manager เสมอ
+            # Existing instance — character entry always SHOWS the panel
             if character_name:
-                self.npc_manager.show_window()
+                if not self.npc_manager.isVisible():
+                    self._position_npc_manager()
+                    self.npc_manager.show()
+                self.npc_manager.raise_()
+                self.npc_manager.activateWindow()
                 self._sync_npc_button_state(True)
-            elif is_visible:
-                self.npc_manager.window.withdraw()
-                self._sync_npc_button_state(False)
-                if hasattr(self.npc_manager, "search_var"):
-                    self.npc_manager.search_var.set("")
-            else:
-                self.npc_manager.show_window()
-                self._sync_npc_button_state(True)
+                self.npc_manager.open_with_character(character_name)
+                return
 
-            # ปลดล็อค UI และซ่อนไอคอนกำลังโหลด
-            self._finish_npc_manager_loading()
+            # Plain toggle (no character) — flip visibility
+            if self.npc_manager.isVisible():
+                self.npc_manager.hide()
+                self._sync_npc_button_state(False)
+            else:
+                self._position_npc_manager()
+                self.npc_manager.show()
+                self.npc_manager.raise_()
+                self.npc_manager.activateWindow()
+                self._sync_npc_button_state(True)
 
         except Exception as e:
             import traceback
@@ -3173,6 +2856,45 @@ class MagicBabelApp:
             self.hide_loading_indicator()
         # ปลดล็อค UI การเคลื่อนย้าย
         self.unlock_ui_movement()
+
+    def _position_panel_next_to_mbb(self, panel, gap: int = 10):
+        """Place a PyQt6 panel to the right of MBB main window, vertically centered
+        on the screen MBB is currently on. Multi-monitor friendly + clamps to screen.
+        Used for direct-from-MBB panels: Theme, Settings, NPC Manager."""
+        if not (panel and self.qt_main_window):
+            return
+        try:
+            from PyQt6.QtWidgets import QApplication
+            mbb_geom = self.qt_main_window.geometry()
+            size = panel.size()
+            screen = QApplication.screenAt(mbb_geom.topLeft()) or QApplication.primaryScreen()
+            avail = screen.availableGeometry()
+            # X: right of MBB, but clamp so panel stays on-screen
+            x = mbb_geom.x() + mbb_geom.width() + gap
+            max_x = avail.right() - size.width()
+            x = max(avail.left(), min(x, max_x))
+            # Y: vertically center on available screen area
+            y = avail.top() + (avail.height() - size.height()) // 2
+            y = max(avail.top(), y)
+            panel.move(x, y)
+        except Exception as e:
+            logging.debug(f"Panel positioning skipped: {e}")
+
+    # Backwards-compat alias — keep for callers that imported the old name
+    def _position_npc_manager(self):
+        if self.npc_manager:
+            self._position_panel_next_to_mbb(self.npc_manager, gap=16)
+
+    def _npc_manager_alive(self) -> bool:
+        """Check if the PyQt6 NPC Manager panel is still a valid Qt widget
+        (returns False if user closed it / it was destroyed)."""
+        if self.npc_manager is None:
+            return False
+        try:
+            _ = self.npc_manager.isVisible()  # raises RuntimeError if widget destroyed
+            return True
+        except (RuntimeError, AttributeError):
+            return False
 
     def reload_npc_data(self):
         """Reload NPC data and update related components"""
@@ -3584,10 +3306,19 @@ class MagicBabelApp:
             and hasattr(self.font_manager, "font_settings")
             and hasattr(self, "translated_ui")
         ):
-            # ใช้เมธอดใหม่เพื่ออัพเดตการตั้งค่าฟอนต์
+            # IMPORTANT (v1.7.9 fix): apply TUI font DIRECTLY here. Going
+            # through `update_font_settings` would respect `font_target_mode`,
+            # and if that's set to "logs" or "both", the TUI font_size would
+            # be pushed onto translated_logs_instance — overwriting whatever
+            # the user explicitly set for the Logs UI on disk. Logs has its
+            # own `logs_ui.font_size` key and loads it during its own init.
             font_name = self.settings.get("font")
             font_size = self.settings.get("font_size")
-            self.update_font_settings(font_name, font_size)
+            self.translated_ui.update_font(font_name)
+            self.translated_ui.adjust_font_size(font_size)
+            # Keep FontSettings in sync (no observers will fire on logs)
+            self.font_manager.font_settings.font_name = font_name
+            self.font_manager.font_settings.font_size = font_size
 
             # ยังคงอัพเดตส่วนอื่นๆ ตามปกติ
             self.translated_ui.update_transparency(self.settings.get("transparency"))
@@ -3671,8 +3402,11 @@ class MagicBabelApp:
         else:
             self.logging_manager.log_info("⚙️ Settings: เปิดหน้าต่างการตั้งค่า")
             self.update_button_highlight(self.settings_button, True)
+            # open_settings() shows + does its own initial positioning. We then
+            # reposition uniformly: right of MBB + vertically centered.
             mx, my, mw, mh = self._get_mbb_geometry()
             self.settings_ui.open_settings(mx, my, mw)
+            self._position_panel_next_to_mbb(self.settings_ui)
 
     # toggle_edit_area method removed - Edit Area functionality not used in this version
 
@@ -4428,19 +4162,7 @@ class MagicBabelApp:
             self.logging_manager.log_error(f"Error in check_cpu_usage: {e}")
             return -1
 
-    def set_cpu_limit(self, limit):
-        """ตั้งค่าลิมิต CPU
-
-        Args:
-            limit (int): เปอร์เซ็นต์ลิมิต CPU (0-100)
-        """
-        if not 0 <= limit <= 100:
-            limit = 80
-
-        self.cpu_limit = limit
-        self.settings.set("cpu_limit", limit)
-        self.settings.save_settings()
-        self.logging_manager.log_info(f"CPU limit set to {limit}%")
+    # set_cpu_limit() removed 2026-04-25 — Control_UI dead UI cleanup.
 
     def on_dalamud_text_received(self, message_data):
         """DEPRECATED: Now handled by DalamudMessageHandler for proper synchronization"""
@@ -4573,13 +4295,7 @@ class MagicBabelApp:
 
         return [("dalamud", message_text)]
 
-    def smart_switch_area(self):
-        """
-        สลับพื้นที่อัตโนมัติ (ปิดการใช้งานถาวร)
-        """
-        # ปิดการใช้งาน Auto Switch ทั้งหมด
-        logging.debug("Auto area switching is permanently disabled.")
-        return False
+    # smart_switch_area() removed 2026-04-25 — was OCR-era stub returning False.
 
     def is_choice_preset_active(self):
         """ตรวจสอบว่า preset ปัจจุบันเป็น choice preset หรือไม่"""
@@ -5139,546 +4855,31 @@ class MagicBabelApp:
     def text_similarity(self, text1, text2):
         return difflib.SequenceMatcher(None, text1, text2).ratio()
 
-    def test_area_switching(self):
-        """ทดสอบระบบสลับพื้นที่อัตโนมัติ (ปิดใช้งานถาวร)"""
-        messagebox.showinfo(
-            "Auto Area Switch Test",
-            "การสลับพื้นที่อัตโนมัติถูกปิดใช้งานถาวรแล้ว\nใช้การสลับ Preset แบบ Manual เท่านั้น",
-        )
-        return False
-
-    def explain_area_switching(self):
-        """แสดงหน้าต่างอธิบายระบบสลับพื้นที่อัตโนมัติ"""
-        explanation = """
-        ระบบสลับพื้นที่อัตโนมัติใน MagicBabel
-        
-        หลักการทำงาน:
-        1. ตรวจจับประเภทข้อความอัตโนมัติ
-        - บทสนทนาปกติ (มีชื่อ+ข้อความ) -> ใช้พื้นที่ A+B
-        - บทบรรยาย -> ใช้พื้นที่ C
-        - ข้อความตัวเลือก -> ใช้พื้นที่ B
-        
-        2. การตรวจสอบพิเศษสำหรับพื้นที่ C:
-        - เมื่ออยู่ในพื้นที่ C (บทบรรยาย) ระบบจะตรวจสอบพื้นที่ A+B ในเบื้องหลังบ่อยขึ้น
-        - หากพบว่าข้อความเปลี่ยนกลับเป็นบทสนทนาปกติ จะสลับกลับไปยังพื้นที่ A+B โดยอัตโนมัติ
-        
-        3. การป้องกันการสลับพื้นที่ถี่เกินไป:
-        - ระบบมีกลไกป้องกันการสลับพื้นที่ไปมาเร็วเกินไป
-        - ช่วงเวลาขั้นต่ำระหว่างการสลับพื้นที่: 3 วินาที
-        
-        การเปิด/ปิดระบบ:
-        - ตั้งค่า "Auto Area Detection" ในหน้า Settings
-        - เมื่อปิดการทำงาน จะต้องสลับพื้นที่ด้วยตนเองผ่าน Control Panel
-        
-        การทดสอบ:
-        - ใช้ฟังก์ชัน test_area_switching() เพื่อทดสอบระบบ
-        - วิธีใช้: เรียกฟังก์ชันนี้ผ่าน Python console หรือสร้างปุ่มทดสอบ
-        """
-
-        info_window = tk.Toplevel(self.root)
-        info_window.title("ระบบสลับพื้นที่อัตโนมัติ")
-        info_window.geometry("600x500")
-        info_window.configure(bg="#1a1a1a")
-
-        # สร้าง Text widget สำหรับแสดงข้อความ
-        text_widget = tk.Text(
-            info_window,
-            wrap=tk.WORD,
-            bg="#1a1a1a",
-            fg="white",
-            font=("IBM Plex Sans Thai Medium", 12),
-            padx=20,
-            pady=20,
-        )
-        text_widget.pack(expand=True, fill=tk.BOTH)
-        text_widget.insert(tk.END, explanation)
-        text_widget.config(state=tk.DISABLED)  # ทำให้ข้อความไม่สามารถแก้ไขได้
-
-        # โหลดไอคอน del.png และใช้ Label แทน Button เพื่อให้โปร่งใส
-        try:
-            del_icon = tk.PhotoImage(file=resource_path("assets/del.png"))
-
-            # สร้างปุ่มปิดใช้ Label (โปร่งใสได้)
-            close_button = tk.Label(
-                self.guide_window,
-                image=del_icon,
-                bg=self.guide_window.cget("bg"),  # พื้นหลังโปร่งใส
-                cursor="hand2",
-            )
-            close_button.image = del_icon  # เก็บ reference
-
-        except:
-            # ถ้าโหลดไอคอนไม่ได้ ใช้ text แทน
-            close_button = tk.Label(
-                self.guide_window,
-                text="×",
-                font=("Arial", 14, "bold"),
-                bg=self.guide_window.cget("bg"),
-                fg="#888888",  # สีเทาอ่อน
-                cursor="hand2",
-            )
-
-        guide_width = 600  # กำหนดค่าความกว้างของหน้าต่าง guide
-        close_button.place(x=guide_width - 35, y=10)
-
-        # เพิ่ม hover effect ให้แสดงสี theme_accent เมื่อ hover
-        theme_accent = (
-            self.appearance_manager.get_accent_color()
-            if hasattr(self, "appearance_manager")
-            else "#6C5CE7"
-        )
-        window_bg = self.guide_window.cget("bg")
-
-        def on_enter(e):
-            close_button.configure(bg=theme_accent)
-
-        def on_leave(e):
-            close_button.configure(bg=window_bg)
-
-        def on_click(e):
-            self.guide_window.destroy()
-
-        close_button.bind("<Enter>", on_enter)
-        close_button.bind("<Leave>", on_leave)
-        close_button.bind("<Button-1>", on_click)  # เพิ่ม click event
-
-        # ทำให้หน้าต่างอยู่ด้านบนและตรงกลางหน้าจอ
-        info_window.update_idletasks()
-        width = info_window.winfo_width()
-        height = info_window.winfo_height()
-        x = (info_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (info_window.winfo_screenheight() // 2) - (height // 2)
-        info_window.geometry(f"{width}x{height}+{x}+{y}")
-        info_window.attributes("-topmost", True)
-
-    def area_detection_stability_system(self):
-        """ระบบตรวจสอบความเสถียรของการตรวจจับรูปแบบข้อความเพื่อลดการสลับพื้นที่ไม่จำเป็น
-
-        ฟังก์ชันนี้จะเก็บประวัติการตรวจจับประเภทข้อความและคำนวณความมั่นใจ
-        ก่อนที่จะอนุญาตให้สลับพื้นที่ เพื่อป้องกันการสลับพื้นที่ไปมาบ่อยเกินไป
-
-        Returns:
-            dict: ข้อมูลเกี่ยวกับความเสถียรของการตรวจจับ
-        """
-        # สร้างหรืออัพเดตตัวแปรเก็บประวัติการตรวจจับ
-        if not hasattr(self, "_detection_history"):
-            self._detection_history = {
-                "normal": [],  # บทสนทนาปกติ (A+B)
-                "narrator": [],  # บทบรรยาย (C)
-                "choice": [],  # ตัวเลือก (B)
-                "other": [],  # ประเภทอื่นๆ (B)
-                "unknown": [],  # ไม่สามารถระบุประเภทได้
-                "last_stable_type": None,  # ประเภทล่าสุดที่มั่นคง
-                "last_stable_time": 0,  # เวลาล่าสุดที่มีการเปลี่ยนประเภทที่มั่นคง
-                "consecutive_detections": 0,  # จำนวนครั้งที่ตรวจพบประเภทเดิมติดต่อกัน
-                "current_type": None,  # ประเภทปัจจุบัน
-                "stability_score": 0,  # คะแนนความเสถียร (0-100)
-            }
-
-        # ระบบวิเคราะห์ความเสถียร
-        history = self._detection_history
-        current_time = time.time()
-
-        # ประเภทข้อความที่สมเหตุสมผลที่จะสลับไปมา
-        valid_types = ["normal", "narrator", "choice", "other"]
-
-        # ตัดประวัติที่เก่าเกิน 10 วินาที
-        for dtype in valid_types + ["unknown"]:
-            history[dtype] = [d for d in history[dtype] if current_time - d <= 10]
-
-        # คำนวณความถี่ของแต่ละประเภทในช่วง 5 วินาทีล่าสุด
-        recent_window = 5  # ช่วงเวลาที่พิจารณา (วินาที)
-        recent_counts = {}
-        for dtype in valid_types:
-            recent_counts[dtype] = len(
-                [d for d in history[dtype] if current_time - d <= recent_window]
-            )
-
-        total_recent = sum(recent_counts.values())
-
-        # คำนวณความมั่นใจของแต่ละประเภท
-        confidence = {}
-        for dtype in valid_types:
-            if total_recent > 0:
-                confidence[dtype] = (recent_counts[dtype] / total_recent) * 100
-            else:
-                confidence[dtype] = 0
-
-        # ตรวจสอบว่ามีประเภทไหนที่มั่นใจมากพอ (มากกว่า 70%)
-        stable_type = None
-        max_confidence = 0
-        for dtype, conf in confidence.items():
-            if conf > max_confidence:
-                max_confidence = conf
-                stable_type = dtype
-
-        # ตรวจสอบว่าประเภทนั้นมีความมั่นใจสูงพอ
-        is_stable = max_confidence >= 70
-
-        # อัพเดตข้อมูลความเสถียร
-        if is_stable and stable_type != history["last_stable_type"]:
-            history["last_stable_type"] = stable_type
-            history["last_stable_time"] = current_time
-            history["consecutive_detections"] = 1
-        elif is_stable and stable_type == history["last_stable_type"]:
-            history["consecutive_detections"] += 1
-
-        # คะแนนความเสถียรขึ้นอยู่กับจำนวนครั้งที่ตรวจพบประเภทเดิมติดต่อกัน
-        if history["consecutive_detections"] >= 3:
-            history["stability_score"] = 100  # มั่นคงมาก (ตรวจพบประเภทเดิม 3 ครั้งขึ้นไป)
-        else:
-            history["stability_score"] = (
-                history["consecutive_detections"] * 33
-            )  # 33%, 66%, 99%
-
-        # อัพเดตประเภทปัจจุบัน
-        history["current_type"] = stable_type if is_stable else history["current_type"]
-
-        return {
-            "is_stable": is_stable,
-            "stable_type": stable_type,
-            "confidence": confidence,
-            "stability_score": history["stability_score"],
-            "consecutive_detections": history["consecutive_detections"],
-            "time_since_last_stable": (
-                current_time - history["last_stable_time"]
-                if history["last_stable_time"] > 0
-                else float("inf")
-            ),
-        }
-
-    def switch_area_using_preset(self, dialogue_type):
-        """สลับพื้นที่โดยใช้ preset ที่เหมาะสมกับประเภทข้อความแบบอัตโนมัติ (ปิดใช้งานถาวร)
-
-        Args:
-            dialogue_type: ประเภทข้อความ ("normal", "narrator", "choice", ฯลฯ)
-
-        Returns:
-            bool: False - Auto preset switching disabled permanently
-        """
-        # ปิดการใช้งาน Auto Preset Switching ถาวร
-        logging.debug(
-            f"Auto preset switching disabled for dialogue type: {dialogue_type}"
-        )
-        return False
-        # ตรวจสอบว่ามี control_ui หรือไม่
-        if not hasattr(self, "control_ui") or not self.control_ui:
-            self._update_status_line(
-                "Control UI not available, using direct area switch"
-            )
-            return self.switch_area_directly(dialogue_type)
-
-        current_areas = (
-            self.current_area.split("+")
-            if isinstance(self.current_area, str)
-            else self.current_area
-        )
-        current_areas_set = set(current_areas)
-
-        # ตรวจสอบว่า control_ui พร้อมใช้งานหรือไม่
-        if not self.control_ui.root.winfo_exists():
-            self._update_status_line(
-                "Control UI not available, using direct area switch"
-            )
-            return self.switch_area_directly(dialogue_type)
-
-        # อัพเดต detection history สำหรับการคำนวณความเสถียร
-        self.update_detection_history(dialogue_type)
-
-        # เรียกใช้ระบบวิเคราะห์ความเสถียร
-        stability_info = self.area_detection_stability_system()
-
-        # ถ้าความเสถียรต่ำเกินไป (<66%) ให้รอก่อน
-        if stability_info["stability_score"] < 66:
-            self._update_status_line(
-                f"Stability too low ({int(stability_info['stability_score'])}%), waiting for more consistent detection"
-            )
-            return False
-
-        # ค้นหา preset ที่เหมาะสมโดยอัตโนมัติ
-        target_preset = self.find_appropriate_preset(dialogue_type)
-
-        if target_preset is None:
-            self._update_status_line(
-                f"Could not find appropriate preset for {dialogue_type}, keeping current areas"
-            )
-            return False
-
-        # ดึงหมายเลข preset ปัจจุบัน
-        current_preset = self.control_ui.current_preset
-
-        # ถ้า preset ปัจจุบันเหมาะสมกับประเภทข้อความอยู่แล้ว ให้ข้ามการสลับ
-        if current_preset == target_preset:
-            self._update_status_line(
-                f"Already using appropriate preset (P{current_preset}) for {dialogue_type}"
-            )
-            return False
-
-        # ตรวจสอบ preset เป้าหมายว่ามีอยู่จริง
-        presets = self.settings.get_all_presets()
-        if target_preset > len(presets):
-            self._update_status_line(
-                f"Target preset P{target_preset} does not exist, keeping current preset"
-            )
-            return False
-
-        # บันทึกข้อมูลก่อนสลับ preset
-        old_preset = current_preset
-        old_areas = current_areas
-
-        # สลับไปที่ preset เป้าหมาย
-        try:
-            self._update_status_line(
-                f"✓ Auto switching from P{old_preset} to P{target_preset} for {dialogue_type}"
-            )
-            self.logging_manager.log_info(
-                f"Auto switching preset: P{old_preset} -> P{target_preset} for dialogue type: {dialogue_type}"
-            )
-
-            # เรียกใช้ฟังก์ชัน load_preset ของ control_ui
-            self.control_ui.load_preset(target_preset)
-
-            # ตรวจสอบว่าการสลับ preset สำเร็จหรือไม่
-            if self.control_ui.current_preset == target_preset:
-                self.logging_manager.log_info(
-                    f"Successfully switched to preset P{target_preset}"
-                )
-                return True
-            else:
-                self.logging_manager.log_error(
-                    f"Failed to switch to preset P{target_preset}"
-                )
-                return False
-
-        except Exception as e:
-            self.logging_manager.log_error(f"Error switching preset: {e}")
-            return False
-
-    def find_appropriate_preset(self, dialogue_type):
-        """
-        ค้นหา preset ที่เหมาะสมกับประเภทข้อความโดยวิเคราะห์โครงสร้างของแต่ละ preset
-
-        Args:
-            dialogue_type: ประเภทข้อความ ("normal", "narrator", "choice" ฯลฯ)
-
-        Returns:
-            int: หมายเลข preset ที่เหมาะสม หรือ None ถ้าไม่พบ
-        """
-        # ดึงข้อมูล presets ทั้งหมด
-        presets = self.settings.get_all_presets()
-        if not presets:
-            self.logging_manager.log_warning("No presets found")
-            return None
-
-        # เตรียมวิเคราะห์พื้นที่ที่เหมาะสมกับแต่ละประเภทข้อความ
-        required_areas = {
-            "normal": {"A", "B"},  # ต้องการทั้ง A และ B
-            "narrator": {"C"},  # ต้องการ C
-            "choice": {"B"},  # ต้องการแค่ B สำหรับ choice dialogue
-            "speaker_in_text": {"B"},  # ต้องการแค่ B
-            "dialog_without_name": {"B"},  # ต้องการแค่ B
-        }
-
-        # ถ้าไม่มีประเภทข้อความที่ต้องการในการจับคู่ ให้ใช้ preset 1
-        if dialogue_type not in required_areas:
-            return 1  # default เป็น preset 1
-
-        # ลำดับความสำคัญของ preset (preset 1 มักเป็น default)
-        preset_priority = [1, 2, 3, 4, 5]
-
-        # รายการตัวเลือก preset ที่เข้าเกณฑ์
-        candidates = []
-
-        # วนลูปตรวจสอบแต่ละ preset ว่าตรงกับความต้องการหรือไม่
-        for i, preset in enumerate(presets):
-            preset_number = i + 1
-            areas_str = preset.get("areas", "")
-            areas_set = set(areas_str.split("+"))
-
-            # ตรวจสอบว่า preset นี้มีพื้นที่ที่ต้องการทั้งหมดหรือไม่
-            if required_areas[dialogue_type].issubset(areas_set):
-                # เก็บคะแนนความเหมาะสม (ใช้ลำดับความสำคัญของ preset)
-                priority_score = (
-                    preset_priority.index(preset_number)
-                    if preset_number in preset_priority
-                    else 999
-                )
-                candidates.append((preset_number, priority_score, len(areas_set)))
-
-        if not candidates:
-            # ถ้าไม่พบ preset ที่เหมาะสม ให้ใช้ preset 1 เป็น default
-            self.logging_manager.log_warning(
-                f"No suitable preset found for {dialogue_type}, using preset 1"
-            )
-            return 1
-
-        # เรียงลำดับตามความสำคัญและความกระชับของพื้นที่
-        # - ลำดับที่ 1: คะแนนลำดับความสำคัญ (ต่ำกว่าดีกว่า)
-        # - ลำดับที่ 2: จำนวนพื้นที่ (น้อยกว่าดีกว่า เพื่อเลือก preset ที่มีเฉพาะพื้นที่ที่จำเป็น)
-        candidates.sort(key=lambda x: (x[1], x[2]))
-
-        # เลือก preset ที่เหมาะสมที่สุด
-        best_preset = candidates[0][0]
-
-        self.logging_manager.log_info(
-            f"Found appropriate preset {best_preset} for {dialogue_type}"
-        )
-        return best_preset
-
-    def switch_area_directly(self, dialogue_type):
-        """สลับพื้นที่โดยตรงตามประเภทข้อความ (ปิดใช้งานถาวร)
-
-        Args:
-            dialogue_type: ประเภทข้อความ ("normal", "narrator", "choice", ฯลฯ)
-
-        Returns:
-            bool: False - Auto area switching disabled permanently
-        """
-        # ปิดการใช้งาน Auto Area Switching ถาวร
-        logging.debug(
-            f"Auto direct area switching disabled for dialogue type: {dialogue_type}"
-        )
-        return False
-        current_areas = (
-            self.current_area.split("+")
-            if isinstance(self.current_area, str)
-            else self.current_area
-        )
-        current_areas_set = set(current_areas)
-
-        # กำหนดพื้นที่ที่เหมาะสมสำหรับแต่ละประเภทข้อความ
-        if dialogue_type == "normal":
-            # บทสนทนาปกติ (มีทั้งชื่อและข้อความ) - ใช้พื้นที่ A+B
-            target_areas = ["A", "B"]
-        elif dialogue_type == "narrator":
-            # บทบรรยาย - ใช้พื้นที่ C
-            target_areas = ["C"]
-        elif dialogue_type == "choice":
-            # ตัวเลือก - ใช้พื้นที่ B
-            target_areas = ["B"]
-        elif dialogue_type in ["speaker_in_text", "dialog_without_name"]:
-            # ข้อความที่มีชื่อคนพูดอยู่ในข้อความ หรือไม่มีชื่อ - ใช้พื้นที่ B
-            target_areas = ["B"]
-        else:
-            # ประเภทข้อความที่ไม่รู้จัก - คงพื้นที่เดิม
-            self._update_status_line(
-                f"Unknown dialogue type: {dialogue_type}, keeping current areas"
-            )
-            return False
-
-        # ตรวจสอบความจำเป็นในการสลับพื้นที่
-        target_areas_set = set(target_areas)
-        if current_areas_set == target_areas_set:
-            # พื้นที่ปัจจุบันเหมาะสมกับประเภทข้อความอยู่แล้ว
-            return False
-
-        # สลับพื้นที่
-        new_area_str = "+".join(target_areas)
-        self.switch_area(new_area_str)
-        self._update_status_line(f"✓ Auto switched to area: {new_area_str}")
-        self.logging_manager.log_info(
-            f"Auto switched from {'+'.join(current_areas)} to {new_area_str}"
-        )
-
-        return True
-
-    def update_detection_history(self, dialogue_type):
-        """บันทึกประวัติการตรวจจับประเภทข้อความ
-
-        Args:
-            dialogue_type: ประเภทข้อความที่ตรวจพบ ("normal", "narrator", "choice", ฯลฯ)
-        """
-        if not hasattr(self, "_detection_history"):
-            self.area_detection_stability_system()  # สร้างถ้ายังไม่มี
-
-        # เพิ่มเวลาปัจจุบันลงในประวัติของประเภทที่ตรวจพบ
-        current_time = time.time()
-
-        # จัดประเภทข้อความให้เข้ากับหมวดหมู่หลัก
-        if dialogue_type == "normal":
-            self._detection_history["normal"].append(current_time)
-        elif dialogue_type == "narrator":
-            self._detection_history["narrator"].append(current_time)
-        elif dialogue_type == "choice":
-            self._detection_history["choice"].append(current_time)
-        elif dialogue_type in ["speaker_in_text", "dialog_without_name"]:
-            self._detection_history["other"].append(current_time)
-        else:
-            self._detection_history["unknown"].append(current_time)
+    # OCR-era area switching chain removed 2026-04-25:
+    #   test_area_switching, explain_area_switching, area_detection_stability_system,
+    #   switch_area_using_preset, find_appropriate_preset, switch_area_directly,
+    #   update_detection_history. ZERO external callers in Dalamud-mode codebase.
 
     def translation_loop(self):
-        """จัดการการแปลและแสดงผลด้วยระบบ Text Stability Check"""
-        # --- ตัวแปรจัดการสถานะภายใน Loop ---
-        is_processing = False
-        last_processing_time = time.time()
-        idle_throttle = 0.3
-        cpu_status_counter = 0  # Counter for CPU status display
+        """Background status loop for Dalamud mode.
+
+        NOTE: Translation itself happens in dalamud_immediate_handler via named-pipe
+        push, NOT in this loop. This loop only updates the status line periodically.
+        Legacy OCR text-stability + Click-translate + auto-switch + cpu-throttle code
+        was removed 2026-04-25 (all dead under Dalamud architecture)."""
         dalamud_status_counter = 0  # Counter for Dalamud status update
 
         while self.is_translating:
             try:
-                if is_processing:
-                    # Use CPU-aware sleep interval
-                    if self.cpu_monitor and self.cpu_monitor.is_enabled():
-                        sleep_time = self.cpu_monitor.get_sleep_interval()
-                        time.sleep(sleep_time)
-                    else:
-                        time.sleep(0.05)
-                    continue
-
-                current_time = time.time()
-                wait_time = 0.1 if self.force_next_translation else idle_throttle
-                if time.time() - last_processing_time < wait_time:
-                    # Use CPU-aware sleep for idle throttling too
-                    if self.cpu_monitor and self.cpu_monitor.is_enabled():
-                        sleep_time = min(0.05, self.cpu_monitor.get_sleep_interval())
-                        time.sleep(sleep_time)
-                    else:
-                        time.sleep(0.05)
-                    continue
-
-                # --- เริ่ม Process ---
-                is_processing = True
-                last_processing_time = current_time
-
-                # --- CPU Status Display (every 20 loops) ---
-                cpu_status_counter += 1
-                if (
-                    self.cpu_monitor
-                    and cpu_status_counter % 20 == 0
-                    and self.cpu_monitor.is_enabled()
-                ):
-                    status_msg = self.cpu_monitor.get_status_message()
-                    if status_msg:  # Only display if there's a message
-                        self._update_status_line(status_msg)
-
                 # --- Dalamud Status Update (every 10 loops ~ 1 second) ---
                 dalamud_status_counter += 1
                 if dalamud_status_counter >= 10 and self.dalamud_mode:
                     dalamud_status_counter = 0
-                    # อัพเดต info label เพื่อแสดงสถานะล่าสุด
                     try:
                         self.logging_manager.log_info("Updating Dalamud status display...")
                         self.safe_after(0, self.update_info_label_with_model_color)
                     except Exception as e:
                         self.logging_manager.log_error(f"Status update error: {e}")
-
-                # --- Smart Switch & Click Translate Check (ปิดการใช้งาน Auto Switch) ---
-                # self.smart_switch_area() # Auto switching disabled permanently
-
-                # DISABLED - 1-Click mode causes delay in text hook display
-                """
-                if (
-                    self.settings.get("enable_click_translate", False)
-                    and not self.force_next_translation
-                ):
-                    self._update_status_line(
-                        "▶ 1-Click Mode: Waiting for trigger (click FORCE button or right-click)"
-                    )
-                    is_processing = False
-                    time.sleep(0.1)
-                    continue
-                """
 
                 # --- TEXT HOOK MODE: Check for Dalamud text hook first ---
                 text_hook_data = self.get_text_hook_data()
@@ -5686,7 +4887,7 @@ class MagicBabelApp:
                     success = self.translate_and_display_directly(text_hook_data)
                     if success:
                         self._update_status_line("✅ Text hook translation complete")
-                    is_processing = False
+                    time.sleep(0.05)
                     continue
 
                 # --- Dalamud mode: wait for text hook data ---
@@ -5695,69 +4896,12 @@ class MagicBabelApp:
                         self._update_status_line("✅ Dalamud Bridge Connected")
                     else:
                         self._update_status_line("⏳ Waiting for Dalamud connection...")
-                is_processing = False
+
                 time.sleep(0.1)
-                continue
-
-                # --- ส่งข้อความที่ "เสถียร" แล้วไปแปล ---
-                stable_text_to_translate = None
-                has_dalamud = False
-                if stable_text_to_translate:
-                    # ตั้ง flag การแปล สำหรับ Dalamud rate limiting
-                    if has_dalamud:
-                        self._is_translating_dalamud = True
-
-                    self._update_status_line(
-                        f"✅ Translating: {stable_text_to_translate[:30]}..."
-                    )
-
-                    # ตรวจสอบว่าเป็น Choice Dialogue หรือไม่
-                    is_choice = (
-                        self.is_choice_dialogue(stable_text_to_translate)
-                        or self.is_choice_preset_active()
-                    )
-                    logging.info(
-                        f"Choice detection result: {is_choice} for text: '{stable_text_to_translate[:50]}...'"
-                    )
-
-                    translated_text = self.translator.translate(
-                        stable_text_to_translate, is_choice_option=is_choice
-                    )
-
-                    if translated_text and not translated_text.startswith("[Error"):
-                        # ใช้ dual-state display สำหรับแสดงข้อความแปล
-                        self.safe_after(
-                            0,
-                            lambda txt=translated_text: self._display_translation_complete(
-                                txt, stable_text_to_translate
-                            ),
-                        )
-                        if hasattr(self, "translated_logs_instance"):
-                            self.translated_logs_instance.add_message(translated_text)
-                        self.last_translation = translated_text
-
-                    # Reset Dalamud translation flag และ process pending queue
-                    if has_dalamud:
-                        self._is_translating_dalamud = False
-                        # Process pending queue ถ้ามี
-                        if hasattr(self, '_dalamud_pending_queue') and self._dalamud_pending_queue:
-                            next_message = self._dalamud_pending_queue.pop(0)
-                            print(f"📋 Processing queued message: {next_message['text'][:30]}...")
-                            # เพิ่มข้อความถัดไปเข้า main queue
-                            self.dalamud_text_queue.clear()
-                            self.dalamud_text_queue.append(next_message)
-                            # Trigger translation loop อีกรอบ
-                            self.translation_event.set()
-
-                is_processing = False
 
             except Exception as e:
                 self._update_status_line(f"Error: {e}")
                 logging.error(f"Translation loop error: {e}", exc_info=True)
-                # Reset Dalamud flag ในกรณี error
-                if hasattr(self, '_is_translating_dalamud'):
-                    self._is_translating_dalamud = False
-                is_processing = False
                 time.sleep(0.5)
 
     def get_text_hook_data(self):
