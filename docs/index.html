@@ -908,8 +908,15 @@
             .pulse-badge,
             .miqote-icon { animation-play-state: paused !important; }
 
-            /* ── Simpler banner glow ── */
-            .logo-glow { filter: none !important; background: rgba(99,102,241,0.12) !important; }
+            /* ── Simpler banner glow — keep radial gradient for soft edges, drop blur for perf ── */
+            .logo-glow {
+                filter: none !important;
+                background: radial-gradient(ellipse at center,
+                    rgba(99,102,241,0.22) 0%,
+                    rgba(99,102,241,0.08) 35%,
+                    transparent 65%
+                ) !important;
+            }
 
             /* ── Reduce heavy drop-shadows ── */
             .banner-logo { filter: drop-shadow(0 0 10px rgba(99,102,241,0.4)) !important; }
