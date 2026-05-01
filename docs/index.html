@@ -254,6 +254,27 @@
         }
         @media (max-width: 768px) {
             .cinematic-banner { height: 220px; }
+            /* Center the video so character stays visible (desktop right-shift is too aggressive on narrow screens) */
+            .banner-glitch .glitch-base,
+            .banner-glitch .glitch-r,
+            .banner-glitch .glitch-b {
+                object-position: 62% center;
+            }
+            /* Softer dissolve — fade earlier so video isn't covered by a giant black panel */
+            .cinematic-banner .dissolve-overlay {
+                background: linear-gradient(to right,
+                    rgba(6,13,26,0.92) 0%,
+                    rgba(6,13,26,0.65) 18%,
+                    rgba(6,13,26,0.25) 38%,
+                    rgba(6,13,26,0.05) 52%,
+                    transparent 65%
+                );
+            }
+            /* Tame the heavy logo glow at narrow viewport */
+            .cinematic-banner .logo-glow {
+                width: 55%;
+                opacity: 0.55;
+            }
         }
         /* Left dissolve gradient overlay — คลุมทั้ง banner, ฝั่งซ้ายทึบ ฝั่งขวา transparent */
         .cinematic-banner .dissolve-overlay {
