@@ -727,6 +727,32 @@
             transition: opacity 0.3s;
         }
         .banner-glitch.glitching .scanlines { opacity: 0.7; }
+        /* LCD subpixel RGB stripes — cyberpunk LCD coating */
+        .banner-glitch .lcd-grid {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(255, 0, 60, 0.05) 0px,
+                    rgba(255, 0, 60, 0.05) 1px,
+                    rgba(0, 255, 120, 0.05) 1px,
+                    rgba(0, 255, 120, 0.05) 2px,
+                    rgba(0, 120, 255, 0.05) 2px,
+                    rgba(0, 120, 255, 0.05) 3px
+                );
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            z-index: 4;
+            opacity: 0.35;
+            transition: opacity 0.3s;
+        }
+        .banner-glitch.glitching .lcd-grid { opacity: 0.6; }
+        @media (max-width: 768px) {
+            /* Hide subpixel grid on mobile — too dense at small sizes, also saves battery */
+            .banner-glitch .lcd-grid { display: none; }
+        }
         /* Horizontal glitch bars — subtle colored slices */
         .banner-glitch .glitch-bar {
             position: absolute;
@@ -1021,14 +1047,18 @@
     <!-- CINEMATIC BANNER — Full-width, dissolve left       -->
     <!-- ═══════════════════════════════════════════════════ -->
     <div class="cinematic-banner">
-        <!-- Banner image (full-width) with cyberpunk glitch -->
+        <!-- Banner video (full-width) with cyberpunk glitch -->
         <div id="heroBanner" class="banner-glitch" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;">
-            <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772760917/mbb_banner01_tmaxtu.png"
-                 alt="Magicite Babel Banner" class="glitch-base">
-            <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772760917/mbb_banner01_tmaxtu.png"
-                 alt="" class="glitch-r">
-            <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772760917/mbb_banner01_tmaxtu.png"
-                 alt="" class="glitch-b">
+            <video class="glitch-base" autoplay loop muted playsinline preload="auto" disableremoteplayback poster="https://res.cloudinary.com/docoo51xb/image/upload/v1772760917/mbb_banner01_tmaxtu.png">
+                <source src="web_assets/mbb_banner.mp4" type="video/mp4">
+            </video>
+            <video class="glitch-r" autoplay loop muted playsinline preload="auto" disableremoteplayback aria-hidden="true">
+                <source src="web_assets/mbb_banner.mp4" type="video/mp4">
+            </video>
+            <video class="glitch-b" autoplay loop muted playsinline preload="auto" disableremoteplayback aria-hidden="true">
+                <source src="web_assets/mbb_banner.mp4" type="video/mp4">
+            </video>
+            <div class="lcd-grid"></div>
             <div class="scanlines"></div>
             <div class="glitch-bar"></div>
             <div class="glitch-bar"></div>
@@ -1044,7 +1074,7 @@
         <div class="banner-logo-group">
             <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772761009/mbb_LOGO_vkk21r.png"
                  alt="Magicite Babel Logo" class="banner-logo">
-            <span class="banner-version">v1.7.8</span>
+            <span class="banner-version">v1.8.2</span>
         </div>
     </div>
 
