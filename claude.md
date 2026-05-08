@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.8.0
+**Version:** 1.8.4
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -47,8 +47,105 @@ C:\MBB_Dalamud/
 - [x] Code cleanup Phase 1 — dead-code purge + theme system v2 (2026-04-25)
 - [x] NPC Manager polish + word_fixes deprecated (2026-04-26)
 - [x] Translated Logs PyQt6 rewrite + Settings polish (v1.8.0, 2026-04-26)
+- [x] Translation tuning + Theme/NPC polish (v1.8.1, 2026-04-27)
+- [x] NPC Manager database visibility + merge tool (v1.8.4, 2026-05-08)
+- [x] NPC Manager Polaroid view + WebP avatar storage (v1.8.2, 2026-04-27)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
+
+---
+
+## Changelog — v1.8.4 (2026-05-08)
+
+### NPC Manager — Database Visibility + Merge Tool
+- **Header status strip** ([npc_manager_panel.py:_update_db_status](python-app/pyqt_ui/npc_manager_panel.py)): subtitle replaced with live counts + file mtime — `main 218 · npcs 65 · lore 139 · อัปเดต X นาทีที่แล้ว`. Refreshed on init / autosave / reload / 60s QTimer.
+- **Manual reload button** (header `↻` → `assets/swap.png`): re-reads npc.json from disk + propagates via `on_save_callback` (translator + text_corrector + caches). Use case: user edits npc.json from external editor or merges from another source.
+- **Toast message clarity**: default `"✓ บันทึกแล้ว"` → `"✓ บันทึก · ใช้ในการแปลทันที"` when MBB attached. Tells the user the change is live without needing restart.
+- **`_format_relative_time(ts)`** helper: `<60s → "เมื่อสักครู่"`, `<60m → "X นาทีที่แล้ว"`, `<24h → "X ชม.ที่แล้ว"`, `<7d → "X วันที่แล้ว"`, else absolute date.
+
+### Merge Modal — Cross-File Database Sync
+- **`Merge` button in header** opens file picker → loads target npc.json → shows diff modal.
+- **`_MergeDiff` class**: computes additive diff (new + changed, never deleted) across 4 sections (`main_characters`, `npcs`, `lore`, `character_roles`). Identity: `(firstName, lastName)` lowercase for main, `name` lowercase for npcs, key for dicts. Skips `word_fixes` (deprecated) + `_game_info` (metadata).
+- **`_MergeDialog`** ([npc_manager_panel.py:_MergeDialog](python-app/pyqt_ui/npc_manager_panel.py)): frameless 760×660 modal with 2px accent border (so it pops against panel underneath). Layout:
+  - Top: 2 file cards (BASE | TARGET) — filename 13pt bold, mtime 12pt bold + colour (`↑` green=newer, `↓` orange=older, `=` neutral=same), counts 11pt 2-line layout
+  - Body: scroll area with diff rows grouped by section, checkbox + NEW/CHG badge + label + details (truncated, full text in tooltip)
+  - Footer: "Cancel" / "Merge ที่เลือก (N)" — disabled when N=0
+- **Merge semantics**: `new` → append to base (preserve target value verbatim, stamp `_added_at` if missing), `change` → overwrite (preserve local `_added_at`). Never deletes anything. After accept → caller calls `panel.autosave()` which propagates via `on_save_callback` to translator/text_corrector/caches.
+
+### Audit Fixes
+- **MAX_NPC_BYTES = 50MB cap** before `json.load` — prevent UI freeze / OOM if user picks a malicious huge JSON file.
+- **`dlg.deleteLater()`** after `exec()` — without it, repeated merge sessions accumulate dialog widgets parented to the panel (memory leak over long dev sessions).
+- **`_apply_diff` / `_apply_list_diff` isinstance hardening**: `setdefault` alone fails if existing value is wrong type (e.g. `data["lore"] = None` on corrupted file); now reset to `{}` / `[]` when type mismatches.
+
+### Build — npc.json + npc_images Promoted Out of `_internal/`
+- **Post-build copy in [mbb.spec](python-app/mbb.spec)** (after COLLECT): `_internal/npc.json` → `MBB/npc.json`, `_internal/npc_images/` → `MBB/npc_images/`. Uses `shutil.copyfile` + `shutil.copytree(dirs_exist_ok=True)` so each rebuild refreshes.
+- **Why**: PyInstaller default buries everything in `_internal/` but these are the only files users actually want to find / share / back up. Resolver in `npc_file_utils.get_npc_file_path()` already prefers exe-level → `_internal/` fallback, so duplicating ~1.5MB is worth it.
+- **Distribution layout (v1.8.4+)**:
+  ```
+  MBB/
+  ├── MBB.exe
+  ├── npc.json          ← user-editable, visible
+  ├── npc_images/       ← user data, visible
+  │   └── main_characters/
+  └── _internal/
+      ├── npc.json      (fallback)
+      ├── npc_images/   (fallback)
+      └── ... (Python runtime + libs)
+  ```
+
+---
+
+## Changelog — v1.8.2 (2026-04-27)
+
+### NPC Manager — Polaroid Avatar View
+- **New feature** ([npc_manager_panel.py:_PolaroidCard / PolaroidOverlay](python-app/pyqt_ui/npc_manager_panel.py)): clicking a character's avatar opens a polaroid-style enlarged photo card (~400×510px) inside the details panel. Card shows the full image (top-cropped, KeepAspectRatioByExpanding) + the firstName below in a handwriting font (Caveat, bundled). Hover the card → "📷 เปลี่ยนภาพ" pill (top-right) + "✕" delete (bottom-right) appear.
+- **UX flows**:
+  - Empty avatar → click goes straight to file picker (skip empty Polaroid)
+  - Avatar with image → click opens Polaroid; "เปลี่ยนภาพ" → file picker → after upload, Polaroid auto-reopens with the new photo
+  - Click outside / Resize window / ESC → Polaroid dismisses immediately
+
+### Polaroid Implementation Notes (every one of these took multiple iterations — captured in [project_pyqt6_gotchas.md](memory))
+- **Shadow ghost outline fix** ([QTBUG-56081](https://bugreports.qt.io/browse/QTBUG-56081)): action buttons live as **siblings of the shadowed `_PolaroidCard`** (children of the overlay), not children of the card. `QGraphicsDropShadowEffect` rasterizes ALL descendants together — children-of-shadow get their full bounding rect baked into the shadow pass before QSS border-radius clips them, leaking square ghosts. Pattern from [BoxShadow-in-PyQt-PySide](https://github.com/GvozdevLeonid/BoxShadow-in-PyQt-PySide).
+- **Custom font fix**: `QtFontManager` runs lazily (only on Settings/Font panel open). Polaroid calls `QFontDatabase.addApplicationFont()` itself in `__init__` (idempotent). Even after registration, panel-level QSS subtree cascade can override `setFont()`. Bulletproof workaround: pre-render the name to a QPixmap via `QPainter.drawText` (uses QFont directly, bypassing QSS pipeline), then `label.setPixmap(pm)`. See `_render_name_pixmap`.
+- **Hover flicker fix**: timer-based geometry polling (60ms) instead of Enter/Leave events. When buttons are siblings painted on top of card, cursor crossing onto a button = Leave on card = hide buttons = cursor on card again = Enter on card = show buttons = ... Geometry poll avoids the loop. See `_update_hover_state`.
+- **Resize / outside-click dismiss**: app-level `eventFilter` installed only while overlay is visible. Listens for top-level window `Resize` (backdrop wouldn't reflow → dismiss) and `MouseButtonPress` outside the overlay's screen rect (covers title bar / resize grip clicks).
+
+### Avatar Storage — 128 PNG → 512 WebP (~89% smaller files)
+- **Resolution bump** ([npc_data_manager.py:set_main_character_image](python-app/npc_data_manager.py)): default `size = 128` → `512`. The 128px legacy default produced visibly blurry images in the Polaroid (which displays at 360 logical px). 512 has just-enough headroom for HiDPI without storage bloat.
+- **Format switch** ([image_optimizer.py](python-app/image_optimizer.py)): default save format PNG → **WebP, lossy quality=88**, alpha preserved. Real comparison: y_shtola PNG 503KB → WebP 56KB (11% of original size, visually indistinguishable). `safe_filename` default extension `.png` → `.webp`.
+- **Legacy cleanup**: when re-uploading an avatar that previously had a different extension (`.png`), the old file is deleted to prevent orphans.
+- **Polaroid no-upscale guard**: `_PolaroidCard.paintEvent` caps `target_logical = min(IMAGE_AREA, source_min_dim)` — small legacy 128px images display at native size centered (letterboxed) instead of being blurry-upscaled to 360.
+
+### Caveat Font Bundled
+- **New asset** ([fonts/Caveat-Regular.ttf](python-app/fonts/Caveat-Regular.ttf)): English handwriting font (Google Fonts, OFL license, ~300KB). Renamed to `Caveat.ttf` automatically by `font_manager.py` metadata-rename logic on first run. Used by Polaroid for the firstName strip below the photo.
+
+### NPC Manager — Avatar Badge Icons (MAIN list + Polaroid button)
+- **Procedural flat-design icon** ([npc_manager_panel.py:_make_avatar_badge_icon](python-app/pyqt_ui/npc_manager_panel.py)): rounded square in the current theme accent color + white photo glyph (frame outline + mountain V + sun dot) drawn with QPainter. No raster asset needed — scales cleanly with theme.
+- **MAIN list rows**: rows whose character has `image` set show the badge at column-0 left edge; rows without get a transparent placeholder same size, so all icons line up vertically. `_make_tree` now calls `setIconSize(QSize(22,22))` to prevent Qt's 16px default from downscaling the icon and destroying glyph detail.
+- **Polaroid "เปลี่ยนภาพ" button**: replaced the static `assets/camera.png` with the same procedural badge — visually consistent with the list, picks up theme color automatically. `setIconSize(20,20)` set explicitly for the same downscale reason.
+
+### NPC Manager — Pin Button + Defensive Code
+- **Pin default** ([npc_manager_panel.py:NPCManagerPanel.__init__](python-app/pyqt_ui/npc_manager_panel.py)): `_is_pinned = True` matches the `WindowStaysOnTopHint` set in `_init_window`. Previously defaulted to False → user had to click the pin twice before the toggle worked. Now first click correctly unpins.
+- **Pin flicker fix** (`_apply_topmost`): hybrid Qt + Win32 — `setWindowFlag` keeps Qt's internal model in sync (otherwise Qt re-applies topmost on next activate), Win32 `SetWindowPos(HWND_TOPMOST/NOTOPMOST)` enforces actual z-order in place without the unmap+remap that flickers.
+- **Defensive try/except** around `PolaroidOverlay.eventFilter`, `_update_hover_state`, `showEvent`/`hideEvent` filter install/remove. App-level eventFilters receive events from background threads (e.g. `keyboard` library's global hook) — any exception propagating to Qt's C++ side can silently terminate the app. All wrapped + logged. Was added in pursuit of an intermittent self-close crash that's still not pinned down — but eliminates the most likely propagation paths.
+
+---
+
+## Changelog — v1.8.1 (2026-04-27)
+
+### Translation Quality — Modern Thai Default
+- **New prompt v3** ([translator_gemini.py:553-588](python-app/translator_gemini.py#L553-L588)): inverted default register from archaic ข้า/เจ้า/ท่าน → **modern Thai** (ฉัน/ผม/คุณ/นาย/เธอ). Target audience explicitly stated: Thai teens/young adults reading like an anime dub or Frieren Netflix subtitles. Archaic register applies ONLY when `Character's style` says so — most Scions/NPCs now sound contemporary. v2 preserved as `get_rpg_general_prompt_v2()` for revert. Token cost ~487 → ~701 (added 2 EN→TH style anchors)
+- **Lore audit + 8 fixes** ([npc.json](python-app/npc.json)): Aether (clarified — energy that sustains, not "origin of all things"), Reflection ("เคยมี 13 ดวง" — historical fact, no current count), Endless (linked to Living Memory + Alexandria), Living Memory (linked back to Endless), Sin eater + Lightwarden (added ทับศัพท์), Tempered (added Primal connection), Dynamis (added Dawntrail context), Electrope (added Alexandria), Eikon (clarified vs Primal — same beings, Allagan/Garlean naming)
+- **Character roles rewrite — 12 mains** ([npc.json:2060-2073](python-app/npc.json#L2060)): each entry now specifies Thai pronoun + register precisely (modern vs semi-archaic vs archaic) + 1 distinctive trait. Modern register (default) applied to: Y'shtola/Alphinaud/Alisaie/Wuk Lamat/G'raha Tia/Estinien/Thancred/Zoraal Ja. Semi-archaic/archaic preserved for: Urianger (deeply archaic — canon trait other characters mock in-game), Sphene (gentle royal), Emet-Selch (theatrical ancient), Hythlodaeus (warm ancient)
+- **Stale dup cleanup**: removed `EmetSelch` (no-hyphen typo) + `Feo UI` (typo). Backup at `python-app/backups/npc_backup_20260426.json`
+
+### Theme Panel — Drag Bounce Fix
+- **Bug** ([theme_panel.py:571-595](python-app/pyqt_ui/theme_panel.py#L571-L595)): clicking a swatch / color picker / empty area with even 1-2px mouse drift moved the entire panel (`mouseMoveEvent` activated on any LMB+move). Fixed: header-only drag using same pattern as `font_panel.py` and `translated_logs.py` — `_dragging` flag set true ONLY when mousePress y ≤ 46 (outer margin 10 + header height 36)
+
+### NPC Manager — Data Font Scaler (LORE tab)
+- **Default font 11 → 18** ([npc_manager_panel.py:DictTabBase:DATA_FONT_DEFAULT](python-app/pyqt_ui/npc_manager_panel.py)): list rows + Term/Definition input fields scale together. Labels (Term:/Definition:/Lore Details) stay fixed — they're chrome, not data
+- **+/- buttons** in search bar (right side, after toast slot) — visible only when current tab is `DictTabBase` subclass (currently LORE only since Roles+Fixes are hidden). Min 11pt, max 28pt, session-scoped (no persistence)
+- **CRITICAL gotcha workaround** ([npc_manager_panel.py:set_data_font_size](python-app/pyqt_ui/npc_manager_panel.py)): panel-level QSS forces `font-size: 11pt` on `QLineEdit.npc_field` + `QTextEdit.npc_textarea`, silently overriding `setFont()`. Fixed by `setStyleSheet(f"font-size: {size}pt;")` on each input — inline rules win against parent class rules. Same gotcha now documented in [project_pyqt6_gotchas.md](memory) — applies to QLineEdit/QTextEdit too, not just QLabel
 
 ---
 
@@ -764,6 +861,35 @@ Bindings อยู่ใน `setup_bindings()` เท่านั้น (ไม�
 | `SetWindowRgn` ระหว่าง drag | `apply_rounded_corners_to_ui()` ทุก 100ms → Win32 สร้าง region ใหม่ + redraw | ลบออกจาก `on_resize()` — ใส่กลับใน `stop_resize()` (`root.after(150, ...)`) |
 | Duplicate bindings | resize_handle ถูก bind ทั้งใน `setup_bindings()` และ `_create_resize_handle()` | ลบ bindings ใน `_create_resize_handle()` เหลือแค่ที่เดียว |
 | Root drag conflict | root `<B1-Motion>` → `on_drag()` → `_do_move()` fire พร้อม resize | `on_drag()` เพิ่ม `is_resizing` guard, `on_click()` เพิ่ม `_is_click_on_resize_handle()` check |
+
+### Bug Fix Session — Buttons + Handle หายตอน Resize ใหญ่ (v1.8.2 / 2026-05-08)
+
+**อาการ:** ลาก resize handle ขยาย TUI → buttons (X, lock, transparency, font) ทั้งคอลัมน์ขวาหาย, resize handle ก็หายไปด้วย → resize ไม่ได้อีก. เกิดเฉพาะตอน **ขยาย** (extend) ขนาดถึงจุดหนึ่ง — การย่อ (shrink) ทำงานปกติ. หลัง buttons หาย หาก hover ก็ไม่ตอบสนอง.
+
+**Root Causes (4 ชั้น):**
+
+| ชั้น | ต้นเหตุ | Diagnostic |
+|-----|--------|-----------|
+| 1. **Pack manager collapse** | Tkinter `pack_propagate(False)` + รัว Configure events ระหว่าง resize → control_area's children (close/lock/color buttons) ถูก collapsed เป็น `(x=0, y=0, w=1, map=0, view=0)` แม้ frame เองยังอยู่ตำแหน่งถูก | log แสดง `buttons=close(x=0,y=0,w=1,map=0,view=0)` ตอน BEFORE restore |
+| 2. **stop_resize ไม่ fire** | Win32 `SetWindowRgn` clip resize_handle ออกนอก viewport → ButtonRelease event ที่ส่งไปที่ handle หาย | log: 5 "UI resize completed" entries แต่ 0 [RESIZE-DEBUG] entries (debug ใส่ใน stop_resize) |
+| 3. **Canvas.lift TclError** | Canvas widget override `lift = tag_raise` (รับ tagOrId) → เรียก `lift()` no-args โยน TclError `wrong # args: should be ".!toplevel2.!frame.!canvas raise tagOrId ?aboveThis?"` | error log จาก _restore_layout |
+| 4. **Stale `default_width` cache** | `self.default_width = self.settings.get('width')` ถูก set ครั้งเดียวที่ startup. ผู้ใช้ resize → settings.json ได้ค่าใหม่ แต่ `self.default_width` ยังเก่า → chat-type switch กลับ dialog ใช้ค่าเก่า → window snap | line 1352 (init), line 1645 (dialog mode `geometry({default_width}x{default_height})`) |
+
+**การแก้ไข:**
+
+1. **Global ButtonRelease bind** (`start_resize`): `bind_all("<ButtonRelease-1>", stop_resize)` ก่อน drag, `unbind_all` ตอน stop → release event fire เสมอแม้ handle ถูก clip
+2. **`_restore_layout_after_resize_universal`** เรียกจาก `on_smart_resize_end` (Configure-driven) — universal endpoint, fires after any resize-end:
+   - `pack_configure` (NOT `pack_forget`) ที่ control_area + each button → ไม่ unmap children
+   - `tk.call("raise", widget._w)` แทน `widget.lift()` → bypass Canvas override
+   - Force re-bind auto-hide hover bindings (ไม่ conditional บน cache change)
+   - Re-apply rounded corners
+3. **Light/Full restore split** (เพิ่ม responsiveness):
+   - `_restore_layout_light` (ระหว่าง drag, throttle 150ms): เฉพาะ pack_configure + place — ไม่มี logging, update_idletasks, auto-hide rebind, Win32 → drag responsive
+   - Universal restore (ที่ release): full version with all expensive ops
+4. **Sync default_width/_height** ใน `stop_resize`: `self.default_width = final_w` หลัง save settings → chat-type switch ไม่ snap กลับ
+5. **ลบ orphan `tui_sizes`** จาก settings.json (code ไม่ได้ใช้แล้วตั้งแต่ 2026-04-25)
+
+> **เพิ่มเติม:** translated_logs (PyQt6) ไม่มีปัญหาเดียวกัน เพราะ Qt resize เป็น native + ใช้ `QTimer 500ms throttle` สำหรับ disk I/O + ไม่มี Win32 SetWindowRgn calls (Qt paintEvent ทำ rounded corner เอง)
 
 ### หลักการออกแบบ
 

@@ -539,7 +539,12 @@ class TranslatorGemini:
         return cleaned
 
     def get_system_prompt(self, role_mode=None):
-        """Get system prompt based on current role mode and prompt version"""
+        """Get system prompt based on current role mode and prompt version.
+
+        Active = v3 (modern Thai default + style anchors). Set use_verbose_prompt=True
+        to fall back to v1 (verbose). v2 is preserved as get_rpg_general_prompt_v2()
+        for revert without losing the prior wording.
+        """
         if role_mode is None:
             role_mode = self.current_role_mode
 
@@ -551,7 +556,52 @@ class TranslatorGemini:
             return self.get_rpg_general_prompt()
 
     def get_rpg_general_prompt(self):
-        """Optimized RPG translation prompt for FFXIV — v2 (token-efficient)"""
+        """ACTIVE — v3: modern Thai default, archaic only when Character's style demands.
+
+        Target audience: Thai teenagers / young adults reading like an anime dub or
+        Frieren-style Netflix subtitles. Most characters speak modern Thai
+        (ฉัน/ผม/คุณ/นาย/เธอ). Only ancients (Urianger, Emet-Selch, Hythlodaeus,
+        Sphene, Venat) speak archaic register, and only when Character's style says so.
+        """
+        return (
+            "You are translating FFXIV English game text to Thai. "
+            "Target audience: Thai teenagers and young adults — readable like an anime dub "
+            "or Frieren-style Netflix subtitles (modern, restrained, emotionally precise).\n\n"
+            "1. **DEFAULT REGISTER — MODERN THAI.** Use casual modern pronouns: "
+            "ฉัน/ผม/เรา (subject), นาย/คุณ/เธอ (object). Speak like a contemporary fantasy "
+            "anime dub. Politeness comes from word choice and sentence structure.\n"
+            "2. **ARCHAIC REGISTER (ข้า/เจ้า/ท่าน, ฤๅ, หามิได้)** — use ONLY when "
+            "'Character's style' explicitly specifies it. Most Scions and modern NPCs must "
+            "speak modern Thai. Forcing ข้า/เจ้า on everyone destroys readability.\n"
+            "3. **Character Voice (HIGHEST PRIORITY).** Follow 'Character's style' precisely "
+            "— pronoun choice, register (modern/semi-archaic/archaic), tone (terse/warm/cold). "
+            "Match the speaker, do not impose a uniform style.\n"
+            "4. **Name Preservation.** Names in [brackets] and the Preserve names list stay in "
+            "English exactly — never translate or transliterate. Drop the brackets in output.\n"
+            "5. **FORBIDDEN PARTICLES.** ❌ Never use: ครับ, ค่ะ, คะ, ดิฉัน, นะคะ, นะครับ, "
+            "ข้าพเจ้า, หม่อมฉัน, เพคะ, เจ้าค่ะ. These destroy fantasy RPG immersion even in formal scenes.\n"
+            "6. **Profanity.** ❌ Never use กู/มึง. ✅ Mild expressions (แม่ง/เชี่ย!/บ้าเอ๊ย!) "
+            "only when source clearly conveys frustration, anger, or shock.\n"
+            "7. **\"แก\" pronoun.** Inherently rude — use ONLY for hostile/angry dialogue OR "
+            "characters with Relationship: Enemy. Default to นาย/คุณ for neutral interactions.\n"
+            "8. **Lore Context.** Use the Lore section to understand meaning ONLY. Never inject "
+            "Thai explanations of lore terms into the translation output.\n"
+            "9. **Recent Context Consistency.** When [Recent dialogue] is provided, keep the SAME "
+            "pronouns, names, and key terms as previous lines. Do not switch register mid-conversation.\n"
+            "10. **Output.** Return ONLY the Thai translation — no English, no notes, no commentary.\n\n"
+            "[Style anchors — match these registers]\n"
+            "EN: \"Hey, you good? You've been staring at that map for an hour.\"\n"
+            "TH: \"นี่ เป็นอะไรรึเปล่า นั่งจ้องแผนที่อยู่ตั้งชั่วโมงแล้วนะ\"  (modern — default for most characters)\n"
+            "EN: \"I have foreseen this end. The waters of recollection drown all who linger.\"\n"
+            "TH: \"ข้าได้หยั่งรู้บั้นปลายนี้แล้ว สายน้ำแห่งความทรงจำกลืนผู้ที่รั้งรอทั้งสิ้น\"  (archaic — only when Character's style says so)\n\n"
+        )
+
+    def get_rpg_general_prompt_v2(self):
+        """BACKUP — v2 prompt (kept for revert if v3 quality regresses).
+
+        v2 was the previous active prompt (~490 tokens). It pushed ข้า/เจ้า/ท่าน
+        as default, which proved too archaic for teenage Thai players.
+        """
         return (
             "You are a professional FFXIV English-to-Thai translator. "
             "Translate accurately following these rules:\n\n"

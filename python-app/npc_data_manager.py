@@ -143,13 +143,15 @@ class NPCDataManager:
         return full if os.path.exists(full) else None
 
     def set_main_character_image(self, index: int, src_image_path: str,
-                                  size: int = 128) -> Optional[str]:
+                                  size: int = 512) -> Optional[str]:
         """Optimize a raw image and assign it to a character.
 
         Args:
             index: character index in main_characters list
             src_image_path: path to raw input image
-            size: avatar dimension (default 128px)
+            size: avatar dimension (default 512px — bumped from 128 to support
+                  the Polaroid enlarged view without upscaling artifacts).
+                  Existing 128px images stay 128px until re-uploaded.
 
         Returns:
             Filename (without dir) on success, None on failure.
@@ -163,8 +165,20 @@ class NPCDataManager:
         name = (c.get("firstName", "") + "_" + c.get("lastName", "")).strip("_")
         if not name:
             return None
-        filename = safe_filename(name)
-        dst = os.path.join(self.get_image_dir("main_characters"), filename)
+        filename = safe_filename(name)  # default .webp
+        img_dir = self.get_image_dir("main_characters")
+        dst = os.path.join(img_dir, filename)
+        # If the character already has an image with a DIFFERENT extension
+        # (e.g. legacy .png → new .webp), remove the old file to avoid orphans.
+        old_filename = c.get("image", "").strip()
+        if old_filename and old_filename != filename:
+            old_path = os.path.join(img_dir, old_filename)
+            try:
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+                    log.info(f"Replaced legacy avatar: {old_filename} → {filename}")
+            except Exception as e:
+                log.warning(f"Failed to remove old avatar {old_path}: {e}")
         if not optimize_avatar(src_image_path, dst, size=size):
             return None
         # Update entry's image field

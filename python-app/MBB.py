@@ -6534,6 +6534,11 @@ if __name__ == "__main__":
 
     # QApplication MUST exist before any PyQt6 dialog (including API key UI)
     qt_app = QApplication(sys.argv)
+    # Don't auto-quit when the last Qt top-level window closes. MBB owns its
+    # own shutdown via exit_program() — without this, closing NPC Manager
+    # while the main MBB window happens to be minimized/hidden silently
+    # quits the whole app (Qt's default behavior, no error in log).
+    qt_app.setQuitOnLastWindowClosed(False)
     qt_app.setStyleSheet("QWidget { font-family: 'Segoe UI'; }")
 
     # Check and setup API key (PyQt6 dialog — needs QApplication above)

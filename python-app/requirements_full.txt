@@ -1,16 +1,22 @@
 # Magicite Babel Dalamud Bridge - Full Dependencies
-# Python 3.11+ required
+# Python 3.11+ required (PyInstaller bootloader stable on 3.11)
 
 # === Core Dependencies ===
 requests>=2.31.0
 pillow>=10.0.0
 python-dotenv>=1.0.0
 
+# === UI Framework — PyQt6 (PINNED) ===
+# Qt 6.10+ has frameless+translucent compositor regression on Windows DWM
+# (visible RGB chromatic fringe around translucent window edges).
+# Affects: Polaroid overlay, Theme panel, NPC Manager, Translated Logs, main window.
+# See BUILD_PROTOCOL.md §3 before upgrading.
+PyQt6==6.9.0
+PyQt6-Qt6==6.9.0
+PyQt6-sip==13.10.2
+
 # === Windows Integration ===
 pywin32>=306
-
-# === OCR Engine (REMOVED - Project is 100% text hook) ===
-# easyocr>=1.7.0  # No longer needed
 
 # === System Monitoring ===
 psutil>=5.9.0
@@ -21,9 +27,8 @@ keyboard>=0.13.5
 # === AI Translation (Gemini) ===
 google-generativeai>=0.3.0
 
-# === UI Components ===
-sv-ttk>=2.5.0
-
-# === Optional: Performance (REMOVED - OCR removed) ===
-# torch>=2.0.0  # No longer needed (was for OCR GPU acceleration)
-# torchvision>=0.15.0  # No longer needed (was for OCR)
+# === REMOVED Dependencies ===
+# easyocr>=1.7.0       # OCR era - project is 100% text hook now
+# torch>=2.0.0         # GPU OCR acceleration (no longer needed)
+# torchvision>=0.15.0  # OCR (no longer needed)
+# sv-ttk>=2.5.0        # PyQt6 styling replaced sv_ttk for Tkinter themes

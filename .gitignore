@@ -36,8 +36,12 @@ desktop.ini
 # Build artifacts
 build/
 dist/
+dist_test/
 *.egg-info/
 *.egg
+
+# Video / motion graphics source files (large, edited externally)
+Video/
 
 # PyInstaller
 *.spec.bak

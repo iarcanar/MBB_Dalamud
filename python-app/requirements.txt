@@ -1,3 +1,25 @@
+# MBB Dalamud — runtime dependencies
+# Install: python -m pip install -r requirements.txt
+
+# Core
 requests>=2.31.0
 pillow>=10.0.0
 python-dotenv>=1.0.0
+
+# UI framework — PINNED. Qt 6.10+ has frameless+translucent compositor regression
+# on Windows DWM (visible RGB chromatic fringe around translucent window edges).
+# Do NOT upgrade without retesting: Polaroid overlay, Theme panel, NPC Manager,
+# Translated Logs, main window. See BUILD_PROTOCOL.md §3.
+PyQt6==6.9.0
+PyQt6-Qt6==6.9.0
+PyQt6-sip==13.10.2
+
+# Windows integration
+pywin32>=306
+
+# AI translation
+google-generativeai>=0.3.0
+
+# System
+psutil>=5.9.0
+keyboard>=0.13.5

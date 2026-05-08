@@ -154,7 +154,7 @@ namespace DalamudMBBBridge
         }
 
         // SYSTEM EVENT: Zone/Territory change → ส่งให้ Python เพื่อตัด conversation
-        private void OnTerritoryChanged(ushort territoryId)
+        private void OnTerritoryChanged(uint territoryId)
         {
             var data = new TextHookData
             {
@@ -250,7 +250,7 @@ namespace DalamudMBBBridge
                 // Extract text from AtkValues exactly as documented in guide
                 // Speaker Node: updateAtkValues[1].String
                 // Message Node: updateAtkValues[0].String
-                string speakerName = updateAtkValues[1].String != null ?
+                string speakerName = updateAtkValues[1].String.Value != null ?
                     MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[1].String.Value) : "";
                 string message = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value);
 
@@ -280,10 +280,13 @@ namespace DalamudMBBBridge
             }
         }
 
-        private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+        private void OnChatMessage(Dalamud.Game.Chat.IHandleableChatMessage chatMessage)
         {
             try
             {
+                var type = chatMessage.LogKind;
+                var sender = chatMessage.Sender;
+                var message = chatMessage.Message;
                 // FIXED: Handle non-Talk chat types only to prevent overlap with AddonLifecycle
                 // Exclude type 0x003D (Talk) as it's handled by OnTalkAddonPreReceive
                 // 🔥 CRITICAL FIX: Block combat/duty spam ChatTypes with REAL values from logs
@@ -451,7 +454,7 @@ namespace DalamudMBBBridge
                                 if (node != null)
                                 {
                                     var textNode = node->GetAsAtkTextNode();
-                                    if (textNode != null && textNode->NodeText.StringPtr != null)
+                                    if (textNode != null && textNode->NodeText.StringPtr.Value != null)
                                     {
                                         var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
                                         if (!string.IsNullOrEmpty(text) && text.Length > 3)
@@ -507,7 +510,7 @@ namespace DalamudMBBBridge
                 {
                     for (int i = 0; i < 5; i++)
                     {
-                        if (updateAtkValues[i].String != null)
+                        if (updateAtkValues[i].String.Value != null)
                         {
                             var text = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[i].String.Value);
                             if (!string.IsNullOrEmpty(text) && text.Length > 3)
@@ -547,7 +550,7 @@ namespace DalamudMBBBridge
                     if (node->Type != NodeType.Text) continue;
 
                     var textNode = (AtkTextNode*)node;  // Explicit cast (safer than GetAsAtkTextNode)
-                    if (textNode->NodeText.StringPtr != null)
+                    if (textNode->NodeText.StringPtr.Value != null)
                     {
                         var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
                         if (!string.IsNullOrEmpty(text) && text.Length > 5)
@@ -597,7 +600,7 @@ namespace DalamudMBBBridge
                     var updateAtkValues = (AtkValue*)refreshArgs.AtkValues;
                     if (updateAtkValues != null)
                     {
-                        string speakerName = updateAtkValues[1].String != null ?
+                        string speakerName = updateAtkValues[1].String.Value != null ?
                             MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[1].String.Value) : "";
                         string message = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value);
 
@@ -627,7 +630,7 @@ namespace DalamudMBBBridge
                     if (textNode != null)
                     {
                         var atkTextNode = textNode->GetAsAtkTextNode();
-                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr != null)
+                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr.Value != null)
                         {
                             var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
                             if (!string.IsNullOrEmpty(text) && text.Length > 5 && IsUniqueMessage("", text, "cutscene"))
@@ -674,7 +677,7 @@ namespace DalamudMBBBridge
                 if (args is AddonSetupArgs setupArgs && setupArgs.AtkValues != null)
                 {
                     var setupAtkValues = (AtkValue*)setupArgs.AtkValues;
-                    if (setupAtkValues != null && setupAtkValues[0].String != null)
+                    if (setupAtkValues != null && setupAtkValues[0].String.Value != null)
                     {
                         var textToTranslate = MemoryHelper.ReadSeStringAsString(out _, (nint)setupAtkValues[0].String.Value);
 
@@ -807,7 +810,7 @@ namespace DalamudMBBBridge
                 if (titleNode != null && titleNode->Type == NodeType.Text)
                 {
                     var textNode = (AtkTextNode*)titleNode;
-                    if (textNode->NodeText.StringPtr != null)
+                    if (textNode->NodeText.StringPtr.Value != null)
                     {
                         dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
                         Log.Info($"[CHOICE-TITLE] Node 2: {dialogTitle}");
@@ -829,7 +832,7 @@ namespace DalamudMBBBridge
                                 if (child != null && child->Type == NodeType.Text)
                                 {
                                     var ct = (AtkTextNode*)child;
-                                    if (ct->NodeText.StringPtr != null)
+                                    if (ct->NodeText.StringPtr.Value != null)
                                     {
                                         dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)ct->NodeText.StringPtr.Value);
                                         if (!string.IsNullOrEmpty(dialogTitle))
@@ -882,7 +885,7 @@ namespace DalamudMBBBridge
                             if (itemChild == null || itemChild->Type != NodeType.Text || !itemChild->IsVisible()) continue;
 
                             var choiceTextNode = (AtkTextNode*)itemChild;
-                            if (choiceTextNode->NodeText.StringPtr != null)
+                            if (choiceTextNode->NodeText.StringPtr.Value != null)
                             {
                                 var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)choiceTextNode->NodeText.StringPtr.Value);
                                 if (!string.IsNullOrEmpty(choiceText))
@@ -954,7 +957,7 @@ namespace DalamudMBBBridge
                             if (child != null && child->Type == NodeType.Text)
                             {
                                 var textNode = (AtkTextNode*)child;
-                                if (textNode->NodeText.StringPtr != null)
+                                if (textNode->NodeText.StringPtr.Value != null)
                                 {
                                     dialogTitle = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
                                     if (!string.IsNullOrEmpty(dialogTitle))
@@ -998,7 +1001,7 @@ namespace DalamudMBBBridge
                                 if (!itemChild->IsVisible()) continue;
 
                                 var choiceTextNode = (AtkTextNode*)itemChild;
-                                if (choiceTextNode->NodeText.StringPtr != null)
+                                if (choiceTextNode->NodeText.StringPtr.Value != null)
                                 {
                                     var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)choiceTextNode->NodeText.StringPtr.Value);
                                     if (!string.IsNullOrEmpty(choiceText))
@@ -1083,7 +1086,7 @@ namespace DalamudMBBBridge
                     var textNode = (AtkTextNode*)node;
                     if (!textNode->AtkResNode.IsVisible()) continue;
 
-                    if (textNode->NodeText.StringPtr != null)
+                    if (textNode->NodeText.StringPtr.Value != null)
                     {
                         var choiceText = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
                         if (!string.IsNullOrEmpty(choiceText) && choiceText.Length > 2)
@@ -1141,7 +1144,7 @@ namespace DalamudMBBBridge
                             // Try multiple AtkValue indices (like Talk does)
                             for (int i = 0; i < 10; i++)
                             {
-                                if (updateAtkValues[i].Type == FFXIVClientStructs.FFXIV.Component.GUI.ValueType.String && updateAtkValues[i].String != null)
+                                if (updateAtkValues[i].Type == FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.String && updateAtkValues[i].String.Value != null)
                                 {
                                     var text = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[i].String.Value);
                                     if (!string.IsNullOrEmpty(text) && text.Length > 3)
@@ -1251,7 +1254,7 @@ namespace DalamudMBBBridge
                     if (updateAtkValues != null)
                     {
                         // Try to get prompt text (usually index 0)
-                        string promptText = updateAtkValues[0].String != null ?
+                        string promptText = updateAtkValues[0].String.Value != null ?
                             MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value) : "";
 
                         // Use global duplicate prevention system
@@ -1281,7 +1284,7 @@ namespace DalamudMBBBridge
                     if (textNode != null)
                     {
                         var atkTextNode = textNode->GetAsAtkTextNode();
-                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr != null)
+                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr.Value != null)
                         {
                             var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
                             if (!string.IsNullOrEmpty(text) && text.Length > 2)
@@ -1341,7 +1344,7 @@ namespace DalamudMBBBridge
                     if (textNode != null)
                     {
                         var atkTextNode = textNode->GetAsAtkTextNode();
-                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr != null)
+                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr.Value != null)
                         {
                             var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
                             if (!string.IsNullOrEmpty(text) && text.Length > 2)

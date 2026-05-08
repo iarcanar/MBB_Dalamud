@@ -158,6 +158,7 @@ class ThemePanel(QWidget):
         self._secondary_color = "#888888"      # Accent / Highlight
         self._surface_color = None             # Surface (None = auto-derive)
         self._text_color = None                # Text (None = auto-derive)
+        self._dragging = False                 # Header-only drag flag
 
         # Widget refs
         self.bg = None
@@ -566,14 +567,28 @@ class ThemePanel(QWidget):
         self.setStyleSheet(qss)
         self._update_swatches()
 
-    # ── Drag Support ──
+    # ── Drag Support — header only ──
+    # Outer margin (10) + header height (36) = 46. Clicks below this don't drag.
+    # This prevents the panel from "bouncing" when the user clicks on a swatch /
+    # color picker / empty content area and the mouse drifts a few pixels —
+    # previously any LMB+move anywhere on the panel moved the window.
+    _DRAG_HEADER_BOTTOM = 46
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.old_pos = event.globalPosition().toPoint()
+            if event.position().y() <= self._DRAG_HEADER_BOTTOM:
+                self._dragging = True
+                self.old_pos = event.globalPosition().toPoint()
+            else:
+                self._dragging = False
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.MouseButton.LeftButton:
+        if self._dragging and event.buttons() == Qt.MouseButton.LeftButton:
             delta = event.globalPosition().toPoint() - self.old_pos
             self.move(self.x() + delta.x(), self.y() + delta.y())
             self.old_pos = event.globalPosition().toPoint()
+
+    def mouseReleaseEvent(self, event):
+        self._dragging = False
+        super().mouseReleaseEvent(event)

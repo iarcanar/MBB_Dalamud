@@ -7,16 +7,18 @@ Pipeline:
   2. Convert to RGBA (preserves any transparency)
   3. Center-crop to a square
   4. Resize with LANCZOS (sharp downscale)
-  5. Save as PNG with optimize=True
+  5. Save as WebP (lossy quality=88, alpha preserved) — ~30% the size of PNG
+     at visually-identical quality. The Polaroid view displays at ~480px so
+     512px source has just-enough headroom for HiDPI without storage bloat.
 
-Typical output: 128×128 PNG, transparent background preserved, ~5-15 KB.
+Typical output: 512×512 WebP, alpha preserved, ~30-80 KB (vs ~200-500KB PNG).
 
 CLI usage:
-  python image_optimizer.py <input> <output> [--size 128]
+  python image_optimizer.py <input> <output> [--size 512]
 
 Library usage:
   from image_optimizer import optimize_avatar
-  ok = optimize_avatar('raw.png', 'out.png', size=128)
+  ok = optimize_avatar('raw.png', 'out.webp', size=512)
 """
 from __future__ import annotations
 
@@ -31,8 +33,10 @@ from PIL import Image
 log = logging.getLogger("image-optimizer")
 
 
-# Default avatar size — 128px is sharp at 64px display (2x retina) and stays small
-DEFAULT_SIZE = 128
+# Default avatar size — 512px supports the Polaroid view (~480px on screen)
+# with mild headroom for HiDPI. WebP at quality=88 keeps files ~30-80KB.
+DEFAULT_SIZE = 512
+DEFAULT_QUALITY = 88  # WebP lossy quality (0-100). 88 is visually lossless for portraits.
 SUPPORTED_IN = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff")
 
 
@@ -98,31 +102,42 @@ def optimize_avatar(
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
-        # Save as PNG with optimization (Pillow's "optimize" runs zopfli-lite compression)
-        save_kwargs = {"optimize": True}
-        if keep_transparency:
-            # Use palette + alpha for smaller files when possible
-            # but only when image has limited colors. For photos, keep RGBA.
-            save_kwargs["compress_level"] = 9
-        img.save(dst_path, format="PNG", **save_kwargs)
+        # Save format chosen by destination extension (so callers can override).
+        # Default is WebP — much smaller than PNG at indistinguishable quality.
+        ext = os.path.splitext(dst_path)[1].lower().lstrip(".")
+        if ext == "webp":
+            img.save(dst_path, format="WEBP", quality=DEFAULT_QUALITY, method=6)
+        elif ext in ("jpg", "jpeg"):
+            # JPEG can't hold alpha — flatten over white if needed
+            if img.mode == "RGBA":
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                img = bg
+            img.save(dst_path, format="JPEG", quality=DEFAULT_QUALITY, optimize=True)
+        else:
+            # Fallback PNG (legacy behavior — keeps existing call sites working)
+            save_kwargs = {"optimize": True}
+            if keep_transparency:
+                save_kwargs["compress_level"] = 9
+            img.save(dst_path, format="PNG", **save_kwargs)
 
         in_kb = os.path.getsize(src_path) / 1024
         out_kb = os.path.getsize(dst_path) / 1024
         log.info(f"Optimized {os.path.basename(src_path)}: "
-                 f"{in_kb:.1f}KB → {out_kb:.1f}KB ({size}×{size})")
+                 f"{in_kb:.1f}KB → {out_kb:.1f}KB ({size}×{size}, .{ext or 'png'})")
         return True
     except Exception as e:
         log.error(f"Optimization failed for {src_path}: {e}")
         return False
 
 
-def safe_filename(name: str, ext: str = ".png") -> str:
+def safe_filename(name: str, ext: str = ".webp") -> str:
     """Convert a character name into a filesystem-safe filename.
 
     Examples:
-        "Y'shtola" → "y_shtola.png"
-        "G'raha Tia" → "g_raha_tia.png"
-        "Wuk Lamat" → "wuk_lamat.png"
+        "Y'shtola" → "y_shtola.webp"
+        "G'raha Tia" → "g_raha_tia.webp"
+        "Wuk Lamat" → "wuk_lamat.webp"
     """
     # Lowercase, replace non-alphanumeric with underscore, collapse runs
     base = re.sub(r"[^a-zA-Z0-9]+", "_", name.lower()).strip("_")

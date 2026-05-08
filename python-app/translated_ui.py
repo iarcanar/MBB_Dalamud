@@ -5346,6 +5346,20 @@ class Translated_UI(FontObserver):
         # บันทึกขนาดหน้าต่างก่อนเริ่มปรับขนาด เพื่อใช้เป็นจุดอ้างอิง
         self.original_geometry = self.root.geometry()
 
+        # 🔧 Capture mouse globally during drag — when window grows beyond a
+        # threshold, Win32 SetWindowRgn clips the resize_handle and the
+        # ButtonRelease event sent there gets lost. Binding to root_all() makes
+        # the release reach us regardless of where the cursor ends up.
+        try:
+            self._resize_motion_root_id = self.root.bind_all(
+                "<B1-Motion>", self.on_resize, add="+"
+            )
+            self._resize_release_root_id = self.root.bind_all(
+                "<ButtonRelease-1>", self.stop_resize, add="+"
+            )
+        except Exception as _e:
+            logging.debug(f"start_resize global bind failed: {_e}")
+
         # หากมีพรีวิวอยู่แล้ว ให้ลบออก
         if hasattr(self, "resize_preview") and self.resize_preview is not None:
             self.root.after_cancel(self.resize_preview)
@@ -5388,27 +5402,20 @@ class Translated_UI(FontObserver):
 
             current_time = time.time()
 
-            # *** PROFESSIONAL UI: Remove intrusive resize messages ***
-            # Silent resize - no overlay text that interferes with content
-            # Only log to console for debugging if needed
-            if (
-                current_time - self.last_resize_time > 0.1
-            ):  # Update throttling every 100ms
-                # Optional: Minimal console logging (can be disabled in production)
-                # print(f"\rResize: {int(new_width)}x{int(new_height)}px", end="", flush=True)
+            # 🔧 LIGHT layout restore during drag — every 150ms keep widgets
+            # visible without expensive ops. Skip debug logging, auto-hide
+            # rebinding, rounded-corner Win32 calls, and update_idletasks —
+            # those go to stop_resize. Goal: keep drag responsive (no UI freeze
+            # → mouse stays on handle).
+            if current_time - self.last_resize_time > 0.15:
                 self.last_resize_time = current_time
-
-                # ไม่อัพเดตขอบโค้งมนระหว่าง drag — จะใส่กลับตอน stop_resize
-                # (SetWindowRgn + update_idletasks หนักเกินไปสำหรับทุก frame)
-
-                # *** REMOVED: Intrusive resize message overlay ***
-                # Professional UI should not show "กำลังปรับขนาด" text
-                # that interferes with existing translation content
+                try:
+                    self._restore_layout_light()
+                except Exception as _re:
+                    logging.debug(f"on_resize light restore error: {_re}")
 
         except Exception as e:
             logging.error(f"Error during resize: {e}")
-            # Professional UI: Log errors silently
-            # print(f"\rResize error: {e}")  # Can be enabled for debugging
 
     def stop_resize(self, event: Optional[tk.Event] = None) -> None:
         """
@@ -5419,6 +5426,22 @@ class Translated_UI(FontObserver):
         if not self.is_resizing:
             return
 
+        # 🔧 Release the global drag captures we set in start_resize. Without
+        # this we'd intercept every ButtonRelease in the app for the rest of
+        # the session.
+        try:
+            if hasattr(self, "_resize_motion_root_id") and self._resize_motion_root_id:
+                self.root.unbind_all("<B1-Motion>")
+                # Re-bind handle's own motion (we removed the all-bind, but the
+                # handle had its own bind too — stays attached because unbind_all
+                # only clears the all-class binding)
+                self._resize_motion_root_id = None
+            if hasattr(self, "_resize_release_root_id") and self._resize_release_root_id:
+                self.root.unbind_all("<ButtonRelease-1>")
+                self._resize_release_root_id = None
+        except Exception as _e:
+            logging.debug(f"stop_resize global unbind failed: {_e}")
+
         try:
             # บันทึกขนาดสุดท้ายลงใน settings
             final_w = self.root.winfo_width()
@@ -5427,6 +5450,12 @@ class Translated_UI(FontObserver):
             self.settings.set("width", final_w)
             self.settings.set("height", final_h)
             self.settings.save_settings()
+
+            # 🔧 Keep cached defaults in sync with the new manual size, so the
+            # chat-type switch back to "dialog" mode (which uses self.default_*
+            # from line ~1352) doesn't snap the window back to startup size.
+            self.default_width = final_w
+            self.default_height = final_h
 
             # ตั้งค่า flag เพื่อบอกว่าหยุดการปรับขนาดแล้ว
             self.is_resizing = False
@@ -5457,8 +5486,11 @@ class Translated_UI(FontObserver):
 
             # รอ 100ms ก่อนอัพเดตเนื้อหา เพื่อให้การแสดงผลมีความนิ่ง
             self.root.after(100, update_content_after_resize)
-            # 🎨 เพิ่ม: อัปเดตขอบโค้งมนหลังจากปรับขนาดเสร็จ
-            self.root.after(150, self.apply_rounded_corners_to_ui)
+            # 🔧 Single full-restore call at release (replaces inline duplicate).
+            # Layout repair + auto-hide rebind + rounded corners — all done once
+            # here, not throttled. Cheap during drag (light restore in on_resize)
+            # → expensive at release (this).
+            self.root.after(120, self._restore_layout_after_resize_universal)
 
         except Exception as e:
             logging.error(f"Error in stop_resize: {e}")
@@ -7823,8 +7855,74 @@ class Translated_UI(FontObserver):
                 self.refresh_auto_hide_bindings()
                 self.check_mouse_position_immediate()
 
+                # ─────────────────────────────────────────────────────────────
+                # 🔧 FIX: control_area + buttons + resize_handle restoration.
+                # When window grows beyond a threshold, Win32 SetWindowRgn can
+                # clip the resize_handle, so the ButtonRelease event never
+                # reaches it → stop_resize() doesn't fire. on_smart_resize_end
+                # is Configure-event-driven and ALWAYS fires after resize stops,
+                # so the layout restore lives here. Same logic as stop_resize.
+                # ─────────────────────────────────────────────────────────────
+                self._restore_layout_after_resize_universal()
         except Exception as e:
             logging.error(f"Error in smart resize end: {e}")
+
+    def _restore_layout_light(self):
+        """Cheap layout restore for use DURING drag (every ~150ms). No debug
+        logging, no idle-task syncs, no auto-hide rebind, no Win32 calls. Just
+        re-pack the control_area + buttons and re-place the handle."""
+        try:
+            ca = getattr(self.components, "control_area", None)
+            if ca and ca.winfo_exists():
+                ca.pack_configure(side=tk.RIGHT, fill=tk.Y, padx=(0, 5))
+                if hasattr(self.components, "buttons"):
+                    for name, btn in self.components.buttons.items():
+                        if btn and btn.winfo_exists():
+                            pady = (5, 5) if name == "close" else 5
+                            btn.pack_configure(side=tk.TOP, pady=pady)
+            rh_widget = getattr(self, "resize_handle", None)
+            if rh_widget and rh_widget.winfo_exists():
+                rh_widget.place(relx=1, rely=1, anchor="se")
+        except Exception:
+            pass  # Drag-time errors are silenced — full restore at release will fix any state
+
+    def _restore_layout_after_resize_universal(self):
+        """Full layout restore — fires ONCE per resize at release (not during
+        drag). Re-packs control_area + buttons, re-places resize_handle, force
+        re-binds auto-hide hover events (so hover stays accurate), re-applies
+        rounded corners. Avoids pack_forget (would unmap children) and avoids
+        Canvas.lift (overridden as tag_raise — needs tagOrId)."""
+        try:
+            self.root.update_idletasks()
+            ca = getattr(self.components, "control_area", None)
+            rh_widget = getattr(self, "resize_handle", None)
+            # ── RESTORE control_area + buttons via pack_configure (no unmap) ──
+            if ca and ca.winfo_exists():
+                ca.pack_configure(side=tk.RIGHT, fill=tk.Y, padx=(0, 5))
+                if hasattr(self.components, "buttons"):
+                    for name, btn in self.components.buttons.items():
+                        if btn and btn.winfo_exists():
+                            pady = (5, 5) if name == "close" else 5
+                            btn.pack_configure(side=tk.TOP, pady=pady)
+            # ── RESTORE resize_handle (Canvas — bypass overridden lift) ──
+            if rh_widget and rh_widget.winfo_exists():
+                try:
+                    rh_widget.tk.call("raise", rh_widget._w)
+                except Exception:
+                    pass
+                rh_widget.place(relx=1, rely=1, anchor="se")
+            # ── Re-apply rounded corners with new size ──
+            self.root.after(50, self.apply_rounded_corners_to_ui)
+            # ── Force-rebind auto-hide so hover stays accurate after unmap+remap ──
+            try:
+                if hasattr(self, "cache_ui_widgets"):
+                    self.cache_ui_widgets()
+                if hasattr(self, "setup_auto_hide_bindings"):
+                    self.setup_auto_hide_bindings()
+            except Exception:
+                pass
+        except Exception as e:
+            logging.error(f"Layout restore error: {e}", exc_info=True)
 
     def setup_auto_hide_bindings(self):
         """Setup mouse hover detection สำหรับ auto hide icons"""

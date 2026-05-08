@@ -42,5 +42,25 @@
       "Thai",
       "Latin"
     ]
+  },
+  "Caveat.ttf": {
+    "family_name": "Caveat",
+    "subfamily": "Regular",
+    "full_name": "Caveat Regular",
+    "postscript_name": "Caveat-Regular",
+    "file_name": "Caveat-Regular.ttf",
+    "supported_scripts": [
+      "Latin"
+    ]
+  },
+  "Pacifico.ttf": {
+    "family_name": "Pacifico",
+    "subfamily": "Regular",
+    "full_name": "Pacifico Regular",
+    "postscript_name": "Pacifico-Regular",
+    "file_name": "Pacifico-Regular.ttf",
+    "supported_scripts": [
+      "Latin"
+    ]
   }
 }

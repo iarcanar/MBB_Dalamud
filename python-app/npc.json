@@ -6,168 +6,191 @@
       "gender": "Female",
       "role": "Scion, Black mage",
       "relationship": "Close Ally",
-      "image": "y_shtola.png"
+      "image": "y_shtola.webp"
     },
     {
       "firstName": "Alphinaud",
       "lastName": "",
       "gender": "Male",
       "role": "Scion, Academician",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "alphinaud.webp"
     },
     {
       "firstName": "Alisaie",
       "lastName": "",
       "gender": "Female",
       "role": "Scion, Red Mage",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "alisaie.webp"
     },
     {
       "firstName": "Urianger",
       "lastName": "",
       "gender": "Male",
       "role": "Scion, Astrologian",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "urianger.webp"
     },
     {
       "firstName": "Thancred",
       "lastName": "",
       "gender": "Male",
       "role": "Scion, Gunbreaker",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "thancred.webp"
     },
     {
       "firstName": "Wuk Lamat",
       "lastName": "",
       "gender": "Female",
       "role": "Hrothgar, Third Promise, lamaty'i",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "wuk_lamat.webp"
     },
     {
       "firstName": "Zoraal Ja",
       "lastName": "",
       "gender": "Male",
       "role": "Mamool Ja warrior",
-      "relationship": "Wuk Lamat's older brother"
+      "relationship": "Wuk Lamat's older brother",
+      "image": "zoraal_ja.webp"
     },
     {
       "firstName": "Sphene",
       "lastName": "",
       "gender": "Female",
       "role": "Princess of Alexandria",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "sphene.webp"
     },
     {
       "firstName": "Otis",
       "lastName": "",
       "gender": "Male",
       "role": "Alexandria Battle Robot",
-      "relationship": "Royalty friend"
+      "relationship": "Royalty friend",
+      "image": "otis.webp"
     },
     {
       "firstName": "Koana",
       "lastName": "",
       "gender": "Male",
       "role": "Prince",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "koana.webp"
     },
     {
       "firstName": "Gulool Ja",
       "lastName": "",
       "gender": "Male",
       "role": "Mamool Ja, Prince of Alexandria",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "gulool_ja.webp"
     },
     {
       "firstName": "G'raha Tia",
       "lastName": "",
       "gender": "Male",
       "role": "Scion, Historian, Crystal Exarch",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "g_raha_tia.webp"
     },
     {
       "firstName": "Crystal Exarch",
       "lastName": "",
       "gender": "Male",
       "role": "Exarch, ท่านคริสตัล",
-      "relationship": "Close ally (G'raha Tia's identity in the First)"
+      "relationship": "Close ally (G'raha Tia's identity in the First)",
+      "image": "crystal_exarch.webp"
     },
     {
       "firstName": "Krile",
       "lastName": "",
       "gender": "Female",
       "role": "Scion, Pictomancer",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "krile.webp"
     },
     {
       "firstName": "Erenville",
       "lastName": "",
       "gender": "Male",
       "role": "Gleaner",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "erenville.webp"
     },
     {
       "firstName": "Hythlodaeus",
       "lastName": "",
       "gender": "Male",
       "role": "Ascians",
-      "relationship": "Past ally"
+      "relationship": "Past ally",
+      "image": "hythlodaeus.webp"
     },
     {
       "firstName": "Emet-Selch",
       "lastName": "",
       "gender": "Male",
       "role": "Ascians",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "emet_selch.webp"
     },
     {
       "firstName": "Meteion",
       "lastName": "",
       "gender": "Female",
       "role": "Elpis Citizen",
-      "relationship": "New Ally"
+      "relationship": "New Ally",
+      "image": "meteion.webp"
     },
     {
       "firstName": "Hermes",
       "lastName": "",
       "gender": "Male",
       "role": "Ascians",
-      "relationship": "Past ally"
+      "relationship": "Past ally",
+      "image": "hermes.webp"
     },
     {
       "firstName": "Venat",
       "lastName": "",
       "gender": "Female",
       "role": "Ascians,Hydaelyn",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "venat.webp"
     },
     {
       "firstName": "Nanamo Ul Namo",
       "lastName": "",
       "gender": "Female",
       "role": "Princess of Uldah",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "nanamo_ul_namo.webp"
     },
     {
       "firstName": "2P",
       "lastName": "",
       "gender": "Female",
       "role": "android",
-      "relationship": "Unknown"
+      "relationship": "Unknown",
+      "image": "2p.webp"
     },
     {
       "firstName": "2B",
       "lastName": "",
       "gender": "Female",
       "role": "android",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "2b.webp"
     },
     {
       "firstName": "9S",
       "lastName": "",
       "gender": "Male",
       "role": "android",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "9s.webp"
     },
     {
       "firstName": "Themis",
@@ -195,21 +218,24 @@
       "lastName": "",
       "gender": "Male",
       "role": "Mamool Ja",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "bakool_ja_ja_the_mighty.webp"
     },
     {
       "firstName": "Bakool Ja Ja the Mystic",
       "lastName": "",
       "gender": "Male",
       "role": "Mamool Ja",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "bakool_ja_ja_the_mystic.webp"
     },
     {
       "firstName": "Prishe",
       "lastName": "",
       "gender": "Female",
       "role": "Elvaan",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "prishe.webp"
     },
     {
       "firstName": "Liplu",
@@ -328,70 +354,80 @@
       "lastName": "",
       "gender": "Male",
       "role": "Warrior of Darkness",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "ardbert.webp"
     },
     {
       "firstName": "DuliaChai",
       "lastName": "",
       "gender": "Female",
       "role": "ชาว Eulmore",
-      "relationship": "Ally, ภรรยาของ ChaiNuzz"
+      "relationship": "Ally, ภรรยาของ ChaiNuzz",
+      "image": "duliachai.webp"
     },
     {
       "firstName": "ChaiNuzz",
       "lastName": "",
       "gender": "Male",
       "role": "ชาว Eulmore",
-      "relationship": "Ally, สามีของ DuliaChai"
+      "relationship": "Ally, สามีของ DuliaChai",
+      "image": "chainuzz.webp"
     },
     {
       "firstName": "Vauthry",
       "lastName": "",
       "gender": "Male",
       "role": "เจ้าเมือง Eulmore",
-      "relationship": "Enemy"
+      "relationship": "Enemy",
+      "image": "vauthry.webp"
     },
     {
       "firstName": "Tesleen",
       "lastName": "",
       "gender": "Female",
       "role": "หญิงสาวผู้ดูแลในค่ายกักกัน",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "tesleen.webp"
     },
     {
       "firstName": "Lyna",
       "lastName": "",
       "gender": "Female",
       "role": "Captain แห่ง Crystarium",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "lyna.webp"
     },
     {
       "firstName": "Estinien",
       "lastName": "",
       "gender": "Male",
       "role": "Dragoon, Scion",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "estinien.webp"
     },
     {
       "firstName": "Gaius",
       "lastName": "",
       "gender": "Male",
       "role": "ShadowHunter",
-      "relationship": "Old Enemy, New Ally"
+      "relationship": "Old Enemy, New Ally",
+      "image": "gaius.webp"
     },
     {
       "firstName": "Ranjit",
       "lastName": "",
       "gender": "Male",
       "role": "ผู้บัญชาการ แห่งเมือง Eulmore",
-      "relationship": "Enemy"
+      "relationship": "Enemy",
+      "image": "ranjit.webp"
     },
     {
       "firstName": "Minfilia",
       "lastName": "",
       "gender": "Female",
       "role": "ผู้กุมความลับแห่งแสง",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "minfilia.webp"
     },
     {
       "firstName": "Feo Ul",
@@ -412,14 +448,16 @@
       "lastName": "",
       "gender": "Male",
       "role": "Samurai",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "gosetsu.webp"
     },
     {
       "firstName": "Hien",
       "lastName": "",
       "gender": "Male",
       "role": "Leader of Doma",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "hien.webp"
     },
     {
       "firstName": "Asahi",
@@ -447,7 +485,8 @@
       "lastName": "",
       "gender": "Male",
       "role": "Dawnservant, Gulool Ja Ja",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "vow_of_resolve_gulool_ja_ja.webp"
     },
     {
       "firstName": "Minstreling Wanderer",
@@ -475,14 +514,16 @@
       "lastName": "",
       "gender": "Female",
       "role": "Ascians",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "hydaelyn.webp"
     },
     {
       "firstName": "Matoya",
       "lastName": "",
       "gender": "Female",
       "role": "Elder Wizard",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "matoya.webp"
     },
     {
       "firstName": "Varshahn",
@@ -494,9 +535,10 @@
     {
       "firstName": "Zero",
       "lastName": "",
-      "gender": "None",
+      "gender": "Neutral",
       "role": "Reaper",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "zero.webp"
     },
     {
       "firstName": "Golbez",
@@ -524,7 +566,8 @@
       "lastName": "",
       "gender": "Female",
       "role": "Oracle of Light (The First)",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "ryne.webp"
     },
     {
       "firstName": "Barbariccia",
@@ -558,36 +601,41 @@
       "firstName": "Fourchenault",
       "lastName": "Leveilleur",
       "gender": "Male",
-      "role": "Member of The Forum (Sharlayan)",
-      "relationship": "Close Ally"
+      "role": "Member of The Forum (Sharlayan), Father of Alphinaud and Alisaie",
+      "relationship": "Neutral, พ่อของ Alphinaud",
+      "image": "fourchenault_leveilleur.webp"
     },
     {
       "firstName": "Ameliance",
       "lastName": "Leveilleur",
       "gender": "Female",
       "role": "Mother of Alphinaud and Alisaie",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally, แม่ของ Alphinaud",
+      "image": "ameliance_leveilleur.webp"
     },
     {
       "firstName": "Nidhana",
       "lastName": "",
       "gender": "Female",
       "role": "Researcher of Thavnair",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "nidhana.webp"
     },
     {
       "firstName": "Zenos",
       "lastName": "",
       "gender": "Male",
       "role": "Garlean Prince, Antagonist",
-      "relationship": "Enemy"
+      "relationship": "Enemy",
+      "image": "zenos.webp"
     },
     {
       "firstName": "Zenos yae Galvus",
       "lastName": "",
       "gender": "Male",
       "role": "Garlean Prince, Antagonist",
-      "relationship": "Enemy"
+      "relationship": "Enemy",
+      "image": "zenos_yae_galvus.webp"
     },
     {
       "firstName": "Zenos viator Galvus",
@@ -685,14 +733,16 @@
       "lastName": "",
       "gender": "Female",
       "role": "Healer, Priest",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "kan_e_senna.webp"
     },
     {
       "firstName": "Yda",
       "lastName": "",
       "gender": "Female",
       "role": "scions fighter",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "yda.webp"
     },
     {
       "firstName": "Ketenramm",
@@ -706,7 +756,8 @@
       "lastName": "Garlond",
       "gender": "Male",
       "role": "Engineer",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "cid_garlond.webp"
     },
     {
       "firstName": "Rammbroes",
@@ -727,7 +778,8 @@
       "lastName": "",
       "gender": "Male",
       "role": "จักรพรรดิ์แห่ง Allagan",
-      "relationship": "Enemy"
+      "relationship": "Enemy",
+      "image": "xande.webp"
     },
     {
       "firstName": "Gurfurlur",
@@ -741,7 +793,8 @@
       "lastName": "",
       "gender": "Male",
       "role": "Imperial Knight",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "raubahn.webp"
     },
     {
       "firstName": "Runar",
@@ -769,21 +822,24 @@
       "lastName": "",
       "gender": "Female",
       "role": "Fighter, Yda",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "lyse.webp"
     },
     {
       "firstName": "Aymeric",
       "lastName": "",
       "gender": "Male",
       "role": "Temple Knight of Ishgard",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "aymeric.webp"
     },
     {
       "firstName": "Amon",
       "lastName": "",
       "gender": "Male",
       "role": "Ascians, Artist",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "amon.webp"
     },
     {
       "firstName": "Hancock",
@@ -804,14 +860,16 @@
       "lastName": "",
       "gender": "Female",
       "role": "ninja",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "yugiri.webp"
     },
     {
       "firstName": "Yotsuyu",
       "lastName": "",
       "gender": "Female",
       "role": "Samurai",
-      "relationship": "Unknown"
+      "relationship": "Unknown",
+      "image": "yotsuyu.webp"
     },
     {
       "firstName": "Solus zos Galvus",
@@ -874,14 +932,16 @@
       "lastName": "",
       "gender": "Male",
       "role": "Eternal Darkness",
-      "relationship": "Enemy"
+      "relationship": "Enemy",
+      "image": "zodiark.webp"
     },
     {
       "firstName": "Louisoix",
       "lastName": "",
       "gender": "Male",
       "role": "มหาเวทย์ผู้ยิ่งใหญ่",
-      "relationship": "Ally"
+      "relationship": "Ally",
+      "image": "louisoix.webp"
     },
     {
       "firstName": "Cloud",
@@ -936,8 +996,9 @@
       "firstName": "Gaia",
       "lastName": "",
       "gender": "Female",
-      "role": "Mysterious",
-      "relationship": "Ally"
+      "role": "Mysterious woman",
+      "relationship": "Neutral",
+      "image": "gaia.webp"
     },
     {
       "firstName": "Cymet",
@@ -1091,7 +1152,8 @@
       "lastName": "",
       "gender": "Male",
       "role": "Knight",
-      "relationship": "Close Ally"
+      "relationship": "Close Ally",
+      "image": "haurchefant.webp"
     },
     {
       "firstName": "Count Edmont de Fortemps",
@@ -1105,7 +1167,8 @@
       "lastName": "",
       "gender": "Male",
       "role": "Archbishop",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "archbishop_thordan_vii.webp"
     },
     {
       "firstName": "Vidofnir",
@@ -1308,14 +1371,16 @@
       "lastName": "",
       "gender": "Female",
       "role": "ผู้ช่วยแสนน่ารัก",
-      "relationship": "Close Friend"
+      "relationship": "Close Friend",
+      "image": "tataru.webp"
     },
     {
       "firstName": "???",
       "lastName": "",
       "gender": "Neutral",
       "role": "Unknown",
-      "relationship": "Unknown"
+      "relationship": "Unknown",
+      "image": "character.webp"
     },
     {
       "firstName": "Ofangeim",
@@ -1333,13 +1398,6 @@
     },
     {
       "firstName": "Jeffroy",
-      "lastName": "",
-      "gender": "Female",
-      "role": "Adventure",
-      "relationship": "Neutral"
-    },
-    {
-      "firstName": "Asther",
       "lastName": "",
       "gender": "Female",
       "role": "Adventure",
@@ -1527,25 +1585,24 @@
       "lastName": "",
       "gender": "Male",
       "role": "Mamool Ja Knight",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "bakool_ja_ja.webp"
     },
     {
-      "firstName": "Nashu Mhakaracca",
-      "lastName": "",
+      "firstName": "Nashu",
+      "lastName": "Mhakaracca",
       "gender": "Female",
       "role": "Adventure",
       "relationship": "Close Ally",
-      "appearance": "",
-      "personality": "",
-      "background": "",
-      "notes": ""
+      "image": "nashu_mhakaracca.webp"
     },
     {
       "firstName": "Hildibrand",
       "lastName": "",
       "gender": "Male",
       "role": "Inspector",
-      "relationship": "Neutral"
+      "relationship": "Neutral",
+      "image": "hildibrand.webp"
     },
     {
       "firstName": "Hardiboiled",
@@ -1928,15 +1985,15 @@
     "Godsdammit!": "บ้าเอ๊ย!",
     "Bloody hells!": "มันบ้าอะไรเนี่ย!",
     "Baldesion": "ชื่อขององค์กรของนักวิชาการ 'Students of Baldesion' ที่ก่อตั้งโดย 'Galuf Baldesion'",
-    "Aether": "'เอเทอร์' พลังงานต้นกำเนิดของทุกสรรพสิ่ง",
-    "Reflection": "โลกสะท้อน ปัจจุบันมี 13 แห่ง",
+    "Aether": "'เอเทอร์' พลังงานธาตุที่หล่อเลี้ยงชีวิตและเวทมนตร์ในโลกนี้",
+    "Reflection": "โลกสะท้อน เคยมีทั้งหมด 13 ดวง แตกออกจาก The Source",
     "Echo": "พลังพิเศษที่ทำให้ผู้ใช้งานเห็นความทรงจำของผู้อื่นและเข้าใจภาษาต่างๆ",
     "the First": "โลกสะท้อน ลำดับที่ 1 ที่ถูกกลืนกินด้วย แสง",
     "the Source": "โลกหลักใน Final Fantasy XIV",
     "linkpearls": "'ลิ้งค์เพิร์ล' : อุปกรณ์สื่อสารขนาดเล็ก",
     "Ascians": "เผ่าพันธุ์ผู้บุกเบิก มีพลังที่สมบูรณ์แบบ มีเป้าหมายในการคืนชีพ Zodiark และการรวมโลก",
     "vessel": "เมื่อใช้กับคน : ร่างที่ใช้บรรจุวิญญาณ ใน Living Memory , แปลว่า 'เรือเหาะ' เมื่อใช้พูดถึงวัตถุ",
-    "Endless": "เอนด์เลส คือ สถานะหลังความตายที่ข้อมูลวิญญาณถูกนำมาประกอบสร้างเป็นรูปร่างดั่งยามมีชีวิต",
+    "Endless": "'เหล่าอมตะ' จิตของผู้ตายจาก Alexandria ที่ถูกอัพโหลดมาอยู่ใน Living Memory ในร่างเหมือนตอนยังมีชีวิต",
     "Primal": "'ไพรมัล'สิ่งมีชีวิตที่ถูกอัญเชิญมาโดยการใช้พลังงาน Aether จากแรงศรัทธา",
     "Tuliyollal": "เมืองหลักในตอนเหนือของ Yok Tural",
     "barrier": "เขตแดน คั่นพื้นที่ระหว่างโลกภายนอกและเมือง Alexandria",
@@ -1945,13 +2002,13 @@
     "Kozama'uka": "พื้นที่เขตร้อนใต้ของ Tuliyollal",
     "Shaaloani": "โซนแห้งแล้งใน Tural ตอนกลาง",
     "Heritage Found": "โซนที่เชื่อมโยงระหว่างอารยธรรมเก่าและใหม่ใน New World",
-    "Living Memory": "'ลิฟวิ่งเมมโมรี' : เมืองจำลองของ Alexandria",
+    "Living Memory": "'ลิฟวิ่งเมมโมรี' โลกจำลองของ Alexandria ที่เก็บจิตของผู้ตาย (Endless) ไว้",
     "Solution Nine": "เมืองล้ำสมัยสร้างขึ้นจาก Electrope",
     "Earthen Sky": "พื้นที่ธรรมชาติที่เน้นภูมิทัศน์ทางธรณีวิทยา",
     "Electric Potential": "บริเวณที่มีกิจกรรมทางไฟฟ้าและแหล่งพลังงานสำคัญ",
     "Tesh'pyani Village": "หมู่บ้านเล็กๆ ที่มีเอกลักษณ์ทางวัฒนธรรมในพื้นที่ Yyasulani",
     "The Thunderyards": "พื้นที่ที่มีฟ้าร้องและกิจกรรมทางไฟฟ้าเป็นปกติ",
-    "Electrope": "เทคโนโลยีที่ประยุกต์ใช้การดักจับสายฟ้าจากธรรมชาติ มาประยุกต์ใช้สร้างพลังงานธาตุต่างๆได้",
+    "Electrope": "'เอเล็กโทรป' แร่สายฟ้าที่ใช้แปลงเอเทอร์เป็นธาตุอื่น เป็นพลังงานหลักของ Alexandria",
     "Convocation of Fourteen": "'องค์คณะทั้ง 14' เป็นกลุ่มสมาชิกที่มีอำนาจสูงสุดในหมู่ Ascians",
     "Fourteen": "'องค์คณะทั้ง 14' เป็นกลุ่มสมาชิกที่มีอำนาจสูงสุดในหมู่ Ascians",
     "the Final Days": "วันสิ้นโลก",
@@ -1967,8 +2024,8 @@
     "Cradle": "เครื่องราง แห่งการหลับไหล",
     "Champion": "คำแทนตัวละครหลักของผู้เล่น เรียกสั้นๆว่า 'ผู้กล้า'",
     "the Flood": "การท่วมครั้งใหญ่ ของแสงที่กลืนกิน the First",
-    "Sin eater": "'ตัวกินบาป' ปีศาจที่มีร่างกายขาวโพลน เดิมดีเคยเป็นสิ่งมีชีวิต หรือมนุษย์มาก่อน",
-    "Lightwarden": "นางพญา ของเหล่าตัวกินบาป",
+    "Sin eater": "'ตัวกินบาป' (ซินอีเตอร์) สิ่งมีชีวิตที่ถูกแสงปฐมกาลกลืนกินจนกลายเป็นปีศาจร่างขาวไร้สำนึก",
+    "Lightwarden": "'ไลท์วอร์เด้น' ตัวกินบาประดับสูงสุด ผู้ครองดินแดนด้วยแสง",
     "Eighth Umbral Calamity": "'มหาภิบัติ ครั้งที่ 8'",
     "Black Rose": "'แบล็คโรส' ก๊าซชั่วร้ายที่ใช้คร่าชีวิตผู้คนจำนวนมาก และยังคงเป็นปริศนาในที่มา",
     "Minfilia": "ในโลกหลัก (the Source) เธอคือหัวหน้ากลุ่ม Scions, แต่ใน the First เธอคือเด็กสาวผู้แทนตำแหน่ง Minfilia (Oracle of Light) ซึ่งปัจจุบันคือ 'Lyne'",
@@ -1991,15 +2048,15 @@
     "Yok huy": "เผ่ายักษ์",
     "auracite": "'ออราไซต์'ผลึกที่สามารถจัดเก็บวิญญาณได้",
     "Warrior of Light": "ผู้กล้าแห่งแสง",
-    "eikon": "สัตว์อสูร ลักษณะเดียวกับ Primal",
-    "tempered": "ผู้ถูกครอบงำ",
+    "eikon": "'ไอคอน' ชื่อเดียวกับ Primal แต่เป็นคำเรียกของฝั่งจักรวรรดิอัลลากันและการ์เลียน (ไม่ยอมรับว่าเป็นเทพ)",
+    "tempered": "'ถูกครอบงำ' ตกอยู่ใต้อาณัติของ Primal สูญเสียเจตจำนงตัวเอง",
     "Your Grace": "'ฝ่าบาท' ใช้พูดกับชนชั้นสูงหรือกษัตริย์",
     "Ark": "เรือเหาะสำหรับท่องอวกาศ สร้างใน Shalayan",
     "Ragnarok": "ชื่อของยานอวกาศ สำหรับเดินทางไปสู่ Ultima Thule",
     "Warrior of Darkness": "ผู้กล้าจาก The First หรือก็คือ 'Ardbert'",
     "Azem": "ตำแหน่งเดิมของ Venat (Hydaelyn)",
     "akasa": "'อะคาสะ' พลังงานภายใน",
-    "Dynamis": "พลังงานที่ขับเคลื่อนด้วยอารมณ์เป็นที่ตั้ง",
+    "Dynamis": "'ไดนามิส' พลังงานที่ตอบสนองต่ออารมณ์รุนแรง อ่อนกว่าเอเทอร์แต่มีอยู่มากกว่า",
     "mindjack": "เชื่อมจิต",
     "brands": "การปิดผนึก มักจะเกี่ยวกับ Zodiark",
     "Teleport": "การวาร์ป",
@@ -2026,7 +2083,7 @@
     "sigh": "'เฮ่อ..'",
     "preservation": "กลุ่มนักวิจัยผู้ค้นคว้าเกี่ยวกับ Electrope ก่อตั้งโดย Calyx",
     "port nine": "โถงขนาดใหญ่ของเมือง Solution nine",
-    "levin": "'อัมพฤก' ผลข้างเคียงจากสายฟ้าอย่างรุนแรง",
+    "levin": "'สายฟ้า'",
     "Backroom": "ศูนย์บัญชาการลับของเหล่าผู้กล้า เรียกเป็นรหัสลับว่า \"ห้องเครื่อง\"",
     "Endless Sphene's": "'Sphene' ในร่าง Endless",
     "King of Resolve": "ราชาแห่ง Tural",
@@ -2054,25 +2111,27 @@
     "Humble": "อ่อนพลังลง",
     "Third Promise": "ผู้สืบทอดลำดับที่ 3",
     "Thavnair": "เมือง 'ทาฟแนร์'",
-    "ambystoma": "'แอมบิส' หรือเรียกแบบติดตลกว่า 'ปิกาจู้แอมบิส'"
+    "ambystoma": "'แอมบิส' หรือเรียกแบบติดตลกว่า 'ปิกาจู้แอมบิส'",
+    "thirteenth": "'โลกที่สิบสาม'",
+    "Ninth": "'โลกที่เก้า'",
+    "Thirteenth": "โลกที่สิบสาม"
   },
   "character_roles": {
-    "Y'shtola": "ใช้ภาษาแบบสาวเฟียส พูดสั้นกระชับ ฉลาดลึก, มั่นใจในตัวเอง",
-    "Urianger": "ใช้ภาษาซับซ้อน แต่ไม่ถึงกับโบราณ, เลี่ยงการใช้คำราชาศัพท์",
-    "Wuk Lamat": "ใช้ภาษากระชับ แบบนักรบ ดุดันในยามรบ แต่มีความห่วงใย และสุภาพในบทสนทนาปกติ",
-    "Zoraal Ja": "ใช้ภาษาที่เยือกเย็น แฝงความน่ากลัว โหดร้าย",
-    "Sphene": "เจ้าหญิงจากยุคโบราณตื่นขึ้นในยุคปัจจุบัน ใช้สรรพนาม 'ข้า/เรา' พูดสั้นกระชับ น้ำเสียงอ่อนโยนแต่มีความสง่า ใช้คำกึ่งโบราณปนสมัยใหม่ ห้ามใช้ราชาศัพท์เต็มรูปแบบอย่าง 'หม่อมฉัน'",
+    "Y'shtola": "นักวิชาการสาวสุขุม ใช้ 'ฉัน/เธอ' ปกติ (เปลี่ยนเป็น 'ข้า/ท่าน' เฉพาะตอนทางการ) คำพูดคมคาย มั่นใจ ไม่อ้อมค้อม",
+    "Urianger": "ใช้ภาษาโบราณ 'ข้า/ท่าน/หามิได้' เป็นเอกลักษณ์ที่ตัวละครอื่นในเกมล้อเลียน — ตัวเดียวที่ควรพูดโบราณเต็มรูปแบบ",
+    "Wuk Lamat": "นักรบสาวหรอธการ์อบอุ่น ใช้ 'ฉัน/นาย' เป็นกันเอง มี 'นะ/น่ะ' ท้ายประโยคได้ ภาษาไม่ทางการ ไม่โบราณ",
+    "Zoraal Ja": "ตัวร้ายเย็นชา ใช้ 'ข้า/เจ้า' ประโยคสั้นคุกคาม ไม่ฟุ่มเฟือยคำ",
+    "Sphene": "เจ้าหญิงโบราณอ่อนโยน ใช้ 'ข้า/ท่าน' สุภาพสง่างาม น้ำเสียงนุ่มนวลแต่มีความเป็นราชา ไม่ใช้ราชาศัพท์เต็มอย่าง 'หม่อมฉัน/เพคะ'",
     "Otis": "พูดจาด้วยสำนวนนักรบที่ภักดีต่ออาณาจักร Alexandria และเจ้าหญิง Sphene",
     "Koana": "พูดด้วยมาดเจ้าชาย ที่แสนอบอุ่นและเข้มแข็ง",
     "Gulool Ja": "ใช้ภาษาแบบเด็กหนุ่ม สุภาพ กล้าหาญ ฉลาด",
-    "G'raha Tia": "ใช้ภาษาที่เป็นมิตร อบอุ่น มีความเป็นผู้นำ ใช้คำสุภาพเสมอ",
+    "G'raha Tia": "นักวิชาการหนุ่มกระตือรือร้น ใช้ 'ผม/คุณ' สุภาพสมัยใหม่ ไม่โบราณ — เมื่อเป็น Crystal Exarch จะสุขุมขึ้น แต่ยังคงสมัยใหม่",
     "Krile": "ใช้ภาษาแบบเนิร์ดวัยรุ่น ฉลาดล้ำลึก",
     "Erenville": "ใช้ภาษาแบบสุขุม มีความรับผิดชอบและมุ่งมั่น",
-    "Alisaie": "สาววัยรุ่นใช้ภาษาทันสมัย คำพูดขวานผ่าซาก แต่ยังคงสุภาพ แฝงความไร้เดียงสาอยู่บ้าง",
-    "Alphinaud": "น้ำเสียงเด็กหนุ่ม ฉลาด มีวาทะศิลป์",
-    "Emet-Selch": "ในบทที่จริงจัง น้ำเสียงสุขุม ดุดัน เย่อหยิ่ง บทสนทนาทั่วไปจะแอบใจดีลึกๆ",
-    "EmetSelch": "ใช้ภาษาแบบชายผู้มากประสบการณ์ เย่อหยิ่ง บางเวลาจะแฝงความใจดีแบบเสียมิได้",
-    "Hythlodaeus": "ใช้ภาษาเนิร์ดผู้ห่วงใยเพื่อน แฝงมุกตลก ใจดี",
+    "Alisaie": "สาววัยรุ่นใช้ 'ฉัน/นาย' ภาษาสมัยใหม่ พูดสั้นตรง ไม่อ้อมค้อม กล้าได้กล้าเสีย — ตรงข้ามกับ Alphinaud",
+    "Alphinaud": "เด็กหนุ่มนักวิชาการ ใช้ 'ผม/คุณ' สุภาพแต่สมัยใหม่ ใช้ประโยคยาวเป็นทางการเมื่อจริงจัง ไม่โบราณ",
+    "Emet-Selch": "อัสเซียนโบราณ ใช้ 'ข้า/พวกเจ้า' น้ำเสียงเหนื่อยล้าเสียดสี ดราม่าโรงละคร แฝงความเหนือกว่า บางครั้งซ่อนความใจดี",
+    "Hythlodaeus": "อัมโรไทน์โบราณ ใช้ 'ข้า/ท่าน' สง่างามอบอุ่น มีอารมณ์ขันลึก ใจดี",
     "Meteion": "มีสองบุคลิก 1.ใช้ภาษาแบบเด็กสาวต่างดาว ไร้เดียงสา 2.คำพูดไร้จิตวิญญาณและน่ากลัว",
     "Venat": "ใช้ภาษาอ่อนโยน สละสลวย แต่ไม่โบราณ มีความมุ่งมั่นแรงกล้า",
     "2P": "เป็นหุ่นยนต์ที่ไร้จิตใจ พูดด้วยคำตรงๆไร้อารมณ์",
@@ -2089,7 +2148,7 @@
     "Vauthry": "ชายอ้วนพลุ้ย ชั่วร้าย สำเนียงเหยียดหยาม",
     "Tesleen": "หญิงสาวที่จิตใจเต็มไปด้วยความเมตตา เข้าใจโลกเป็นอย่างดี",
     "Lyna": "สาวองค์รักษ์ เข้มแข็ง ห้าวหาญ จงรักภักดีต่อ Crystarium และ Crystal Exarch (ท่านคริสตัล) อย่างลึกซึ้ง",
-    "Estinien": "นักรบมังกรหนุ่ม สำเนียงซื่อๆ มาดแมน, บางเวลาที่พูดเล่นอาจดูซื่อบื้อ",
+    "Estinien": "นักรบมังกรหนุ่ม ใช้ 'ฉัน/นาย' (หรือ 'ข้า/เจ้า' ตอนเป็นทางการ) ประโยคสั้นแห้ง เสียดสีเบาๆ มาดแมน",
     "Gaius": "คำพูดสุขุม ฉลาด ห้วน",
     "Ranjit": "ชายแก่ สำเนียงจีน ฉลาดแกมโกง เสียดสี",
     "Minfilia": "หญิงสาวที่ใช้คำพูดอันบริสุทธิ์ ฉลาด",
@@ -2171,7 +2230,6 @@
     "Cymet": "น้ำเสียงเป็นมิตร ฉลาด",
     "Almet": "น้ำเสียงเคร่งขรึม",
     "Uimet": "น้ำเสียงก๋ากั่น",
-    "Feo UI": "น้ำเสียงเอาแต่ใจ ขี้โวยวาย",
     "Magnai": "น้ำเสียงเย่อหยิ่ง จองหอง หลงตัวเอง",
     "Sadu": "กล้าหาญ เย่อหยิ่ง ทะนงตน",
     "Cirina": "น้ำเสียงอ่อนโยน แต่มุ่งมั่น กล้าหาญ แบบผู้นำ",
@@ -2257,8 +2315,9 @@
     "Bewinged Girl": "น้ำเสียงเด็กสาวที่ตื่นเต้น ไร้เดียงสา",
     "Hermes": "น้ำเสียงลุ่มลึก เก็บงำ",
     "Ardbert": "น้ำเสียงเข้มแข็ง กล้าหาญ",
-    "Thancred": "อบอุ่น ดุดัน, คำพูดสไตล์สายลับ",
-    "Shiva": "คำพูดเยือกเย็น"
+    "Thancred": "นักผจญภัยเจ้าสำนวน ใช้ 'ผม/คุณ' ภาษาเก๋มีเสน่ห์ ปนเล่นคำ ไม่โบราณ — สายลับมือเก๋าที่ดูเย่อหยิ่งแต่จริงๆ ห่วงใย",
+    "Shiva": "คำพูดเยือกเย็น",
+    "Nashu": "น้ำเสียงน่ารัก เด๋อด๋า, ไม่ประสีประสา"
   },
   "word_fixes": {},
   "_game_info": {

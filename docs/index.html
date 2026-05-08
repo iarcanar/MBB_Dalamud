@@ -1102,7 +1102,7 @@
         <div class="banner-logo-group">
             <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772761009/mbb_LOGO_vkk21r.png"
                  alt="Magicite Babel Logo" class="banner-logo">
-            <span class="banner-version">v1.8.2</span>
+            <span class="banner-version">v1.8.4</span>
         </div>
     </div>
 
@@ -1161,35 +1161,64 @@
 
             <!-- Flow Diagram — desktop: horizontal row with arrows, mobile: 2-col grid -->
             <!-- Desktop layout (hidden on mobile) -->
-            <div class="hidden md:flex items-center justify-center gap-2 max-w-5xl mx-auto mb-14">
+            <div class="hidden md:flex items-stretch justify-center gap-2 max-w-5xl mx-auto mb-10">
                 <div class="flow-step flex-1">
                     <div class="mb-3 flex justify-center"><i data-lucide="gamepad-2" class="text-indigo-200" style="width:40px;height:40px;stroke-width:1.5"></i></div>
                     <h4 class="text-lg font-semibold text-indigo-200 mb-1">FFXIV</h4>
-                    <p class="text-sm text-gray-400">ข้อความในเกม</p>
+                    <p class="text-xs text-gray-400">บทสนทนาเกิดขึ้นในเกม</p>
                 </div>
                 <div class="flow-arrow"><i data-lucide="chevron-right"></i></div>
                 <div class="flow-step flex-1 pulse-badge">
                     <div class="mb-3 flex justify-center"><i data-lucide="webhook" class="text-cyan-300" style="width:40px;height:40px;stroke-width:1.5"></i></div>
                     <h4 class="text-lg font-semibold text-cyan-300 mb-1">Dalamud Plugin</h4>
-                    <p class="text-sm text-gray-400">Text Hook ดึงข้อความ</p>
+                    <p class="text-xs text-gray-400">ดึงข้อความตรงจาก<br>memory เกม</p>
+                    <p class="text-[10px] text-cyan-400/70 mt-1">ไม่ใช่ OCR · แม่น 100%</p>
                 </div>
                 <div class="flow-arrow"><i data-lucide="chevron-right"></i></div>
                 <div class="flow-step flex-1">
                     <div class="mb-3 flex justify-center"><i data-lucide="terminal" class="text-yellow-300" style="width:40px;height:40px;stroke-width:1.5"></i></div>
                     <h4 class="text-lg font-semibold text-yellow-300 mb-1">Python App</h4>
-                    <p class="text-sm text-gray-400">ประมวลผล + NPC Context</p>
+                    <p class="text-xs text-gray-400">เติมบุคลิก +<br>ประวัติบทสนทนา</p>
+                    <p class="text-[10px] text-yellow-400/70 mt-1">290 ชื่อ · context 3-8 บรรทัด</p>
                 </div>
                 <div class="flow-arrow"><i data-lucide="chevron-right"></i></div>
                 <div class="flow-step flex-1">
                     <div class="mb-3 flex justify-center"><i data-lucide="sparkles" class="text-purple-300" style="width:40px;height:40px;stroke-width:1.5"></i></div>
                     <h4 class="text-lg font-semibold text-purple-300 mb-1">Gemini AI</h4>
-                    <p class="text-sm text-gray-400">แปลด้วย AI คุณภาพสูง</p>
+                    <p class="text-xs text-gray-400">แปลพร้อมเข้าใจ<br>บริบทเต็ม</p>
+                    <p class="text-[10px] text-purple-400/70 mt-1">สรรพนามคงเส้นคงวา</p>
                 </div>
                 <div class="flow-arrow"><i data-lucide="chevron-right"></i></div>
                 <div class="flow-step flex-1">
                     <div class="mb-3 flex justify-center"><i data-lucide="monitor" class="text-emerald-300" style="width:40px;height:40px;stroke-width:1.5"></i></div>
                     <h4 class="text-lg font-semibold text-emerald-300 mb-1">TUI Overlay</h4>
-                    <p class="text-sm text-gray-400">แสดงผลบนหน้าจอเกม</p>
+                    <p class="text-xs text-gray-400">ปรากฏบนเกม<br>ภายใน 1 วินาที</p>
+                    <p class="text-[10px] text-emerald-400/70 mt-1">TUI · LOG · Mini</p>
+                </div>
+            </div>
+
+            <!-- Differentiators — what makes this pipeline special -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 max-w-4xl mx-auto mb-10">
+                <div class="bg-slate-900/60 border border-cyan-500/20 rounded-xl p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="cpu" class="text-cyan-400" style="width:18px;height:18px;stroke-width:2"></i>
+                        <h5 class="text-sm font-bold text-cyan-300">Memory-direct</h5>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">ดึง bytes จาก memory เกมตรงๆ ผ่าน Dalamud — ไม่อ่านพิกเซลแบบ OCR ที่เพี้ยนบ่อย</p>
+                </div>
+                <div class="bg-slate-900/60 border border-yellow-500/20 rounded-xl p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="brain" class="text-yellow-400" style="width:18px;height:18px;stroke-width:2"></i>
+                        <h5 class="text-sm font-bold text-yellow-300">Smart Context</h5>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">ใส่ NPC + lore + บทสนทนาก่อนหน้า ทุกครั้งที่แปล — ตัวละครพูดเหมือนเดิมตลอดทั้งเรื่อง</p>
+                </div>
+                <div class="bg-slate-900/60 border border-emerald-500/20 rounded-xl p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="zap" class="text-emerald-400" style="width:18px;height:18px;stroke-width:2"></i>
+                        <h5 class="text-sm font-bold text-emerald-300">Zero Network</h5>
+                    </div>
+                    <p class="text-xs text-gray-400 leading-relaxed">Plugin ↔ App ผ่าน pipe ภายในเครื่อง — ไม่ต้องผ่านเน็ต ส่ง Gemini ครั้งเดียวจบ</p>
                 </div>
             </div>
 
@@ -1200,28 +1229,28 @@
                         <i data-lucide="gamepad-2" class="text-indigo-200" style="width:22px;height:22px;stroke-width:1.5"></i>
                         <div>
                             <h4 class="text-sm font-semibold text-indigo-200">FFXIV</h4>
-                            <p class="text-xs text-gray-500">ข้อความในเกม</p>
+                            <p class="text-xs text-gray-500">บทสนทนาในเกม</p>
                         </div>
                     </div>
                     <div class="flow-step-compact">
                         <i data-lucide="webhook" class="text-cyan-300" style="width:22px;height:22px;stroke-width:1.5"></i>
                         <div>
-                            <h4 class="text-sm font-semibold text-cyan-300">Text Hook</h4>
-                            <p class="text-xs text-gray-500">ดึงข้อความจากเกม</p>
+                            <h4 class="text-sm font-semibold text-cyan-300">Memory Hook</h4>
+                            <p class="text-xs text-gray-500">ดึงตรง · ไม่ใช่ OCR</p>
                         </div>
                     </div>
                     <div class="flow-step-compact">
                         <i data-lucide="terminal" class="text-yellow-300" style="width:22px;height:22px;stroke-width:1.5"></i>
                         <div>
-                            <h4 class="text-sm font-semibold text-yellow-300">Python App</h4>
-                            <p class="text-xs text-gray-500">ประมวลผล + NPC</p>
+                            <h4 class="text-sm font-semibold text-yellow-300">Smart Context</h4>
+                            <p class="text-xs text-gray-500">บุคลิก + ประวัติ</p>
                         </div>
                     </div>
                     <div class="flow-step-compact">
                         <i data-lucide="sparkles" class="text-purple-300" style="width:22px;height:22px;stroke-width:1.5"></i>
                         <div>
                             <h4 class="text-sm font-semibold text-purple-300">Gemini AI</h4>
-                            <p class="text-xs text-gray-500">แปลด้วย AI</p>
+                            <p class="text-xs text-gray-500">แปลคุณภาพสูง</p>
                         </div>
                     </div>
                 </div>
@@ -1229,8 +1258,8 @@
                 <div class="flow-step-compact mx-auto" style="max-width:calc(50% - 5px);">
                     <i data-lucide="monitor" class="text-emerald-300" style="width:22px;height:22px;stroke-width:1.5"></i>
                     <div>
-                        <h4 class="text-sm font-semibold text-emerald-300">TUI Overlay</h4>
-                        <p class="text-xs text-gray-500">แสดงผลบนจอเกม</p>
+                        <h4 class="text-sm font-semibold text-emerald-300">Overlay</h4>
+                        <p class="text-xs text-gray-500">&lt; 1 วินาที</p>
                     </div>
                 </div>
             </div>
@@ -1245,7 +1274,7 @@
                 <div class="card p-3 md:p-5">
                     <div class="text-2xl md:text-3xl font-bold text-cyan-300 mb-1">100%</div>
                     <p class="text-gray-300 text-xs md:text-sm font-medium">แม่นยำ</p>
-                    <p class="text-xs text-gray-500 mt-0.5 md:mt-1 hidden md:block">ดึงตรงจาก memory</p>
+                    <p class="text-xs text-gray-500 mt-0.5 md:mt-1 hidden md:block">ไม่มี OCR error</p>
                 </div>
                 <div class="card p-3 md:p-5">
                     <div class="text-2xl md:text-3xl font-bold text-purple-300 mb-1">290+</div>
@@ -1373,51 +1402,54 @@
             <p class="text-center text-gray-500 text-sm max-w-xl mx-auto" style="margin-top:1.8rem;margin-bottom:2.5rem;">
                 ออกแบบมาเพื่อผู้เล่น FFXIV ชาวไทยโดยเฉพาะ — ใช้งานง่าย ครบครัน ไม่รบกวนการเล่น
             </p>
-            <!-- Primary Features — 3 large cards -->
+            <!-- Primary Features — 3 large cards (spec-sheet typography) -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6">
                 <div class="card p-8 card-primary-mobile">
                     <div class="feature-icon hook"><i data-lucide="plug-zap"></i></div>
-                    <h3 class="text-2xl font-bold mb-3 text-white">Text Hook แม่นยำ 100%</h3>
-                    <p class="text-gray-300 text-base leading-relaxed">ดึงข้อความจาก FFXIV ผ่าน Dalamud Plugin โดยตรง ไม่ต้อง OCR ไม่มีการอ่านผิด รองรับทุก ChatType — บทสนทนา, คัตซีน, แบทเทิล</p>
+                    <h3 class="text-3xl md:text-4xl font-black text-white leading-tight mb-3 tracking-tight">อ่านแม่นยำ <span class="grad-text">100%</span></h3>
+                    <p class="text-cyan-300 text-sm font-semibold mb-3 uppercase" style="letter-spacing:0.08em;">ดึงข้อความตรงจากระบบเกม</p>
+                    <p class="text-gray-300 text-sm leading-relaxed">ไม่ใช้วิธีถ่ายภาพหน้าจอเพื่ออ่าน คำที่ได้จึงไม่เพี้ยนสักตัวอักษร ครอบคลุมทั้งบทสนทนา ฉากคัตซีน และฉากต่อสู้</p>
                 </div>
                 <div class="card p-8 card-primary-mobile">
                     <div class="feature-icon npc"><i data-lucide="users"></i></div>
-                    <h3 class="text-2xl font-bold mb-3 text-white">NPC Manager 290+</h3>
-                    <p class="text-gray-300 text-base leading-relaxed">ฐานข้อมูลตัวละคร FFXIV ครบถ้วน — ชื่อ, เพศ, สรรพนาม, บุคลิก ทำให้ AI แปลได้ตรงคาแรกเตอร์ เหมือนซับไตเติลมืออาชีพ</p>
+                    <h3 class="text-3xl md:text-4xl font-black text-white leading-tight mb-3 tracking-tight">รู้จักตัวละคร <span class="grad-text">290+</span></h3>
+                    <p class="text-emerald-300 text-sm font-semibold mb-3 uppercase" style="letter-spacing:0.08em;">ฐานข้อมูลคาแรกเตอร์ครบทั้งเรื่อง</p>
+                    <p class="text-gray-300 text-sm leading-relaxed">เก็บชื่อ เพศ สรรพนาม และบุคลิกของแต่ละคนไว้ครบ AI ใช้ข้อมูลนี้เลือกคำพูดให้เข้ากับตัวละคร เหมือนซับไตเติลของผู้แปลมืออาชีพ</p>
                 </div>
                 <div class="card p-8 card-primary-mobile">
                     <div class="feature-icon context"><i data-lucide="brain"></i></div>
-                    <h3 class="text-2xl font-bold mb-3 text-white">Wide-Context AI</h3>
-                    <p class="text-gray-300 text-base leading-relaxed">จำบทสนทนาก่อนหน้า เพื่อรักษาความสม่ำเสมอ — สรรพนาม, คำเรียก, ชื่อตัวละคร ไม่สลับไปมาระหว่าง Quest</p>
+                    <h3 class="text-3xl md:text-4xl font-black text-white leading-tight mb-3 tracking-tight">เข้าใจ<span class="grad-text">บริบท</span></h3>
+                    <p class="text-purple-300 text-sm font-semibold mb-3 uppercase" style="letter-spacing:0.08em;">จดจำบทสนทนาก่อนหน้าได้</p>
+                    <p class="text-gray-300 text-sm leading-relaxed">รักษาสรรพนาม คำเรียก และชื่อตัวละครให้คงเส้นคงวาตลอดบท ไม่สลับไปมากลางคันแบบเครื่องมือแปลทั่วไป</p>
                 </div>
             </div>
 
-            <!-- Secondary Features — 5 smaller cards -->
+            <!-- Secondary Features — 5 smaller cards (spec-sheet style) -->
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 secondary-features-grid">
                 <div class="card p-4 text-center">
                     <div class="feature-icon speed mx-auto" style="width:40px;height:40px;margin-bottom:0.75rem;"><i data-lucide="zap" style="width:18px;height:18px"></i></div>
-                    <h4 class="text-sm font-semibold text-indigo-200 mb-1">แปลใน 1 วินาที</h4>
-                    <p class="text-xs text-gray-400">Gemini 3.1 Flash Lite</p>
+                    <h4 class="text-lg md:text-xl font-black text-white mb-1.5 leading-tight">เร็วกว่า 1 วิ</h4>
+                    <p class="text-xs text-gray-400 leading-relaxed">คำแปลปรากฏแทบทันทีที่พูด</p>
                 </div>
                 <div class="card p-4 text-center">
                     <div class="feature-icon glass mx-auto" style="width:40px;height:40px;margin-bottom:0.75rem;"><i data-lucide="gem" style="width:18px;height:18px"></i></div>
-                    <h4 class="text-sm font-semibold text-indigo-200 mb-1">Glass Mode</h4>
-                    <p class="text-xs text-gray-400">UI โปร่งใสไม่บังเกม</p>
+                    <h4 class="text-lg md:text-xl font-black text-white mb-1.5 leading-tight">โปร่งใส ไม่บังจอ</h4>
+                    <p class="text-xs text-gray-400 leading-relaxed">หน้าต่างเกือบมองไม่เห็น เห็นเฉพาะคำแปล</p>
                 </div>
                 <div class="card p-4 text-center">
                     <div class="feature-icon install mx-auto" style="width:40px;height:40px;margin-bottom:0.75rem;"><i data-lucide="package-check" style="width:18px;height:18px"></i></div>
-                    <h4 class="text-sm font-semibold text-indigo-200 mb-1">ติดตั้ง 1 คลิก</h4>
-                    <p class="text-xs text-gray-400">Dalamud Plugin</p>
+                    <h4 class="text-lg md:text-xl font-black text-white mb-1.5 leading-tight">ติดตั้งครั้งเดียวจบ</h4>
+                    <p class="text-xs text-gray-400 leading-relaxed">ทำตามคู่มือครั้งแรก ครั้งต่อไปเปิดใช้ได้ทันที</p>
                 </div>
                 <div class="card p-4 text-center">
                     <div class="feature-icon zone mx-auto" style="width:40px;height:40px;margin-bottom:0.75rem;"><i data-lucide="map-pin" style="width:18px;height:18px"></i></div>
-                    <h4 class="text-sm font-semibold text-indigo-200 mb-1">Zone Detection</h4>
-                    <p class="text-xs text-gray-400">ล้าง context อัตโนมัติ</p>
+                    <h4 class="text-lg md:text-xl font-black text-white mb-1.5 leading-tight">เข้าใจสถานการณ์</h4>
+                    <p class="text-xs text-gray-400 leading-relaxed">รู้ว่ากำลังแปลฉากแบบไหน อยู่ในพื้นที่ใด</p>
                 </div>
                 <div class="card p-4 text-center">
                     <div class="feature-icon log mx-auto" style="width:40px;height:40px;margin-bottom:0.75rem;"><i data-lucide="scroll-text" style="width:18px;height:18px"></i></div>
-                    <h4 class="text-sm font-semibold text-indigo-200 mb-1">Chat Log</h4>
-                    <p class="text-xs text-gray-400">ย้อนดูบทสนทนา</p>
+                    <h4 class="text-lg md:text-xl font-black text-white mb-1.5 leading-tight">บันทึกบทสนทนา</h4>
+                    <p class="text-xs text-gray-400 leading-relaxed">ย้อนกลับไปอ่านได้ทุกเมื่อ</p>
                 </div>
             </div>
         </div>
@@ -1491,7 +1523,7 @@
                         <!-- Image left (tall phone-like) -->
                         <div class="lg:w-4/12 flex justify-center flex-shrink-0">
                             <div class="log-image-wrap image-container rounded-xl overflow-hidden" style="max-width:260px;width:100%;">
-                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772797987/logs_history_fapgly.png"
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249383/UI_element01-02_n21fln.png"
                                      alt="LOG — ประวัติบทสนทนา"
                                      class="zoomable-image w-full rounded-xl shadow-lg">
                             </div>
@@ -1516,16 +1548,16 @@
 
                     <!-- HERO: Role customization — main highlight -->
                     <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center mb-8">
-                        <!-- Image -->
-                        <div class="lg:w-5/12 flex-shrink-0">
+                        <!-- Image (wider — shows 2 panels: list view + Polaroid view) -->
+                        <div class="lg:w-6/12 flex-shrink-0">
                             <div class="image-container rounded-xl overflow-hidden">
-                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772797988/NPC_manager_rvzmmh.png"
-                                     alt="NPC Manager"
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249384/UI_element01_npc_y1tru9.png"
+                                     alt="NPC Manager + Character Viewer"
                                      class="zoomable-image w-full rounded-xl shadow-lg">
                             </div>
                         </div>
                         <!-- Main feature: Role customization -->
-                        <div class="lg:w-7/12">
+                        <div class="lg:w-6/12">
                             <p class="eyebrow flex items-center gap-2">
                                 <i data-lucide="crown" style="width:12px;height:12px;stroke-width:2.5"></i>
                                 NPC Manager · ฟีเจอร์เด่น
@@ -1541,6 +1573,28 @@
                                 <div class="bg-gradient-to-br from-indigo-950/80 to-purple-950/60 px-4 py-3">
                                     <span class="text-indigo-400 font-mono text-[11px] uppercase tracking-widest">Role: หยิ่งยโส + เย้ยหยัน</span>
                                     <p class="text-indigo-100 text-base mt-1.5">"ฮ่า... จะให้ข้าอธิบายซ้ำอีกรอบไหม เผื่อสมองจะตามทันสักที"</p>
+                                </div>
+                            </div>
+                            <!-- New in v1.8.4 — feature badges -->
+                            <div class="mt-5">
+                                <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-2">ใหม่ใน v1.8.4</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="bg-emerald-900/40 border border-emerald-500/30 text-emerald-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                        <i data-lucide="image-plus" style="width:12px;height:12px;stroke-width:2"></i>
+                                        อัพโหลดภาพตัวละครเอง
+                                    </span>
+                                    <span class="bg-indigo-900/40 border border-indigo-500/30 text-indigo-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                        <i data-lucide="git-merge" style="width:12px;height:12px;stroke-width:2"></i>
+                                        Merge ข้อมูลจากไฟล์อื่น
+                                    </span>
+                                    <span class="bg-cyan-900/40 border border-cyan-500/30 text-cyan-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                        <i data-lucide="zap" style="width:12px;height:12px;stroke-width:2"></i>
+                                        แก้แล้วใช้ในการแปลทันที
+                                    </span>
+                                    <span class="bg-purple-900/40 border border-purple-500/30 text-purple-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                        <i data-lucide="bar-chart-3" style="width:12px;height:12px;stroke-width:2"></i>
+                                        แสดงสถานะ + เวลาอัปเดต
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -1623,7 +1677,7 @@
                         <!-- Image right -->
                         <div class="lg:w-7/12">
                             <div class="image-container rounded-xl overflow-hidden">
-                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772797987/setting_and_fonts_offxss.png"
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249383/UI_element01_settings_bulujj.png"
                                      alt="Settings + Font Manager"
                                      class="zoomable-image w-full rounded-xl shadow-lg">
                             </div>
@@ -1658,22 +1712,34 @@
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
+                            <div class="bg-cyan-900/30 border border-cyan-500/30 rounded-lg p-3 mb-4">
+                                <p class="text-cyan-200 text-sm flex items-start gap-2">
+                                    <i data-lucide="fast-forward" class="text-cyan-400 flex-shrink-0 mt-0.5" style="width:15px;height:15px;stroke-width:2"></i>
+                                    <span><strong class="text-cyan-300">มี Dalamud อยู่แล้ว?</strong> — ถ้าคุณใช้ Plugin อื่นบน Dalamud อยู่ก่อนแล้ว ข้ามขั้นนี้ไป <a href="#install" onclick="document.querySelector('[data-step=&quot;2&quot;] .accordion-header').click(); return false;" class="text-cyan-300 hover:text-white underline font-semibold">Step 2</a> ได้เลย</span>
+                                </p>
+                            </div>
                             <p class="text-gray-300 mb-4 leading-relaxed">
                                 <strong class="text-white">Dalamud</strong> คือ Plugin Framework สำหรับ FFXIV ที่ชุมชนผู้เล่นทั่วโลกใช้งานกันอย่างแพร่หลาย
                                 ช่วยให้ติดตั้ง Plugin และ Mod ต่างๆ ได้สะดวก รวมถึง MBB Dalamud นี้
                             </p>
-                            <div class="bg-indigo-950/80 border border-indigo-400/40 rounded-xl p-4 mb-5 relative">
-                                <div class="absolute -top-3 left-4 bg-indigo-950 px-2">
-                                    <i data-lucide="quote" class="text-indigo-400" style="width:16px;height:16px;stroke-width:2"></i>
+                            <details class="cursor-pointer mb-5">
+                                <summary class="text-xs text-gray-400 hover:text-indigo-300 transition py-1.5 select-none inline-flex items-center gap-1.5">
+                                    <i data-lucide="quote" style="width:12px;height:12px;stroke-width:2"></i>
+                                    คำให้สัมภาษณ์ของ Naoki Yoshida เรื่อง third-party tool
+                                </summary>
+                                <div class="bg-indigo-950/80 border border-indigo-400/40 rounded-xl p-4 mt-2 relative">
+                                    <div class="absolute -top-3 left-4 bg-indigo-950 px-2">
+                                        <i data-lucide="quote" class="text-indigo-400" style="width:16px;height:16px;stroke-width:2"></i>
+                                    </div>
+                                    <p class="text-indigo-100 text-sm leading-relaxed italic">
+                                        "การใช้ Third-party tool ที่ไม่ได้ส่งผลกระทบหรือสร้างความเดือดร้อนให้ผู้เล่นคนอื่น
+                                        เป็นสิ่งที่ทำได้ และจะไม่มีการดำเนินการใดๆ ต่อผู้ใช้งาน"
+                                    </p>
+                                    <p class="text-indigo-400 text-xs mt-2 font-semibold not-italic">
+                                        — Naoki Yoshida, ผู้กำกับและโปรดิวเซอร์ Final Fantasy XIV
+                                    </p>
                                 </div>
-                                <p class="text-indigo-100 text-sm leading-relaxed italic">
-                                    "การใช้ Third-party tool ที่ไม่ได้ส่งผลกระทบหรือสร้างความเดือดร้อนให้ผู้เล่นคนอื่น
-                                    เป็นสิ่งที่ทำได้ และจะไม่มีการดำเนินการใดๆ ต่อผู้ใช้งาน"
-                                </p>
-                                <p class="text-indigo-400 text-xs mt-2 font-semibold not-italic">
-                                    — Naoki Yoshida, ผู้กำกับและโปรดิวเซอร์ Final Fantasy XIV
-                                </p>
-                            </div>
+                            </details>
                             <div class="flex flex-col md:flex-row gap-5 items-center">
                                 <div class="flex-1 bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-4">
                                     <p class="text-emerald-200 text-sm mb-3">ดาวน์โหลด <strong>XIVLauncher</strong> — Dalamud จะติดตั้งอัตโนมัติพร้อมกัน</p>
@@ -1695,47 +1761,62 @@
                     </div>
                 </div>
 
-                <!-- Step 2 — Download MBB Installer -->
+                <!-- Step 2 — Download MBB + Extract -->
                 <div class="accordion-step" data-step="2">
                     <div class="accordion-header" onclick="toggleStep(this)">
                         <span class="step-num">2</span>
-                        <span class="step-title">ดาวน์โหลดและติดตั้ง MBB</span>
+                        <span class="step-title">ดาวน์โหลดและแตกไฟล์ MBB</span>
                         <i data-lucide="chevron-down" class="step-chevron" style="width:20px;height:20px;stroke-width:2"></i>
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
                             <div class="flex flex-col md:flex-row gap-6 items-start">
                                 <div class="flex-1">
-                                    <p class="text-gray-300 mb-4 leading-relaxed">
-                                        ดาวน์โหลด <strong class="text-white">MBB Installer</strong> (.exe) แล้วรันได้เลย
-                                        ตัวติดตั้งจะจัดการทุกอย่างให้อัตโนมัติ — ทั้ง Python App และ Dalamud Plugin
+                                    <p class="text-gray-300 mb-3 leading-relaxed">
+                                        ดาวน์โหลดไฟล์ <strong class="text-white">MBB-1.8.4.zip</strong> (~100 MB)
+                                        แล้วแตกไฟล์ไปวางที่ใดก็ได้บนเครื่อง — โปรแกรมพร้อมใช้งานในตัว ไม่ต้องติดตั้ง Python
                                     </p>
-                                    <div class="space-y-2 mb-4">
-                                        <div class="flex items-center gap-2 text-sm text-gray-300">
-                                            <i data-lucide="check" class="text-emerald-400" style="width:16px;height:16px;stroke-width:2.5;flex-shrink:0"></i>
-                                            ติดตั้ง MBB Python App (standalone, ไม่ต้องติดตั้ง Python)
-                                        </div>
-                                        <div class="flex items-center gap-2 text-sm text-gray-300">
-                                            <i data-lucide="check" class="text-emerald-400" style="width:16px;height:16px;stroke-width:2.5;flex-shrink:0"></i>
-                                            ติดตั้ง Dalamud Plugin (MBB Bridge) โดยอัตโนมัติ
-                                        </div>
-                                        <div class="flex items-center gap-2 text-sm text-gray-300">
-                                            <i data-lucide="check" class="text-emerald-400" style="width:16px;height:16px;stroke-width:2.5;flex-shrink:0"></i>
-                                            ตั้งค่า Path เชื่อมต่อให้เรียบร้อย
-                                        </div>
-                                    </div>
-                                    <div class="bg-yellow-900/40 border border-yellow-500/30 rounded-lg p-3">
-                                        <p class="text-yellow-300 text-sm flex items-center gap-2">
-                                            <i data-lucide="construction" style="width:15px;height:15px;stroke-width:2;flex-shrink:0"></i>
-                                            <span><strong>กำลังพัฒนา</strong> — Installer จะพร้อมให้ดาวน์โหลดเร็วๆ นี้</span>
+                                    <a href="https://github.com/iarcanar/MBB_Dalamud/releases/latest"
+                                       target="_blank" rel="noopener"
+                                       class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold mb-4">
+                                        <i data-lucide="download" style="width:16px;height:16px;stroke-width:2.5;flex-shrink:0"></i>
+                                        ดาวน์โหลด MBB-1.8.4.zip
+                                    </a>
+                                    <div class="bg-rose-900/40 border border-rose-500/30 rounded-lg p-3 mb-4">
+                                        <p class="text-rose-200 text-sm flex items-start gap-2">
+                                            <i data-lucide="alert-triangle" class="text-rose-400 flex-shrink-0 mt-0.5" style="width:15px;height:15px;stroke-width:2"></i>
+                                            <span><strong class="text-rose-300">ห้ามวางใน Program Files</strong> — Windows จำกัดสิทธิ์เขียนไฟล์ ทำให้ settings/log บันทึกไม่ได้ แนะนำที่ <code class="bg-slate-800 text-cyan-300 rounded px-1 text-xs">D:\MBB\</code> หรือ <code class="bg-slate-800 text-cyan-300 rounded px-1 text-xs">C:\Games\MBB\</code></span>
                                         </p>
                                     </div>
+                                    <p class="text-gray-300 text-sm flex items-start gap-2 mb-3">
+                                        <i data-lucide="info" class="text-indigo-400 flex-shrink-0 mt-0.5" style="width:14px;height:14px;stroke-width:2"></i>
+                                        <span>จดจำ path ที่แตกไฟล์ไว้ — จะใช้ในขั้นตอนถัดไป (Step 3 + Step 4)</span>
+                                    </p>
+                                    <details class="cursor-pointer">
+                                        <summary class="text-xs text-gray-400 hover:text-indigo-300 transition py-1.5 select-none inline-flex items-center gap-1.5">
+                                            <i data-lucide="folder-tree" style="width:12px;height:12px;stroke-width:2"></i>
+                                            ดูโครงสร้าง folder ที่จะได้
+                                        </summary>
+                                        <div class="bg-slate-900/80 rounded-lg p-3 border border-white/[0.06] mt-2">
+                                            <pre class="font-mono text-xs text-gray-300 leading-relaxed"><span class="text-yellow-400">MBB\</span>
+├── <span class="text-cyan-300">MBB.exe</span>                    <span class="text-gray-500"># โปรแกรมหลัก</span>
+├── <span class="text-cyan-300">MBB-Updater.exe</span>            <span class="text-gray-500"># อัพเดตเวอร์ชั่นใหม่</span>
+├── <span class="text-yellow-400">plugin\</span>                  <span class="text-gray-500"># Dalamud plugin</span>
+│   ├── <span class="text-cyan-300">DalamudMBBBridge.dll</span>
+│   ├── DalamudMBBBridge.json
+│   └── icon.png
+├── npc.json                 <span class="text-gray-500"># ฐานข้อมูลตัวละคร</span>
+├── npc_images\              <span class="text-gray-500"># รูป avatar</span>
+├── _internal\               <span class="text-gray-500"># Python runtime (ห้ามแตะ)</span>
+└── ...</pre>
+                                        </div>
+                                    </details>
                                 </div>
                                 <div class="md:w-56 flex-shrink-0">
                                     <div class="img-placeholder" style="min-height:160px;">
-                                        <div class="ph-icon"><i data-lucide="package" style="width:36px;height:36px;stroke-width:1.25"></i></div>
-                                        <div class="ph-name">install_step1.png</div>
-                                        <div class="ph-size">MBB Installer</div>
+                                        <div class="ph-icon"><i data-lucide="folder-tree" style="width:36px;height:36px;stroke-width:1.25"></i></div>
+                                        <div class="ph-name">extracted_folder.png</div>
+                                        <div class="ph-size">MBB folder layout</div>
                                     </div>
                                 </div>
                             </div>
@@ -1760,7 +1841,7 @@
                                     <ol class="space-y-2.5 mb-4">
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">1</span>
-                                            <span class="text-gray-300 text-sm">เปิดเกม → เปิด <strong class="text-white">Dalamud Settings</strong></span>
+                                            <span class="text-gray-300 text-sm">เปิดเกม → พิมพ์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">/xlsettings</code> ใน chat</span>
                                         </li>
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">2</span>
@@ -1768,15 +1849,20 @@
                                         </li>
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">3</span>
-                                            <span class="text-gray-300 text-sm">ที่หัวข้อ <strong class="text-white">Dev Plugin Locations</strong> → กด <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">Select Dev Plugin DLL</code></span>
+                                            <span class="text-gray-300 text-sm">ที่หัวข้อ <strong class="text-white">Dev Plugin Locations</strong> → กด <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">+</code> เพิ่มแถวใหม่ → กด <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">...</code> Browse</span>
                                         </li>
                                         <li class="flex items-start gap-3">
                                             <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">4</span>
-                                            <span class="text-gray-300 text-sm">เลือกไฟล์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">DalamudMBBBridge.dll</code> → Plugin จะปรากฏในรายการ</span>
+                                            <span class="text-gray-300 text-sm">ไปที่ folder <strong class="text-white">MBB ที่แตกไว้</strong> → เข้าไปใน folder <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">plugin\</code> → เลือกไฟล์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">DalamudMBBBridge.dll</code></span>
+                                        </li>
+                                        <li class="flex items-start gap-3">
+                                            <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">5</span>
+                                            <span class="text-gray-300 text-sm">กด <strong class="text-white">Save and Close</strong> → พิมพ์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">/xlplugins</code> → Plugin จะปรากฏในรายการ "Dev Tools"</span>
                                         </li>
                                     </ol>
+                                    <p class="text-gray-400 text-xs mb-2">ตัวอย่าง path (เปลี่ยนตามที่คุณแตกไฟล์):</p>
                                     <div class="bg-slate-900/80 rounded-lg p-3 flex items-center gap-2 border border-white/[0.06] cursor-pointer copy-path-btn" onclick="copyPath(this)" title="คลิกเพื่อคัดลอก">
-                                        <code class="font-mono text-xs text-cyan-300 break-all flex-1 select-all">C:\MBB_Dalamud\DalamudMBBBridge\bin\Release\DalamudMBBBridge.dll</code>
+                                        <code class="font-mono text-xs text-cyan-300 break-all flex-1 select-all">D:\MBB\plugin\DalamudMBBBridge.dll</code>
                                         <span class="icon-copy text-gray-500 flex-shrink-0"><i data-lucide="copy" style="width:14px;height:14px"></i></span>
                                         <span class="icon-check text-emerald-400 flex-shrink-0" style="display:none"><i data-lucide="check" style="width:14px;height:14px"></i></span>
                                     </div>
@@ -1784,18 +1870,135 @@
                                 <div class="md:w-72 flex-shrink-0 space-y-3">
                                     <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772952047/dalamud01_gpqx6v.png"
                                          alt="Dalamud Plugin List — MBB Bridge" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
-                                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772952047/dalamud02_yajwup.png"
-                                         alt="Dalamud Settings — Dev Plugin DLL" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
+                                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249383/UI_element01_GUI_y9ei0q.png"
+                                         alt="Dalamud Dev Plugin Locations — เลือก path" class="zoomable-image w-full rounded-xl shadow-lg" loading="lazy">
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Step 4 — API Key + START -->
+                <!-- Step 4 — Configure MBB.exe (path + admin combined) -->
                 <div class="accordion-step" data-step="4">
                     <div class="accordion-header" onclick="toggleStep(this)">
                         <span class="step-num">4</span>
+                        <span class="step-title">ตั้งค่า MBB.exe ให้พร้อมใช้งาน</span>
+                        <i data-lucide="chevron-down" class="step-chevron" style="width:20px;height:20px;stroke-width:2"></i>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <!-- TL;DR — สรุปง่ายๆ ตัวใหญ่บนสุด -->
+                            <div class="bg-gradient-to-br from-emerald-900/50 to-cyan-900/40 border border-emerald-500/30 rounded-2xl p-5 md:p-6 mb-5">
+                                <p class="text-[10px] md:text-xs text-emerald-300/80 uppercase mb-2" style="letter-spacing:0.18em;">สรุปวิธีง่ายๆ</p>
+                                <p class="text-xl md:text-2xl font-black text-white leading-snug tracking-tight">
+                                    เปิดเกม
+                                    <span class="text-emerald-300 mx-1">›</span>
+                                    คลิกขวา <code class="bg-slate-900/70 text-cyan-300 rounded px-2 py-0.5 text-lg md:text-xl">MBB.exe</code>
+                                    <span class="text-emerald-300 mx-1">›</span>
+                                    <span class="text-emerald-300">Run as Admin</span>
+                                    <span class="text-emerald-400">เล่นได้เลย!</span>
+                                </p>
+                            </div>
+
+                            <!-- "อ่านเพิ่มเติม" bar — wraps ALL the detailed content below -->
+                            <details class="cursor-pointer mt-3">
+                                <summary class="select-none py-3 px-4 rounded-xl bg-slate-800/40 border border-white/[0.06] hover:bg-slate-800/70 hover:border-indigo-500/40 transition flex items-center justify-between gap-3">
+                                    <span class="flex items-center gap-2.5 text-left">
+                                        <i data-lucide="chevron-right" class="text-indigo-400 flex-shrink-0" style="width:14px;height:14px;stroke-width:2.5"></i>
+                                        <span class="text-sm text-gray-300">สำหรับผู้ที่ต้องการรันโปรแกรมผ่าน <strong class="text-white">shortcut ในเกม</strong> ได้</span>
+                                    </span>
+                                    <span class="text-xs text-indigo-300 font-semibold flex-shrink-0">อ่านเพิ่มเติม »</span>
+                                </summary>
+                                <div class="mt-5">
+                                    <p class="text-gray-300 mb-3 leading-relaxed">
+                                        ขั้นนี้ทำ <strong class="text-white">2 อย่าง</strong> — (1) บอก Dalamud ว่า MBB.exe อยู่ตรงไหน เพื่อให้กดเปิดจากในเกมได้ (ใส่ใน macro hotbar slot สะดวก) และ (2) ตั้งให้รันด้วยสิทธิ์ <strong class="text-white">Administrator</strong> เพื่อให้ฟีเจอร์ keyboard hook (เช่น <strong class="text-white">ซ่อน TUI ตอนกด WASD วิ่ง</strong>) ทำงานได้
+                                    </p>
+                                    <div class="bg-cyan-900/30 border border-cyan-500/30 rounded-lg p-3 mb-5">
+                                        <p class="text-cyan-200 text-sm flex items-start gap-2">
+                                            <i data-lucide="info" class="text-cyan-400 flex-shrink-0 mt-0.5" style="width:14px;height:14px;stroke-width:2"></i>
+                                            <span><strong class="text-cyan-300">ไม่ตั้ง path ก็ใช้งานได้</strong> — ดับเบิ้ลคลิก <code class="bg-slate-800 rounded px-1 text-xs">MBB.exe</code> ในโฟลเดอร์เปิดเองหลังเปิดเกมก็ได้ แต่ <strong class="text-white">"Run as Admin"</strong> แนะนำให้ตั้งเสมอ ไม่งั้นปุ่มลัด WASD ใช้ไม่ได้</span>
+                                        </p>
+                                    </div>
+
+                            <!-- 4A — Run as Administrator -->
+                            <h4 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                                <span class="bg-emerald-700/60 text-emerald-100 rounded px-2 py-0.5 text-xs">4A</span>
+                                ตั้ง Run as Administrator (ครั้งเดียวจบ)
+                            </h4>
+                            <ol class="space-y-2 mb-3 ml-1">
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">1</span>
+                                    <span class="text-gray-300 text-sm"><strong class="text-white">คลิกขวา</strong> ที่ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">MBB.exe</code> ในโฟลเดอร์ → <strong class="text-white">Properties</strong> (คุณสมบัติ)</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">2</span>
+                                    <span class="text-gray-300 text-sm">แท็บ <strong class="text-white">Compatibility</strong> → ติ๊ก ☑ <strong class="text-white">"Run this program as an administrator"</strong> → <strong class="text-white">Apply</strong> → <strong class="text-white">OK</strong></span>
+                                </li>
+                            </ol>
+                            <div class="bg-amber-900/30 border border-amber-500/30 rounded-lg p-3 mb-3">
+                                <p class="text-amber-200 text-sm flex items-start gap-2">
+                                    <i data-lucide="info" class="text-amber-400 flex-shrink-0 mt-0.5" style="width:14px;height:14px;stroke-width:2"></i>
+                                    <span>ตั้งครั้งเดียวพอ — ครั้งต่อๆ ไปดับเบิ้ลคลิก MBB.exe จะถาม UAC ทีนึงแล้วเปิดเป็น admin ให้เลย</span>
+                                </p>
+                            </div>
+                            <details class="cursor-pointer mb-6">
+                                <summary class="text-xs text-gray-400 hover:text-emerald-300 transition py-1.5 select-none inline-flex items-center gap-1.5">
+                                    <i data-lucide="help-circle" style="width:12px;height:12px;stroke-width:2"></i>
+                                    ทำไมต้องตั้งเป็น Admin?
+                                </summary>
+                                <div class="bg-emerald-900/20 border border-emerald-500/20 rounded-lg p-3 mt-2">
+                                    <p class="text-emerald-200/90 text-sm leading-relaxed">
+                                        Keyboard hook ของ MBB (เช่นการตรวจจับปุ่ม WASD เพื่อซ่อน TUI ขณะวิ่ง) ต้องใช้สิทธิ์ admin เพื่อ "เห็น" คีย์บอร์ดได้ตอนที่ FFXIV เป็น window ที่ active — เพราะเกมรันด้วยสิทธิ์ admin ของตัวเอง โปรแกรมข้างนอกที่จะ hook ได้ต้องอยู่ระดับเดียวกันหรือสูงกว่า
+                                    </p>
+                                </div>
+                            </details>
+
+                            <!-- 4B — Configure Path (collapsible — optional convenience) -->
+                            <details class="cursor-pointer">
+                                <summary class="select-none py-2 inline-flex items-center gap-2 hover:text-indigo-200 transition">
+                                    <span class="bg-indigo-700/60 text-indigo-100 rounded px-2 py-0.5 text-xs font-bold">4B</span>
+                                    <span class="text-sm font-bold text-white">ตั้ง Path สำหรับเปิดจากในเกม</span>
+                                    <span class="text-xs text-gray-400 font-normal">(ทางเลือก · กดดูรายละเอียด)</span>
+                                    <i data-lucide="chevron-down" class="text-gray-400" style="width:14px;height:14px;stroke-width:2"></i>
+                                </summary>
+                                <div class="mt-3 pl-1">
+                                    <p class="text-xs text-gray-400 mb-3 leading-relaxed">
+                                        ตั้งครั้งเดียว เพื่อเปิด MBB จากในเกมได้ — ใช้คำสั่ง <code class="bg-slate-800 rounded px-1 text-cyan-300">/mbb launch</code> หรือใส่เป็น macro ใน hotbar slot สะดวก
+                                    </p>
+                                    <ol class="space-y-2 mb-3 ml-1">
+                                        <li class="flex items-start gap-3">
+                                            <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">1</span>
+                                            <span class="text-gray-300 text-sm">ในเกม → พิมพ์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">/mbb</code> ใน chat → หน้าต่าง config เปิดขึ้น</span>
+                                        </li>
+                                        <li class="flex items-start gap-3">
+                                            <span class="bg-slate-700/80 text-indigo-300 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">2</span>
+                                            <span class="text-gray-300 text-sm">หาส่วน <strong class="text-white">📁 MBB Path Configuration</strong> → กด <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">Browse...</code> → เลือกไฟล์ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">MBB.exe</code> → กด <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">Save Path</code></span>
+                                        </li>
+                                    </ol>
+                                    <p class="text-gray-400 text-xs mb-2">ตัวอย่าง path (เปลี่ยนตามที่คุณแตกไฟล์):</p>
+                                    <div class="bg-slate-900/80 rounded-lg p-3 flex items-center gap-2 border border-white/[0.06] cursor-pointer copy-path-btn mb-3" onclick="copyPath(this)" title="คลิกเพื่อคัดลอก">
+                                        <code class="font-mono text-xs text-cyan-300 break-all flex-1 select-all">D:\MBB\MBB.exe</code>
+                                        <span class="icon-copy text-gray-500 flex-shrink-0"><i data-lucide="copy" style="width:14px;height:14px"></i></span>
+                                        <span class="icon-check text-emerald-400 flex-shrink-0" style="display:none"><i data-lucide="check" style="width:14px;height:14px"></i></span>
+                                    </div>
+                                    <div class="bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-3">
+                                        <p class="text-emerald-200 text-sm flex items-start gap-2">
+                                            <i data-lucide="zap" class="text-emerald-400 flex-shrink-0 mt-0.5" style="width:14px;height:14px;stroke-width:2"></i>
+                                            <span>หลังตั้ง path เสร็จ — ใช้คำสั่ง <code class="bg-slate-800 text-cyan-300 rounded px-1 text-xs">/mbb launch</code> หรือกดปุ่ม <strong class="text-emerald-300">"Launch MBB Application"</strong> ในหน้า <code class="bg-slate-800 text-cyan-300 rounded px-1 text-xs">/mbb</code> เปิด MBB ได้จากในเกมเลย (ใส่ใน macro hotbar ก็ได้)</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </details>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5 — API Key + START -->
+                <div class="accordion-step" data-step="5">
+                    <div class="accordion-header" onclick="toggleStep(this)">
+                        <span class="step-num">5</span>
                         <span class="step-title">ใส่ API Key แล้วเล่นเลย!</span>
                         <i data-lucide="chevron-down" class="step-chevron" style="width:20px;height:20px;stroke-width:2"></i>
                     </div>
@@ -1836,6 +2039,66 @@
     </section>
 
     <!-- ═══════════════════════════════════════════════════ -->
+    <!-- UPDATE GUIDE — v1.8.4+                             -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <section id="update" class="py-12 md:py-16 dark-section">
+        <div class="container mx-auto px-4 md:px-8 max-w-4xl">
+            <div class="text-center mb-8">
+                <p class="text-xs text-gray-500 uppercase mb-2" style="letter-spacing:0.18em;">For existing users · v1.8.4+</p>
+                <h2 class="text-2xl md:text-3xl font-bold inline-block text-white">
+                    อัพเดตเป็น<span class="grad-text">เวอร์ชั่นใหม่</span>
+                </h2>
+            </div>
+
+            <div class="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-6 md:p-8 backdrop-blur-sm">
+                <p class="text-gray-300 mb-6 leading-relaxed">
+                    ตั้งแต่ v1.8.4 เป็นต้นไป — ในโฟลเดอร์ MBB ของคุณจะมีไฟล์
+                    <code class="bg-slate-700 text-cyan-300 rounded px-1.5 py-0.5 text-sm">MBB-Updater.exe</code>
+                    ติดมาด้วย ใช้สำหรับอัพเดตเป็นเวอร์ชั่นใหม่ <strong class="text-white">โดยไม่ต้องดาวน์โหลด zip ใหม่ทั้งหมด</strong>
+                </p>
+
+                <ol class="space-y-3 mb-5">
+                    <li class="flex items-start gap-3">
+                        <span class="bg-emerald-700/40 text-emerald-200 rounded-full w-7 h-7 flex items-center justify-center flex-shrink-0 text-xs font-bold">1</span>
+                        <span class="text-gray-300 text-sm pt-0.5">ปิด <strong class="text-white">FFXIV</strong> และ <strong class="text-white">MBB.exe</strong> ถ้าเปิดอยู่</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="bg-emerald-700/40 text-emerald-200 rounded-full w-7 h-7 flex items-center justify-center flex-shrink-0 text-xs font-bold">2</span>
+                        <span class="text-gray-300 text-sm pt-0.5">เข้าโฟลเดอร์ MBB → <strong class="text-white">ดับเบิลคลิก</strong> ที่ <code class="bg-slate-700 text-cyan-300 rounded px-1 text-xs">MBB-Updater.exe</code></span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="bg-emerald-700/40 text-emerald-200 rounded-full w-7 h-7 flex items-center justify-center flex-shrink-0 text-xs font-bold">3</span>
+                        <span class="text-gray-300 text-sm pt-0.5">หน้าต่าง Updater แสดงเวอร์ชั่นปัจจุบัน + เวอร์ชั่นล่าสุด → กด <strong class="text-emerald-300">"Update Now"</strong> → รอดาวน์โหลดเสร็จ</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="bg-emerald-700/40 text-emerald-200 rounded-full w-7 h-7 flex items-center justify-center flex-shrink-0 text-xs font-bold">4</span>
+                        <span class="text-gray-300 text-sm pt-0.5">เสร็จแล้วกด <strong class="text-emerald-300">"🚀 Launch MBB"</strong> เพื่อใช้งานเวอร์ชั่นใหม่ทันที</span>
+                    </li>
+                </ol>
+
+                <div class="bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-3 mb-3">
+                    <p class="text-emerald-200 text-sm flex items-start gap-2">
+                        <i data-lucide="shield-check" class="text-emerald-400 flex-shrink-0 mt-0.5" style="width:15px;height:15px;stroke-width:2"></i>
+                        <span><strong class="text-emerald-300">ข้อมูลของคุณปลอดภัย</strong> — Updater เก็บ
+                        <code class="bg-slate-800 rounded px-1 text-xs">npc.json</code>,
+                        <code class="bg-slate-800 rounded px-1 text-xs">npc_images/</code>,
+                        <code class="bg-slate-800 rounded px-1 text-xs">settings.json</code>,
+                        และ API key ไว้ครบ ไม่หาย</span>
+                    </p>
+                </div>
+
+                <div class="bg-amber-900/30 border border-amber-500/30 rounded-lg p-3">
+                    <p class="text-amber-200 text-sm flex items-start gap-2">
+                        <i data-lucide="alert-circle" class="text-amber-400 flex-shrink-0 mt-0.5" style="width:15px;height:15px;stroke-width:2"></i>
+                        <span><strong class="text-amber-300">ถ้า Antivirus ลบ MBB-Updater.exe</strong> — เป็นปัญหา false positive ของ PyInstaller exe ทั่วไป
+                        ใส่ folder MBB เป็น exception ใน AV หรือดาวน์โหลด zip ใหม่ทั้งก้อนแทน</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ -->
     <!-- DOWNLOAD + REQUIREMENTS                            -->
     <!-- ═══════════════════════════════════════════════════ -->
     <section id="download" class="py-12 md:py-20 hero-gradient">
@@ -1845,9 +2108,16 @@
             <h2 class="text-2xl md:text-3xl font-bold mb-3 text-white download-cta-heading">พร้อมทลายกำแพงภาษาแล้วหรือยัง?</h2>
             <p class="text-sm text-gray-400 mb-8">สัมผัสเนื้อเรื่อง FFXIV ที่คุณรักได้ลึกซึ้งยิ่งขึ้น</p>
 
-            <a href="#install" class="btn-primary px-8 py-3.5 rounded-full font-semibold text-base shadow-lg inline-flex items-center download-cta-btn">
-                <i data-lucide="rocket" class="mr-2" style="width:16px;height:16px"></i>เริ่มใช้งาน
-            </a>
+            <div class="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                <a href="https://github.com/iarcanar/MBB_Dalamud/releases/latest"
+                   target="_blank" rel="noopener"
+                   class="btn-primary px-8 py-3.5 rounded-full font-semibold text-base shadow-lg inline-flex items-center download-cta-btn">
+                    <i data-lucide="download" class="mr-2" style="width:16px;height:16px;stroke-width:2.5"></i>ดาวน์โหลด v1.8.4
+                </a>
+                <a href="#install" class="text-gray-300 hover:text-white transition text-sm inline-flex items-center gap-1.5">
+                    <i data-lucide="book-open" style="width:14px;height:14px"></i>วิธีติดตั้ง
+                </a>
+            </div>
 
             <!-- Requirements — compact inline -->
             <div class="mt-10 pt-6 border-t border-white/[0.06]">
@@ -1856,6 +2126,7 @@
                     <span class="flex items-center gap-1.5"><i data-lucide="monitor" class="text-indigo-400/60" style="width:13px;height:13px"></i>Windows 10/11</span>
                     <span class="flex items-center gap-1.5"><i data-lucide="gamepad-2" class="text-indigo-400/60" style="width:13px;height:13px"></i>FFXIV + Dalamud</span>
                     <span class="flex items-center gap-1.5"><i data-lucide="key-round" class="text-indigo-400/60" style="width:13px;height:13px"></i>Gemini API Key (ฟรี)</span>
+                    <span class="flex items-center gap-1.5"><i data-lucide="hard-drive" class="text-indigo-400/60" style="width:13px;height:13px"></i>พื้นที่ว่าง ~350 MB</span>
                     <span class="flex items-center gap-1.5"><i data-lucide="wifi" class="text-indigo-400/60" style="width:13px;height:13px"></i>อินเทอร์เน็ต</span>
                 </div>
             </div>
