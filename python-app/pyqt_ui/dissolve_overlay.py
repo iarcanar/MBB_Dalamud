@@ -326,6 +326,12 @@ class DissolveOverlay(QWidget):
 
         # (Re)start auto-hide countdown — every new text resets the clock.
         self._auto_hide_timer.start()
+        log.info(
+            f"[DISSOLVE-DBG] set_text({self._current_mode}): "
+            f"speaker={speaker!r} len={len(self._text)} "
+            f"current_geom=({self.x()},{self.y()},{self.width()}x{self.height()}) "
+            f"opacity={self.windowOpacity():.2f}"
+        )
         self.update()
 
     def show_for_mode(self, mode: str) -> None:
@@ -379,9 +385,16 @@ class DissolveOverlay(QWidget):
 
         # Clamp to primary screen so a stale saved position can't push the
         # window off-screen (e.g. user unplugged a monitor)
-        x, y, w, h = self._clamp_to_screen(x, y, w, h)
+        x_clamped, y_clamped, w_clamped, h_clamped = self._clamp_to_screen(x, y, w, h)
 
-        self.setGeometry(x, y, w, h)
+        log.info(
+            f"[DISSOLVE-DBG] show_for_mode({mode}): "
+            f"loaded pos=({pos_dict.get('x')}, {pos_dict.get('y')}) "
+            f"size=({size_dict.get('w')}, {size_dict.get('h')}) "
+            f"→ clamped=({x_clamped},{y_clamped},{w_clamped}x{h_clamped})"
+        )
+
+        self.setGeometry(x_clamped, y_clamped, w_clamped, h_clamped)
         self._reposition_chrome()
         self.show()
         self.raise_()
@@ -442,11 +455,13 @@ class DissolveOverlay(QWidget):
             return
         if self._cursor_inside:
             # User is interacting — defer hide until they move away
+            log.info(f"[DISSOLVE-DBG] auto_hide deferred: cursor inside overlay")
             self._auto_hide_timer.start()
             return
         # Already fading? Let it finish.
         if self._fade_anim.state() == QAbstractAnimation.State.Running:
             return
+        log.info(f"[DISSOLVE-DBG] auto_hide START fade-out (mode={self._current_mode})")
         self._fade_anim.stop()
         self._fade_anim.setStartValue(self.windowOpacity())
         self._fade_anim.setEndValue(0.0)
@@ -456,6 +471,7 @@ class DissolveOverlay(QWidget):
         """When the fade-out completes (opacity ≈ 0), actually hide the
         window. Reset opacity to 1.0 so the next show isn't invisible."""
         if self.windowOpacity() <= 0.05 and self.isVisible():
+            log.info(f"[DISSOLVE-DBG] auto_hide COMPLETE → hide() (mode={self._current_mode})")
             self.hide()
             self.setWindowOpacity(1.0)
 
@@ -522,6 +538,11 @@ class DissolveOverlay(QWidget):
                 geometries = {}
             geometries[mode] = {"w": int(self.width()), "h": int(self.height())}
             self._settings.set("tui_geometries", geometries, save_immediately=True)
+            log.info(
+                f"[DISSOLVE-DBG] OVERLAY saved {mode}: "
+                f"pos=({int(self.x())},{int(self.y())}) "
+                f"size=({int(self.width())}x{int(self.height())})"
+            )
         except Exception as e:
             log.debug(f"save_geometry_now failed: {e}")
 
@@ -698,9 +719,10 @@ class DissolveOverlay(QWidget):
             body_h = max_body_h
 
         block_h = speaker_line_h + spacing + body_h
-        # Top-anchor the speaker+body block so battle/cutscene reads from the
-        # top of the overlay (matches TUI v4 behavior — overlay grows downward).
-        block_top = pad_y
+        # Center the speaker+body block vertically in the overlay so the text
+        # sits in the middle of the dissolve gradient. pad_y is the floor —
+        # if the block is taller than (h - 2*pad_y), it pins to the top edge.
+        block_top = max(pad_y, (h - block_h) // 2)
 
         # ── 2a. Speaker (centered, smaller, bold, mode color) ──
         if speaker:

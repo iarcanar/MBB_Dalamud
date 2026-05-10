@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.8.5
+**Version:** 1.8.6
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -50,9 +50,53 @@ C:\MBB_Dalamud/
 - [x] Translation tuning + Theme/NPC polish (v1.8.1, 2026-04-27)
 - [x] NPC Manager database visibility + merge tool (v1.8.4, 2026-05-08)
 - [x] TUI architecture overhaul — Win32 resize + DissolveOverlay + file split (v1.8.5, 2026-05-10)
+- [x] DissolveOverlay coordination fixes — mode reload on switch, JSON cleanup, vertical centering, auto-hide (v1.8.6, 2026-05-10)
 - [x] NPC Manager Polaroid view + WebP avatar storage (v1.8.2, 2026-04-27)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
+
+---
+
+## Changelog — v1.8.6 (2026-05-10)
+
+### DissolveOverlay coordination — final stabilization
+
+After v1.8.5 user testing surfaced 3 follow-on bugs in the dispatcher / paint logic. All fixed.
+
+**1. Cross-mode position contamination — Tk save logic ran with wrong mode flag** ([translated_ui.py:_route_to_dissolve_overlay](python-app/translated_ui.py))
+- Symptom: clicking Battle when Dialogue was at the bottom → Battle overlay appears at the bottom (dialogue's position) instead of top.
+- Root cause: dispatcher updated `current_chat_type` + `battle_mode_active` BEFORE withdrawing root. Pending Tk move/resize debounce timers (from a previous drag) then fired with `_get_current_mode_name()` returning "battle" while `winfo_x/y` still reported dialogue's last position → `_save_current_position_to_settings` clobbered `tui_positions["battle"]` with dialogue coords.
+- Fix: dispatcher no longer updates Tk's mode flags (those represent the **rendered** Tkinter state, which doesn't change while overlay is active). Also explicitly cancels `move_end_timer` + `resize_end_timer` + `_deferred_render_id` to kill any pending stale saves.
+- Side benefit: when overlay exits back to dialogue, `set_display_mode_for_chat_type(61)` short-circuits because `current_chat_type` is still 61 — no spurious mode-transition save.
+
+**2. Mode switch within overlay didn't reload geometry** ([translated_ui.py dispatcher block](python-app/translated_ui.py))
+- Symptom: Battle → Cutscene transition kept Battle's position. Cutscene appeared at top instead of its own saved bottom position.
+- Root cause: when overlay was already visible, dispatcher only called `set_mode(mode)` (color change) and skipped `show_for_mode(mode)` (geometry reload). Cutscene rendered at Battle's `setGeometry`.
+- Fix: dispatcher now compares `dissolve_overlay._current_mode != mode` and calls `show_for_mode` whenever mode changes. `show_for_mode` is idempotent — `show()` on a visible window is a no-op.
+
+**3. Vertical centering of overlay text** ([pyqt_ui/dissolve_overlay.py paintEvent](python-app/pyqt_ui/dissolve_overlay.py))
+- v1.8.5 anchored text at top (`block_top = pad_y`) per misread of "ตรงกลางด้านบน".
+- User wants speaker+body block centered vertically within the gradient. Fix: `block_top = max(pad_y, (h - block_h) // 2)`.
+
+**4. Settings JSON cleanup procedure**
+- The bug pattern in #1 had ALREADY corrupted users' `tui_positions["battle"]` and `tui_positions["cutscene"]` to dialogue's position before the fix. Reset procedure: delete `tui_positions[battle/cutscene]` + `tui_geometries[battle/cutscene]` from `python-app/settings.json` so DissolveOverlay falls back to defaults (battle=top-center, cutscene=bottom-center) and re-saves clean values on next show.
+
+### Diagnostic infrastructure
+
+Added `[DISSOLVE-DBG]` trace logs at every dispatch + save site (overlay + Tk). Log format makes it trivial to grep dispatcher behavior:
+```
+route_to_overlay: mode=X chat_type=Y tk_state=Z dissolve_active=B tk_was_visible=B
+Tk root WITHDRAWN | Tk withdraw skipped: ...
+dispatcher: reload geometry (visible=B overlay_mode=A → B)
+show_for_mode(M): loaded pos=(X,Y) size=(W,H) → clamped=...
+set_text(M): speaker=S len=N current_geom=...
+OVERLAY saved M: pos=... size=...   |   TK saved M: pos=... [mode_flags ...]
+```
+Keep these in for now — cheap to maintain, invaluable for the next mode-switch bug.
+
+### v1.9.0 module split plan saved
+
+If shared-state bugs re-surface, see [project_tui_split_plan_v190.md](memory) for the architectural alternative (split TUI_dialog/TUI_battle/TUI_cutscene/TUI_choice into separate modules). Deferred — not a 1.8.x scope.
 
 ---
 

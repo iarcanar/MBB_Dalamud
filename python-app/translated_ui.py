@@ -734,7 +734,9 @@ class Translated_UI(FontObserver):
             self.settings.set("tui_positions", tui_positions)
             self.settings.save_settings()
 
-            logging.info(f"💾 Saved {mode} position: x={x}, y={y}")
+            logging.info(f"[DISSOLVE-DBG] TK saved {mode} pos=({x},{y}) "
+                f"[mode_flags battle={self.battle_mode_active} "
+                f"cutscene={self.cutscene_mode_active}]")
         except Exception as e:
             logging.error(f"Error saving position: {e}")
 
@@ -770,7 +772,9 @@ class Translated_UI(FontObserver):
             self.settings.set("tui_geometries", tui_geometries)
             self.settings.save_settings()
 
-            logging.info(f"💾 Saved {mode} size: {w}×{h}")
+            logging.info(f"[DISSOLVE-DBG] TK saved {mode} size=({w}x{h}) "
+                f"[mode_flags battle={self.battle_mode_active} "
+                f"cutscene={self.cutscene_mode_active}]")
         except Exception as e:
             logging.error(f"Error saving size: {e}")
 
@@ -2187,11 +2191,27 @@ class Translated_UI(FontObserver):
         AND self.dissolve_overlay is wired. Cancels any pending Tkinter fade
         timers so the legacy UI doesn't fight us."""
         mode = "battle" if chat_type == 68 else "cutscene"
+        try:
+            tk_state = self.root.state() if self.root.winfo_exists() else "destroyed"
+        except Exception:
+            tk_state = "?"
+        logging.info(
+            f"[DISSOLVE-DBG] route_to_overlay: mode={mode} chat_type={chat_type} "
+            f"tk_state={tk_state} dissolve_active={self._dissolve_active} "
+            f"tk_was_visible={self._tk_was_visible_before_dissolve}"
+        )
 
         # Cancel pending fade/hide timers — leftover Tkinter fade chains can
         # otherwise reappear and try to manipulate the now-hidden root.
         # Also kill _deferred_render_id so a previous dialogue's deferred render
         # can't paint stale text onto the canvas after we've withdrawn root.
+        # CRITICAL: also cancel pending move_end_timer / resize_end_timer.
+        # Without this, a Tk drag-end timer from a previous dialog session
+        # fires AFTER we withdraw + AFTER we'd updated mode flags below — and
+        # _save_current_position_to_settings reads winfo_x/y of the just-
+        # withdrawn root (still at dialog's position) and saves to whichever
+        # mode the flags say. That clobbered tui_positions["battle"] with
+        # dialog's last drag-end position. Fix: kill the pending timers.
         try:
             if getattr(self.state, "fade_timer_id", None):
                 self.root.after_cancel(self.state.fade_timer_id)
@@ -2202,20 +2222,27 @@ class Translated_UI(FontObserver):
             if getattr(self, "_deferred_render_id", None):
                 self.root.after_cancel(self._deferred_render_id)
                 self._deferred_render_id = None
+            if getattr(self, "move_end_timer", None):
+                self.root.after_cancel(self.move_end_timer)
+                self.move_end_timer = None
+                self.is_moving = False
+            if getattr(self, "resize_end_timer", None):
+                self.root.after_cancel(self.resize_end_timer)
+                self.resize_end_timer = None
+                self.is_resizing = False
             self.state.is_fading = False
         except Exception:
             pass
 
-        # Track current chat type so set_display_mode_for_chat_type's "skip if
-        # already in correct mode" logic stays consistent on subsequent updates.
-        self.current_chat_type = chat_type
-        if chat_type == 68:
-            self.battle_mode_active = True
-            self.cutscene_mode_active = False
-        else:
-            self.cutscene_mode_active = True
-            self.battle_mode_active = False
-        self.choice_mode_active = False
+        # ⚠ DO NOT update current_chat_type / battle_mode_active /
+        # cutscene_mode_active here. Those flags are *Tkinter TUI state*.
+        # While the overlay is active, the Tkinter UI is HIDDEN and isn't
+        # rendering anything — its mode should not change. If we update them,
+        # _get_current_mode_name() returns the new mode → any pending Tk
+        # move/resize save fires and writes the WRONG mode's saved geometry.
+        # When the user exits overlay back to dialogue, set_display_mode_for_chat_type
+        # will see current_chat_type unchanged → returns False → no transition,
+        # which is exactly what we want (Tkinter never left dialog mode).
 
         # Hide the Tkinter root if it's currently visible
         try:
@@ -2224,9 +2251,13 @@ class Translated_UI(FontObserver):
                 if state == "normal" and not self._dissolve_active:
                     self._tk_was_visible_before_dissolve = True
                     self.root.withdraw()
+                    logging.info(f"[DISSOLVE-DBG] Tk root WITHDRAWN (was normal)")
                 elif not self._dissolve_active:
                     # Already withdrawn — remember so we don't deiconify on exit
                     self._tk_was_visible_before_dissolve = False
+                    logging.info(f"[DISSOLVE-DBG] Tk root state={state}, marked tk_was_visible=False")
+                else:
+                    logging.info(f"[DISSOLVE-DBG] Tk withdraw skipped: dissolve_active=True")
         except Exception as e:
             logging.debug(f"hide tkinter root for dissolve overlay failed: {e}")
 
@@ -2237,13 +2268,23 @@ class Translated_UI(FontObserver):
 
         # Show + paint the overlay
         try:
-            # If overlay isn't visible yet, load per-mode geometry first
-            if not self.dissolve_overlay.isVisible():
+            # CRITICAL: reload per-mode geometry whenever the mode CHANGES,
+            # even if overlay is already visible. Without this, switching
+            # battle → cutscene only changes the text color (set_mode) and
+            # the cutscene text appears at battle's geometry. show_for_mode
+            # is idempotent — show() on a visible window is a no-op.
+            current_overlay_mode = getattr(self.dissolve_overlay, "_current_mode", None)
+            needs_reload = (
+                not self.dissolve_overlay.isVisible()
+                or current_overlay_mode != mode
+            )
+            if needs_reload:
+                logging.info(
+                    f"[DISSOLVE-DBG] dispatcher: reload geometry "
+                    f"(visible={self.dissolve_overlay.isVisible()} "
+                    f"overlay_mode={current_overlay_mode} → {mode})"
+                )
                 self.dissolve_overlay.show_for_mode(mode)
-            else:
-                # Already visible — switch mode (might be cutscene → battle
-                # transition with no hide in between)
-                self.dissolve_overlay.set_mode(mode)
             self.dissolve_overlay.set_text(
                 dialogue, speaker=speaker, is_lore=is_lore_text,
             )
