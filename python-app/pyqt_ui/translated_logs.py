@@ -454,6 +454,17 @@ class TranslatedLogsPanel(QWidget):
 
     closed = pyqtSignal()  # emitted when user clicks the close button
 
+    # Transparency step-lock — slider snaps to one of these 4 levels instead of
+    # 91 free values. Drastically reduces work during drag: dragging from 12 to
+    # 80 fires 6+ valueChanged events but only 2 actual stylesheet updates
+    # (10 → 40 → 80). See _on_transparency_changed for the snap logic.
+    TRANSPARENCY_STEPS = (10, 40, 80, 100)
+
+    @classmethod
+    def _snap_to_step(cls, value: int) -> int:
+        """Round any int 0-100 to the nearest TRANSPARENCY_STEPS entry."""
+        return min(cls.TRANSPARENCY_STEPS, key=lambda s: abs(s - value))
+
     def __init__(self, settings, main_app=None, on_close_callback=None):
         super().__init__()
         self.settings = settings
@@ -476,12 +487,14 @@ class TranslatedLogsPanel(QWidget):
         self._font_family = logs_settings.get("font_family", "Anuphan")
         self._font_size = int(logs_settings.get("font_size", 18))
 
-        # Transparency value (10-100) — new key, fall back to old A/B/C/D map
-        self._transparency = int(logs_settings.get(
+        # Transparency value — snapped to one of TRANSPARENCY_STEPS (10/40/80/100).
+        # Old free values from settings.json migrate by snap-on-load: e.g. 75 → 80.
+        # Old A/B/C/D mode codes go through _migrate_old_transparency first.
+        _raw_transparency = int(logs_settings.get(
             "transparency_value",
             self._migrate_old_transparency(logs_settings.get("transparency_mode")),
         ))
-        self._transparency = max(10, min(100, self._transparency))
+        self._transparency = self._snap_to_step(max(10, min(100, _raw_transparency)))
 
         self._build_window()
         self._build_ui()
@@ -1345,13 +1358,30 @@ class TranslatedLogsPanel(QWidget):
             pass
         self._repack_bubbles()
 
-    def _on_transparency_changed(self, value: int):
-        """Slider 10-100. Affects ONLY the background card alpha — bubbles
-        and text remain fully opaque (their paintEvents use solid colours)."""
-        self._transparency = max(10, min(100, value))
-        self.transparency_slider.setToolTip(f"ความโปร่งใส: {self._transparency}%")
-        self._apply_theme()  # rebuild QSS with new bg alpha
-        # Persist (best-effort)
+    def _apply_bg_alpha_only(self):
+        """Surgical alpha update — sets only `self.bg`'s stylesheet, NOT the
+        whole window. The full _apply_theme() rebuilds QSS for the entire
+        widget tree and Qt then re-polishes every descendant + reapplies all
+        selectors against every widget. With 50+ chat bubbles in the log,
+        this stalls the UI thread for 100s of ms per slider tick — visible as
+        severe stutter when the user drags the transparency slider while the
+        log has many messages.
+
+        Bubbles paint themselves with solid colours in their own paintEvent,
+        so they're unaffected by the BG card's alpha — no need to refresh
+        them here."""
+        p = _palette()
+        bg_alpha = max(0, min(255, int(self._transparency * 255 / 100)))
+        bg_rgba = _hex_to_rgba(p["bg"], bg_alpha)
+        border_rgba = _hex_to_rgba(p["border_subtle"], bg_alpha)
+        self.bg.setStyleSheet(
+            f"QFrame#logs_bg {{ background: {bg_rgba}; "
+            f"border: 1px solid {border_rgba}; border-radius: 12px; }}"
+        )
+
+    def _persist_transparency(self):
+        """Write current transparency to settings.json. Called debounced from
+        the slider so we don't thrash the disk on every pixel of drag."""
         try:
             self.settings.set_logs_settings(transparency_value=self._transparency)
         except TypeError:
@@ -1362,8 +1392,41 @@ class TranslatedLogsPanel(QWidget):
                 self.settings.save_settings()
             except Exception:
                 pass
-        except Exception:
-            pass
+
+    def _on_transparency_changed(self, value: int):
+        """Slider 10-100, but snapped to TRANSPARENCY_STEPS (10/40/80/100).
+        Affects ONLY the background card alpha — bubbles and text remain
+        opaque (solid colour paintEvents).
+
+        Three-tier hot path:
+          1. Snap raw value to nearest step (cheap arithmetic).
+          2. If snapped value == current, no-op except for slider snap-back.
+             Dragging within a single step's range = ZERO real work.
+          3. Else: surgical BG-only stylesheet update + debounced disk write.
+        """
+        snapped = self._snap_to_step(max(10, min(100, value)))
+
+        # Sync slider visual to the snapped value — gives the "magnetic" feel.
+        # blockSignals avoids re-firing valueChanged into infinite recursion.
+        if self.transparency_slider.value() != snapped:
+            self.transparency_slider.blockSignals(True)
+            self.transparency_slider.setValue(snapped)
+            self.transparency_slider.blockSignals(False)
+
+        # Already at this step — bail out before any expensive work
+        if snapped == self._transparency:
+            return
+
+        self._transparency = snapped
+        self.transparency_slider.setToolTip(f"ความโปร่งใส: {self._transparency}%")
+        self._apply_bg_alpha_only()
+
+        # Debounce disk write — save 350ms after the user stops moving the slider
+        if not hasattr(self, "_transparency_save_timer") or self._transparency_save_timer is None:
+            self._transparency_save_timer = QTimer(self)
+            self._transparency_save_timer.setSingleShot(True)
+            self._transparency_save_timer.timeout.connect(self._persist_transparency)
+        self._transparency_save_timer.start(350)
 
     def _on_font_clicked(self):
         """Open FontPanel via main_app's settings_ui. Pre-select target='logs'

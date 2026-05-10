@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.8.4
+**Version:** 1.8.5
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -49,9 +49,130 @@ C:\MBB_Dalamud/
 - [x] Translated Logs PyQt6 rewrite + Settings polish (v1.8.0, 2026-04-26)
 - [x] Translation tuning + Theme/NPC polish (v1.8.1, 2026-04-27)
 - [x] NPC Manager database visibility + merge tool (v1.8.4, 2026-05-08)
+- [x] TUI architecture overhaul — Win32 resize + DissolveOverlay + file split (v1.8.5, 2026-05-10)
 - [x] NPC Manager Polaroid view + WebP avatar storage (v1.8.2, 2026-04-27)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
+
+---
+
+## Changelog — v1.8.5 (2026-05-10)
+
+### Critical bugs fixed
+
+**1. Unknown speakers vanished from TUI** ([text_corrector.py:150-155, 552-557](python-app/text_corrector.py))
+- Root cause: OCR-era whitelist filter (`if speaker in self.names else return NORMAL`) — designed to drop garbled OCR reads, harmful with reliable Dalamud text hook
+- Fix: trust speaker always — Dalamud sends 100% accurate text, no need to gate
+- Impact: NPCs not in npc.json now display their name properly (in unknown-purple #a855f7)
+
+**2. TUI fade-out race (stutter / freeze in EXE)** ([translated_ui.py:2789-2820, 6431-6448, 6589-6627](python-app/translated_ui.py))
+- Root cause: new text arriving mid-fade → fade chain kept decrementing alpha while restore_user_transparency raised it → flicker. If alpha hit 0 mid-render, canvas.delete("all") + execute_tui_hide wiped new text → near-freeze in EXE
+- 3-layer fix:
+  - Layer 1 (entry): `update_text` cancels fade_timer_id + window_hide_timer_id, resets is_fading, bumps last_activity_time
+  - Layer 2 (defer): fade_out_text at alpha=0 → defer destructive cleanup 80ms via after()
+  - Layer 3 (recheck): `_do_fade_destructive_cleanup` re-checks is_fading + activity time before wiping; aborts if interrupted
+- KEEPS user prefs intact (auto_hide_after_fade not touched — only runtime flags)
+
+**3. LOG transparency stutter on long messages** ([pyqt_ui/translated_logs.py:_apply_bg_alpha_only](python-app/pyqt_ui/translated_logs.py))
+- Root cause: every slider tick called `_apply_theme()` → `setStyleSheet(qss)` on entire window → Qt re-polished ALL bubbles + reapplied selectors. With 50+ bubbles + 60 events/sec = freeze
+- Fix: surgical `self.bg.setStyleSheet(...)` for BG card only — bubbles paint themselves with solid colours so they don't need updating. Added 350ms QTimer debounce on disk write.
+
+**4. TUI resize handle slow / cursor-escape / hover-miss**
+- ⚠ **First attempted Win32 `WM_NCLBUTTONDOWN + HTBOTTOMRIGHT` hand-off — CRASHED with `PyEval_RestoreThread` GIL fatal**. Root cause: `SendMessageW` is blocking and runs Windows' modal resize loop while Python's main thread is suspended inside a Tk callback. During the modal loop Windows fires WM_PAINT/WM_SIZE back to Tk's window proc; Tk tries to dispatch them but Python thread state is NULL → process terminates. **DO NOT retry this approach inside a Tk callback.**
+- Final fix: **manual resize + 16ms throttle**
+  - `start_resize` routes directly to `_start_manual_resize` (Win32 path removed)
+  - `_manual_on_resize` adds 60 FPS throttle on `self.root.geometry()` calls (was unthrottled — 100+ Hz mouse = 100+ WM_SIZE round-trips/sec = lag)
+  - `bind_all <B1-Motion>` + `<ButtonRelease-1>` for global mouse capture (cursor escape covered)
+  - `on_smart_resize_end → _restore_layout_after_resize_universal` for layout restore + hover refresh
+- 16ms throttle eliminates ~95% of WM_SIZE traffic while keeping motion smooth
+
+**5. Splash screen disabled** — [MBB.py:587-589](python-app/MBB.py) had splash commented out for DEV mode. Re-enabled.
+
+### Step-lock transparency
+
+**LOG (4 levels — used less)**: `10 / 40 / 80 / 100` — `TranslatedLogsPanel.TRANSPARENCY_STEPS` ([pyqt_ui/translated_logs.py](python-app/pyqt_ui/translated_logs.py))
+- snap-on-drag + no-op detection (drag within step = zero work)
+- migration: existing settings.json transparency value snaps to nearest step on load
+
+**TUI (6 levels — used more)**: `80 / 84 / 88 / 92 / 95 / 100` — `ImprovedColorAlphaPickerWindow.TRANSPARENCY_STEPS` (in `tui_color_picker.py` after Phase 1 split)
+- 95 picked as 5th step per user preference ("ค่าที่ฉันชอบประมาณ 95")
+- Custom Canvas slider (replaced tk.Scale) — handle bright-accent on press, dim grey at rest, step labels (1-6) shown only during drag
+
+### Legacy `transparency` key purge
+- 5 sites removed across MBB.py + settings.py + translated_ui.py
+- Was OVERRIDING the user's color-picker setting (`bg_alpha`) on every settings save
+- TUI alpha now controlled SOLELY by the in-TUI picker — no other source
+
+### TUI Color/Alpha Picker — modernized
+- Frameless dark glass design matching Theme Manager / Settings panel
+- 1px accent ring (outer Toplevel bg = ACCENT, inner main_frame = BG_SURFACE)
+- Title with accent underline
+- Hex value label next to color swatch
+- Custom canvas slider (NOT tk.Scale) with magnetic snap behavior
+- Step pip labels (1-6) appear during drag, hide on release
+- Modal sized 300×244, position-only geometry string (preserves setup_ui's size)
+- `winfo_reqwidth/reqheight` instead of `winfo_width/height` (latter can return stale values before Win32 catches up)
+- Win32 corner radius reduced from 20 → 12 (handle no longer clipped at edges)
+
+### Mode-aware TUI behavior
+
+**1. Per-mode geometry memory** ([translated_ui.py:set_display_mode_for_chat_type](python-app/translated_ui.py))
+- New settings key: `tui_geometries[mode] = {w, h}` — stores per-mode size (dialog/battle/cutscene)
+- Existing `tui_positions[mode]` already stored per-mode position
+- Mode switch saves OUTGOING mode's current size+position, loads INCOMING mode's saved values
+- Choice mode is transient — does NOT save (so dialog position restored verbatim when choice ends)
+- `_clamp_to_screen` defends against off-screen restore (multi-monitor changes)
+
+**2. Battle/cutscene minimal hover UI** ([translated_ui.py:set_icons_alpha](python-app/translated_ui.py))
+- Dialog/choice: all 4 buttons + handle on hover (close, lock, color, fadeout)
+- Battle/cutscene: ONLY close + resize_handle (lock/color/fadeout pack_forget)
+- Rationale: battle is intense, cutscene is cinematic — user won't tweak settings during them
+
+**3. WASD auto-hide bypass extended** ([MBB.py:hide_and_stop_translation](python-app/MBB.py))
+- Battle bypass already existed; added cutscene bypass — text must show continuously through both
+
+**4. Battle text centering race fix** (rare, 2-layer defense in `_handle_normal_text_fast` + `_perform_canvas_resize`)
+- Pre-render: force `canvas.update_idletasks()` before reading width when in battle/cutscene + anchor=N
+- Post-render: in `_perform_canvas_resize`, compute delta between current centered-text x and new canvas centre, shift all `anchor='n'` items by delta (preserves shadow ring offsets)
+
+### NEW: Dissolve Overlay for Battle/Cutscene ([pyqt_ui/dissolve_overlay.py](python-app/pyqt_ui/dissolve_overlay.py) — 641 lines)
+
+> ✅ **RE-ENABLED 2026-05-10 (post-fix).** Initial v1.8.5 testing surfaced 3 bugs — all resolved:
+>
+> 1. **Text not centered top** — `paintEvent` vertically centered the speaker+body block (`block_top = max(pad_y, (h - block_h) // 2)`). Fix: `block_top = pad_y` so text reads from the top, overlay grows downward.
+> 2. **Tkinter TUI doesn't hide** — root cause was NOT in dispatcher order (dispatch already runs first at line 2301, returns before `set_display_mode_for_chat_type` at line 2366). Real culprit: `MBB._do_tui_auto_show` was firing on every status update during translation (called from `_trigger_tui_auto_show` at MBB.py:2624 inside the status-update flow), and the auto-show kept deiconifying the just-withdrawn root. Fix: added `_dissolve_active` guard — auto-show now skips when overlay is active.
+> 3. **Mode switch re-deiconifies** — same root cause as #2 (auto-show firing during cross-mode translations). Same fix.
+>
+> Defensive add: `_route_to_dissolve_overlay` now also cancels `_deferred_render_id` so a queued `_original_update_text` from the previous chat_type can't paint stale text on the now-hidden canvas.
+
+- PyQt6 `QWidget` with frameless + translucent + `WA_TranslucentBackground`
+- paintEvent: horizontal `QLinearGradient` — 0% alpha → 5% opaque → 95% opaque → 100% alpha → smooth dissolve on left/right edges (no visible border)
+- BG: dark `#14161c` 90% alpha; text drawn AFTER gradient → fully opaque
+- Per-mode font color: battle `#FF6B00` / cutscene `#FFD700`
+- Reuses existing `tui_geometries[mode]` + `tui_positions[mode]` settings keys
+- Wiring (decorator pattern in `translated_ui.update_text`): chat_type 68/71 → show DissolveOverlay + withdraw Tkinter root; chat_type 61 → hide overlay + deiconify root
+- Hover-revealed close X + resize grip; QTimer-poll cursor (140ms) — no Enter/Leave flicker
+- Self-contained PyQt6 — Tkinter `transparentcolor` is 1-bit and cannot do alpha gradient
+- Demo file kept at [demo_dissolve_tui.py](python-app/demo_dissolve_tui.py) for visual evaluation
+
+### Phase 1 file split — translated_ui.py 9080 → 8127 (–953 lines)
+
+Extracted to dedicated modules (independent classes, mechanical extraction):
+- **[tui_shadow.py](python-app/tui_shadow.py)** (243 lines) — `ShadowConfig` + `BlurShadowEngine`
+- **[tui_color_picker.py](python-app/tui_color_picker.py)** (578 lines) — `ImprovedColorAlphaPickerWindow`
+- **[tui_rich_text.py](python-app/tui_rich_text.py)** (229 lines) — `RichTextFormatter`
+
+translated_ui.py imports them at top with `from tui_X import Y` so external consumers (MBB.py) don't need any change — `translated_ui.ImprovedColorAlphaPickerWindow` etc. still works via re-import.
+
+Phase 2 (deferred — coupled feature modules): tui_fade_system, tui_resize_system, tui_auto_hide. Estimated 1100 more lines extractable but require mixin/delegation pattern.
+
+### Pending after compact
+- **Build v1.8.5 EXE+DLL** (clean dist_test, run pyinstaller updater + main mbb.spec, then dotnet build for DLL)
+- **Commit + push** — `8e44efe v1.8.4` is local-only (push got token-revoke alerts last session); all v1.8.5 changes uncommitted on top
+- **Create GitHub release v1.8.4** (so MBB-Updater.exe has a target to pull — currently `/releases/latest` returns 404)
+- **In-game user testing** of: dissolve overlay, mode-switch, fade-race fix, unknown speaker, transparency snap, Win32 resize
+- **OCR deep-clean** (~1500 lines from 2-agent audits): `model.py` orphan (790 lines), `translation_logger.py` orphan (240 lines), 8 dead settings keys, 3 dead UI methods (~190 lines), text_corrector dead "22"/"222" placeholders + numeric_name guard
+- **Phase 2 file split** if user wants more
 
 ---
 

@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # MBB Dalamud Bridge - PyInstaller Specification
-# Version: 1.8.4
+# Version: 1.8.5
 # Build: 04032026-02 (rebuilt 2026-05-01 for v1.8.2 with PyQt6 + cleanup)
 #
 # Build command:
@@ -155,6 +155,7 @@ hiddenimports = [
     'pyqt_ui',
     'pyqt_ui.bottom_bar',
     'pyqt_ui.control_panel',
+    'pyqt_ui.dissolve_overlay',
     'pyqt_ui.font_panel',
     'pyqt_ui.header_bar',
     'pyqt_ui.hotkey_panel',

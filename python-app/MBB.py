@@ -68,6 +68,7 @@ import webbrowser
 # shims (`root`, `winfo_exists`, `state`, `withdraw`, `is_visible`,
 # `message_cache`) so MBB.py needs no further changes.
 from pyqt_ui.translated_logs import Translated_Logs
+from pyqt_ui.dissolve_overlay import DissolveOverlay
 from font_manager import FontSettings, initialize_font_manager
 from asset_manager import AssetManager
 from resource_utils import resource_path
@@ -584,9 +585,10 @@ class MagicBabelApp:
                     splash.destroy()
                 return None, None
 
-        # DEV MODE: ปิด splash screen ชั่วคราวเพื่อลดเวลา startup ระหว่างพัฒนา
-        # self.splash, self.splash_photo = show_splash()
-        self.splash, self.splash_photo = None, None
+        # Splash screen — respects user preferences (enable_starting_key_visual
+        # toggle + splash_skip_date "ไม่แสดงอีกในวันนี้" — both checked inside
+        # show_splash() via direct json.load on settings.json).
+        self.splash, self.splash_photo = show_splash()
         # --- จบส่วน Splash Screen ---
 
         # Thread-safe callback queue for safe_after → _safe_tk_poll
@@ -1786,6 +1788,25 @@ class MagicBabelApp:
             logging.exception("Detailed error in create_translated_logs:")
             self.translated_logs_instance = None
 
+        # ── Dissolve overlay (battle/cutscene PyQt6 TUI replacement) ──
+        # Created here so it lives alongside the other PyQt6 panels and shares
+        # the same QApplication. The overlay is wired to translated_ui later in
+        # create_translated_ui (the order in __init__ is: create_translated_ui
+        # → create_translated_logs, so we set the attribute on translated_ui
+        # here if it already exists, otherwise create_translated_ui will pick
+        # up self.dissolve_overlay later).
+        # Re-enabled 2026-05-10 after dispatcher fixes (auto-show guard +
+        # paint top-anchor + deferred render cancel). See claude.md v1.8.5.
+        try:
+            self.dissolve_overlay = DissolveOverlay(self.settings)
+            if hasattr(self, "translated_ui") and self.translated_ui is not None:
+                self.translated_ui.dissolve_overlay = self.dissolve_overlay
+            self.logging_manager.log_info("Dissolve overlay created successfully")
+        except Exception as e:
+            self.logging_manager.log_error(f"Error creating dissolve overlay: {e}")
+            logging.exception("Detailed error in dissolve overlay creation:")
+            self.dissolve_overlay = None
+
     def load_shortcuts(self):
         self.toggle_ui_shortcut = self.settings.get_shortcut("toggle_ui", "alt+h")
         self.start_stop_shortcut = self.settings.get_shortcut(
@@ -2706,6 +2727,12 @@ class MagicBabelApp:
     def _do_tui_auto_show(self):
         """Actual TUI auto-show logic (must run on main thread)."""
         try:
+            # Skip while DissolveOverlay is active (battle/cutscene mode hides
+            # Tk root intentionally; without this guard the auto-show would
+            # deiconify it again on every status update during translation)
+            if (hasattr(self, 'translated_ui') and self.translated_ui
+                    and getattr(self.translated_ui, '_dissolve_active', False)):
+                return
             is_visible = self._is_tui_visible()
             if not is_visible:
                 if self._show_translated_ui_auto():
@@ -3320,14 +3347,16 @@ class MagicBabelApp:
             self.font_manager.font_settings.font_name = font_name
             self.font_manager.font_settings.font_size = font_size
 
-            # ยังคงอัพเดตส่วนอื่นๆ ตามปกติ
-            self.translated_ui.update_transparency(self.settings.get("transparency"))
+            # NOTE: legacy update_transparency() call removed — TUI alpha is now
+            # controlled SOLELY by the in-TUI color/alpha picker (saves to bg_alpha).
+            # The legacy "transparency" key (0.8 default) used to slam onto the
+            # window here, wiping the user's picker setting.
             self.translated_ui_window.geometry(
                 f"{self.settings.get('width')}x{self.settings.get('height')}"
             )
         else:
             # โค้ดเดิมถ้ายังไม่มี font_manager
-            self.translated_ui.update_transparency(self.settings.get("transparency"))
+            # (update_transparency removed — see note above)
             self.translated_ui.adjust_font_size(self.settings.get("font_size"))
             self.translated_ui.update_font(self.settings.get("font"))
             self.translated_ui_window.geometry(
@@ -3415,10 +3444,8 @@ class MagicBabelApp:
         try:
             # อัพเดท translated UI ถ้ามีการเปลี่ยนแปลงที่เกี่ยวข้อง
             if hasattr(self, "translated_ui") and self.translated_ui:
-                if "transparency" in settings_dict:
-                    self.translated_ui.update_transparency(
-                        settings_dict["transparency"]
-                    )
+                # NOTE: legacy "transparency" key handler removed — TUI alpha
+                # comes from the in-TUI color/alpha picker only (bg_alpha).
 
                 # ใช้ font_manager ถ้ามี ในการอัพเดตการตั้งค่าฟอนต์
                 if hasattr(self, "font_manager") and hasattr(
@@ -5619,12 +5646,19 @@ class MagicBabelApp:
         NOTE: ถูกเรียกจาก keyboard listener thread → ต้อง queue UI operations ไป main thread"""
         if self.settings.get("enable_wasd_auto_hide"):
             try:
-                # ⚔️ CHECK: ถ้า TUI อยู่ใน Battle Chat Mode → ไม่ซ่อน
+                # ⚔️🎬 CHECK: ถ้า TUI อยู่ใน Battle Chat Mode หรือ Cutscene Mode → ไม่ซ่อน
                 # (อ่าน boolean flag เฉยๆ — thread-safe)
+                # ── เหตุผล (Task 2 — mode-aware behaviour) ─────────────────
+                #   battle: ผู้ใช้ต่อสู้อยู่ — ต้องการอ่านบทพูดต่อเนื่องแม้
+                #          จะกด WASD เพื่อจัดการตัวละคร
+                #   cutscene: ผู้ใช้แค่ดูฉาก — WASD เลื่อนกล้อง/ข้าม การซ่อน
+                #            TUI กลางคัทซีนทำให้พลาดบทบรรยาย
+                # ──────────────────────────────────────────────────────────
                 if hasattr(self, 'translated_ui') and self.translated_ui:
-                    if hasattr(self.translated_ui, 'battle_mode_active'):
-                        if self.translated_ui.battle_mode_active:
-                            return  # ออกจาก function ทันที
+                    if getattr(self.translated_ui, 'battle_mode_active', False):
+                        return  # battle mode → ไม่ซ่อน
+                    if getattr(self.translated_ui, 'cutscene_mode_active', False):
+                        return  # cutscene mode → ไม่ซ่อน
 
                 # 🎯 Queue UI operations ไป main thread ผ่าน safe_after
                 # (keyboard callback มาจาก background thread — ห้ามเรียก Tkinter ตรงๆ)
@@ -5681,6 +5715,14 @@ class MagicBabelApp:
                 self.settings_ui.close_settings()
             except Exception:
                 pass
+
+        # Cleanup dissolve overlay (flush settings, stop hover timer)
+        if hasattr(self, "dissolve_overlay") and self.dissolve_overlay is not None:
+            try:
+                self.dissolve_overlay.cleanup()
+                self.dissolve_overlay.close()
+            except Exception as e:
+                self.logging_manager.log_error(f"Error closing dissolve overlay: {e}")
 
         for window in windows_to_close:
             if window:

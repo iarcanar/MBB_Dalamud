@@ -119,6 +119,7 @@ WEBSITE_SKILL.md
 # Backups and legacy code (local only)
 python-app/backups/
 python-app/Legacy/
+*.backup_*.py
 
 # Adobe / design source files
 *.ai

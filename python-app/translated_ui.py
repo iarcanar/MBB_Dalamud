@@ -22,213 +22,8 @@ from resource_utils import resource_path
 logging.basicConfig(level=logging.INFO)
 
 
-class ShadowConfig:
-    """Centralized shadow configuration for TUI text rendering"""
-
-    # *** SHADOW PARAMETERS - MODIFY HERE FOR ALL SHADOWS ***
-    SHADOW_BLUR_RADIUS = 8  # From TUI_shadow_test.py - balanced combination
-    SHADOW_SPREAD = 6  # From TUI_shadow_test.py - balanced combination
-    SHADOW_OFFSET_X = 0  # No offset - same position as text
-    SHADOW_OFFSET_Y = 0  # No offset - same position as text
-    SHADOW_OPACITY = 0.8  # Shadow transparency
-    SHADOW_COLOR = "#000000"  # Shadow color
-
-    # *** INTELLIGENT SCALING ***
-    BASE_FONT_SIZE = 24  # Reference font size for scaling
-    SPREAD_PRESERVATION_RATIO = 0.25  # Preserve visual consistency
-
-    @classmethod
-    def get_scaled_params(cls, font_size):
-        """Return shadow parameters scaled for specific font size"""
-        scale_factor = font_size / cls.BASE_FONT_SIZE
-        # Use square root scaling for gentler spread preservation
-        spread_scale = math.sqrt(scale_factor)
-        radius_scale = scale_factor * 0.8  # Slightly less aggressive radius scaling
-
-        return {
-            "blur_radius": max(2, int(cls.SHADOW_BLUR_RADIUS * radius_scale)),
-            "spread": max(1, int(cls.SHADOW_SPREAD * spread_scale)),
-            "offset_x": int(cls.SHADOW_OFFSET_X * spread_scale),
-            "offset_y": int(cls.SHADOW_OFFSET_Y * spread_scale),
-            "opacity": cls.SHADOW_OPACITY,
-            "color": cls.SHADOW_COLOR,
-        }
-
-
-class BlurShadowEngine:
-    """Advanced blur shadow system for TUI text rendering"""
-
-    def __init__(self):
-        self._shadow_cache = {}
-        self.max_cache_size = 50
-        self.cache_hits = 0
-        self.cache_misses = 0
-
-    def _get_cache_key(self, text, font_info, shadow_params):
-        """Generate cache key for shadow texture"""
-        font_str = (
-            f"{font_info[0]}-{font_info[1]}"
-            if isinstance(font_info, tuple)
-            else str(font_info)
-        )
-        params_str = f"{shadow_params['blur_radius']}-{shadow_params['spread']}-{shadow_params['offset_x']}-{shadow_params['offset_y']}"
-        return f"{text[:50]}-{font_str}-{params_str}"
-
-    def _cleanup_cache(self):
-        """Clean up cache when it gets too large"""
-        if len(self._shadow_cache) > self.max_cache_size:
-            # Remove oldest 20% of cache entries
-            items_to_remove = max(1, len(self._shadow_cache) // 5)
-            oldest_keys = list(self._shadow_cache.keys())[:items_to_remove]
-            for key in oldest_keys:
-                del self._shadow_cache[key]
-
-    def generate_shadow_texture(self, text, font_path, font_size, shadow_params):
-        """Generate blurred shadow texture using 'Blur on Solid Shape' technique"""
-        try:
-            # Check cache first
-            cache_key = self._get_cache_key(text, (font_path, font_size), shadow_params)
-            if cache_key in self._shadow_cache:
-                self.cache_hits += 1
-                return self._shadow_cache[cache_key]
-
-            self.cache_misses += 1
-
-            # Load font
-            try:
-                if font_path and os.path.exists(font_path):
-                    font = ImageFont.truetype(font_path, font_size)
-                else:
-                    # Fallback to system fonts
-                    fallback_fonts = [
-                        "C:/Windows/Fonts/tahomabd.ttf",
-                        "C:/Windows/Fonts/leelawbd.ttf",
-                    ]
-                    font = None
-                    for fallback in fallback_fonts:
-                        if os.path.exists(fallback):
-                            font = ImageFont.truetype(fallback, font_size)
-                            break
-                    if not font:
-                        font = ImageFont.load_default()
-            except Exception:
-                font = ImageFont.load_default()
-
-            # Calculate image dimensions with padding for spread and blur
-            padding = shadow_params["spread"] + shadow_params["blur_radius"] + 10
-
-            # Create dummy image to measure text
-            dummy_img = Image.new("RGBA", (1, 1))
-            draw = ImageDraw.Draw(dummy_img)
-            text_bbox = draw.textbbox(
-                (0, 0), text, font=font, stroke_width=shadow_params["spread"]
-            )
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-
-            img_width = text_width + padding * 2
-            img_height = text_height + padding * 2
-
-            # 1. Create shadow source layer (Solid Shape)
-            shadow_source = Image.new("RGBA", (img_width, img_height), (0, 0, 0, 0))
-            shadow_draw = ImageDraw.Draw(shadow_source)
-
-            # Draw both fill and stroke in shadow color to create solid shape
-            # Use same position as text (no offset) following TUI_shadow_test.py
-            shadow_draw.text(
-                (padding - text_bbox[0], padding - text_bbox[1]),
-                text,
-                font=font,
-                fill=shadow_params["color"],  # Fill with shadow color
-                stroke_width=shadow_params["spread"],
-                stroke_fill=shadow_params["color"],  # Stroke with same shadow color
-            )
-
-            # 2. Apply Gaussian blur to the solid shape
-            blurred_shadow = shadow_source.filter(
-                ImageFilter.GaussianBlur(radius=shadow_params["blur_radius"])
-            )
-
-            # 3. Apply additional smoothing to reduce harsh edges
-            # Apply a slight blur to anti-alias edges
-            blurred_shadow = blurred_shadow.filter(ImageFilter.SMOOTH)
-
-            # 4. Apply opacity to shadow
-            if shadow_params["opacity"] < 1.0:
-                # Create alpha mask for opacity with smoother transition
-                alpha = blurred_shadow.split()[-1]  # Get alpha channel
-                alpha = alpha.point(lambda p: int(p * shadow_params["opacity"]))
-                blurred_shadow.putalpha(alpha)
-
-            # Cache the result
-            self._shadow_cache[cache_key] = blurred_shadow
-            self._cleanup_cache()
-
-            return blurred_shadow
-
-        except Exception as e:
-            logging.error(f"Error generating shadow texture: {e}")
-            # Return transparent image as fallback
-            return Image.new("RGBA", (100, 50), (0, 0, 0, 0))
-
-    def create_shadow_on_canvas(
-        self, canvas, text, x, y, font_info, width=None, anchor="nw", tags=None
-    ):
-        """Create shadow directly on canvas using blur shadow technique"""
-        try:
-            logging.debug(
-                f"Shadow creation attempt - text: '{text[:50]}...', font: {font_info}"
-            )
-
-            # Get font information
-            if isinstance(font_info, tuple) and len(font_info) >= 2:
-                font_name, font_size = font_info[0], font_info[1]
-            else:
-                font_name, font_size = "TkDefaultFont", 12
-
-            logging.debug(f"Extracted font info - name: {font_name}, size: {font_size}")
-
-            # Get scaled shadow parameters
-            shadow_params = ShadowConfig.get_scaled_params(font_size)
-            logging.debug(f"Shadow params: {shadow_params}")
-
-            # Generate shadow texture
-            shadow_texture = self.generate_shadow_texture(
-                text, None, font_size, shadow_params
-            )
-
-            if shadow_texture is None:
-                logging.error("Shadow texture generation returned None")
-                return None
-
-            logging.debug(f"Shadow texture size: {shadow_texture.size}")
-
-            # Convert to PhotoImage for Tkinter
-            shadow_photo = ImageTk.PhotoImage(shadow_texture)
-
-            # Create shadow on canvas
-            shadow_item = canvas.create_image(
-                x, y, image=shadow_photo, anchor=anchor, tags=tags
-            )
-
-            logging.debug(f"Shadow item created on canvas: {shadow_item}")
-
-            # Keep reference to prevent garbage collection
-            if not hasattr(canvas, "_shadow_images"):
-                canvas._shadow_images = []
-            canvas._shadow_images.append(shadow_photo)
-            # Prevent unbounded growth
-            if len(canvas._shadow_images) > 50:
-                canvas._shadow_images = canvas._shadow_images[-20:]
-
-            return shadow_item
-
-        except Exception as e:
-            logging.error(f"Error creating shadow on canvas: {e}")
-            import traceback
-
-            logging.error(traceback.format_exc())
-            return None
+# ShadowConfig + BlurShadowEngine — extracted to tui_shadow.py for size/maintainability (Phase 1 split)
+from tui_shadow import ShadowConfig, BlurShadowEngine
 
 
 @dataclass
@@ -369,551 +164,12 @@ class UIComponents:
         self.arrow_item: Optional[int] = None
 
 
-class ImprovedColorAlphaPickerWindow(tk.Toplevel):
-    """Color picker ใหม่ที่บันทึกทันทีและปิดเมื่อคลิกข้างนอก"""
+# ImprovedColorAlphaPickerWindow — extracted to tui_color_picker.py for size/maintainability (Phase 1 split)
+from tui_color_picker import ImprovedColorAlphaPickerWindow
 
-    def __init__(
-        self,
-        parent,
-        initial_color,
-        initial_alpha,
-        settings_ref,
-        apply_callback,
-        lock_mode,
-        main_ui=None  # NEW: Reference to main TranslatedUI for mode detection
-    ):
-        super().__init__(parent)
 
-        # ตั้งค่าพื้นฐาน
-        self.overrideredirect(True)
-        self.attributes("-topmost", True)
-        self.configure(bg="#2D2D2D")
-        self.resizable(False, False)
-
-        # เก็บค่าต่างๆ
-        self.selected_color = initial_color
-        self.current_alpha = initial_alpha
-        self.lock_mode = lock_mode
-        self.settings = settings_ref
-        self.apply_callback = apply_callback
-        self.is_alpha_disabled = lock_mode == 1
-        self._choosing_color = False
-        self._is_closing = False  # Guard flag to prevent double-close
-        self.main_ui = main_ui  # NEW: Store main_ui reference
-
-        # สร้าง UI
-        self.setup_ui()
-        self.position_window(parent)
-
-        # เพิ่มขอบโค้งมน
-        self.after(10, self.apply_rounded_corners)
-
-        # ตั้งค่า event bindings
-        self.setup_bindings()
-
-        # ทำให้เป็น modal
-        self.grab_set()
-        self.focus_set()
-
-    def setup_ui(self):
-        """สร้าง UI ของ Color Picker"""
-        # ลดขนาดความกว้างและปรับ padding
-        main_frame = tk.Frame(self, bg="#2D2D2D", padx=12, pady=12)
-        main_frame.pack(expand=True, fill=tk.BOTH)
-
-        # กำหนดขนาดหน้าต่างให้แสดง alpha slider ครบ
-        self.geometry("240x170")
-
-        # หัวข้อ
-        title_label = tk.Label(
-            main_frame,
-            text="TUI Color Setting",
-            bg="#2D2D2D",
-            fg="white",
-            font=("Bai Jamjuree Medium", 12, "bold"),
-        )
-        title_label.pack(pady=(0, 10))
-
-        # ส่วนเลือกสี
-        color_frame = tk.Frame(main_frame, bg="#2D2D2D")
-        color_frame.pack(fill=tk.X, pady=5)
-
-        tk.Label(
-            color_frame,
-            text="Color:",
-            width=8,
-            anchor="w",
-            bg="#2D2D2D",
-            fg="white",
-            font=("Bai Jamjuree Light", 10),
-        ).pack(side=tk.LEFT)
-
-        self.color_preview = tk.Frame(
-            color_frame,
-            bg=self.selected_color,
-            width=60,
-            height=22,
-            relief=tk.SOLID,
-            bd=1,
-            cursor="hand2",
-        )
-        self.color_preview.pack(side=tk.RIGHT, padx=(10, 0))
-        self.color_preview.bind("<Button-1>", self.choose_color)
-
-        # ส่วนความโปร่งใส
-        alpha_frame = tk.Frame(main_frame, bg="#2D2D2D")
-        alpha_frame.pack(fill=tk.X, pady=5)
-
-        alpha_text = "Alpha:" + (" (Disabled)" if self.is_alpha_disabled else "")
-        tk.Label(
-            alpha_frame,
-            text=alpha_text,
-            width=8,
-            anchor="w",
-            bg="#2D2D2D",
-            fg="white",
-            font=("Bai Jamjuree Light", 10),
-        ).pack(side=tk.LEFT)
-
-        # Clamp alpha to 80-100% range (keep background nearly solid for readability)
-        alpha_percentage = max(80, min(100, int(self.current_alpha * 100)))
-        self.alpha_var = tk.IntVar(value=alpha_percentage)
-        self.alpha_slider = tk.Scale(
-            alpha_frame,
-            from_=80,  # Minimum 80%
-            to=100,    # Maximum 100%
-            orient=tk.HORIZONTAL,
-            variable=self.alpha_var,
-            command=self.on_alpha_change,
-            length=90,
-            bg="#2D2D2D",
-            fg="#F5F5F5",  # เปลี่ยนเป็นสีเกือบขาว
-            highlightthickness=0,
-            troughcolor="#E8E8E8",  # เปลี่ยนสี trough เป็นสีเกือบขาว
-            activebackground="#E8E8E8",  # เอา hover effect ออก ให้เหมือนสี trough
-            sliderrelief=tk.FLAT,
-            showvalue=0,
-            state=tk.DISABLED if self.is_alpha_disabled else tk.NORMAL,
-        )
-        self.alpha_slider.pack(side=tk.LEFT, padx=(10, 5))
-
-        self.alpha_value_label = tk.Label(
-            alpha_frame,
-            text=f"{self.alpha_var.get()}%",
-            width=4,
-            bg="#2D2D2D",
-            fg="white",
-            font=("Consolas", 10),
-        )
-        self.alpha_value_label.pack(side=tk.RIGHT)
-
-    def setup_bindings(self):
-        """ตั้งค่า event bindings"""
-        # คลิกข้างนอกเพื่อปิด
-        self.bind("<FocusOut>", self.on_focus_out)
-
-        # กดปุ่ม Escape เพื่อปิด
-        self.bind("<Escape>", lambda e: self.close_window())
-
-        # ตรวจจับคลิกข้างนอก
-        self.bind_all("<Button-1>", self.check_click_outside)
-
-    def choose_color(self, event=None):
-        """เปิดหน้าต่างเลือกสี"""
-        self._choosing_color = True
-        try:
-            color_info = colorchooser.askcolor(
-                color=self.selected_color, parent=self, title="Choose Background Color"
-            )
-
-            if color_info and color_info[1]:
-                self.selected_color = color_info[1]
-                self.color_preview.config(bg=self.selected_color)
-                # บันทึกทันที
-                self.save_immediately()
-        except Exception as e:
-            logging.error(f"Error in color chooser: {e}")
-        finally:
-            self._choosing_color = False
-            # คืน focus หลังปิด color chooser
-            self.after(100, self.focus_set)
-
-    def on_alpha_change(self, value):
-        """เมื่อเปลี่ยนค่าความโปร่งใส"""
-        val = int(float(value))
-        self.alpha_value_label.config(text=f"{val}%")
-        self.current_alpha = val / 100.0
-        # บันทึกทันที
-        self.save_immediately()
-
-    def save_immediately(self):
-        """บันทึกค่าทันทีโดยไม่ต้องรอ"""
-        try:
-            final_alpha = (
-                self.settings.get("bg_alpha", 1.0)
-                if self.is_alpha_disabled
-                else self.current_alpha
-            )
-
-            # Save to mode-specific storage
-            if self.main_ui:
-                mode = self.main_ui._get_current_mode_name()
-
-                # Save color per mode
-                tui_colors = self.settings.get("tui_colors", {})
-                tui_colors[mode] = self.selected_color
-                self.settings.set("tui_colors", tui_colors)
-
-                # Save alpha per mode
-                tui_alphas = self.settings.get("tui_alphas", {})
-                tui_alphas[mode] = final_alpha
-                self.settings.set("tui_alphas", tui_alphas)
-
-                logging.info(
-                    f"💾 Saved {mode} mode: Color={self.selected_color}, Alpha={final_alpha:.2f}"
-                )
-
-            # Also save to legacy keys (backward compatibility)
-            self.settings.set("bg_color", self.selected_color)
-            self.settings.set("bg_alpha", final_alpha)
-            self.settings.save_settings()
-
-            # เรียก callback เพื่อใช้งานทันที
-            if self.apply_callback:
-                self.apply_callback(self.selected_color, final_alpha)
-
-        except Exception as e:
-            logging.error(f"Error in save_immediately: {e}")
-
-    def on_focus_out(self, event=None):
-        """เมื่อหน้าต่างสูญเสีย focus"""
-        # ตรวจสอบว่าไม่ใช่การเปิด color chooser
-        if not self._choosing_color:
-            self.close_window()
-
-    def check_click_outside(self, event):
-        """ตรวจสอบการคลิกข้างนอกหน้าต่าง"""
-        if self._choosing_color:
-            return
-
-        # ถ้าคลิกข้างนอกพื้นที่หน้าต่าง ให้ปิด
-        try:
-            x, y = event.x_root, event.y_root
-            win_x, win_y = self.winfo_rootx(), self.winfo_rooty()
-            win_w, win_h = self.winfo_width(), self.winfo_height()
-
-            if not (win_x <= x <= win_x + win_w and win_y <= y <= win_y + win_h):
-                self.close_window()
-        except:
-            pass
-
-    def apply_rounded_corners(self):
-        """เพิ่มขอบโค้งมนสำหรับ Color Picker Dialog"""
-        try:
-            import win32gui
-            import win32con
-
-            # หา HWND ของหน้าต่าง
-            hwnd = self.winfo_id()
-
-            # ได้ขนาดหน้าต่าง
-            width = self.winfo_width()
-            height = self.winfo_height()
-
-            # สร้าง rounded rectangle region - เพิ่มความโค้งมน
-            region = win32gui.CreateRoundRectRgn(0, 0, width, height, 20, 20)
-
-            # ใช้ region กับหน้าต่าง
-            win32gui.SetWindowRgn(hwnd, region, True)
-
-        except Exception as e:
-            logging.debug(f"Could not apply rounded corners to color picker: {e}")
-
-    def close_window(self):
-        """ปิดหน้าต่าง (with race condition protection)"""
-        if self._is_closing:
-            return  # Already closing, prevent double-close
-
-        self._is_closing = True
-
-        # Schedule actual destruction after current event finishes
-        # This prevents race condition with event callbacks
-        self.after_idle(self._perform_destroy)
-
-    def _perform_destroy(self):
-        """Actually destroy the window (deferred to avoid race condition)"""
-        try:
-            if self.winfo_exists():  # Check window still exists
-                self.unbind_all("<Button-1>")
-                self.grab_release()
-                self.destroy()
-        except tk.TclError as e:
-            logging.debug(f"TclError during Color Picker window close: {e}")
-        except Exception as e:
-            logging.error(f"Error destroying Color Picker window: {e}")
-
-    def position_window(self, parent_widget):
-        """จัดตำแหน่งหน้าต่าง - แสดงด้านบนของ parent window"""
-        self.update_idletasks()
-
-        # ได้ตำแหน่งและขนาดของ parent window
-        parent_x = parent_widget.winfo_rootx()
-        parent_y = parent_widget.winfo_rooty()
-        parent_w = parent_widget.winfo_width()
-
-        # วางตรงกลางด้านบนของ parent window
-        win_w = self.winfo_width()
-        x = parent_x + (parent_w - win_w) // 2  # ตรงกลาง
-        y = parent_y - self.winfo_height() - 10  # ด้านบน (ยกขึ้นมา)
-
-        # ตรวจสอบไม่ให้เกินขอบจอ
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        win_w = self.winfo_width()
-        win_h = self.winfo_height()
-
-        if x + win_w > screen_w:
-            x = screen_w - win_w - 10
-        if y + win_h > screen_h:
-            y = screen_h - win_h - 10
-        if x < 0:
-            x = 10
-        if y < 0:
-            y = 10
-
-        self.geometry(f"{win_w}x{win_h}+{x}+{y}")
-
-    def position_relative_to_button(self, button_widget):
-        """จัดตำแหน่งหน้าต่าง - แสดงเหนือปุ่มที่ระบุ"""
-        self.update_idletasks()
-
-        # ได้ตำแหน่งและขนาดของปุ่ม
-        button_x = button_widget.winfo_rootx()
-        button_y = button_widget.winfo_rooty()
-        button_w = button_widget.winfo_width()
-        button_h = button_widget.winfo_height()
-
-        # วางตรงกลางเหนือปุ่ม
-        win_w = self.winfo_width()
-        win_h = self.winfo_height()
-        x = button_x + (button_w - win_w) // 2  # ตรงกลางของปุ่ม
-        y = button_y - win_h - 10  # เหนือปุ่ม 10px
-
-        # ตรวจสอบไม่ให้เกินขอบจอ
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-
-        if x + win_w > screen_w:
-            x = screen_w - win_w - 10
-        if y < 0:
-            y = button_y + button_h + 10  # ถ้าไม่พอที่เหนือ ให้แสดงใต้ปุ่ม
-        if x < 0:
-            x = 10
-        if y + win_h > screen_h:
-            y = screen_h - win_h - 10
-
-        self.geometry(f"{win_w}x{win_h}+{x}+{y}")
-
-
-class RichTextFormatter:
-    """Rich Text Formatting System for TUI supporting *italic* text with font switching"""
-
-    def __init__(self):
-        self.italic_font_path = resource_path("fonts/FC Minimal.ttf")
-        self.italic_font_name = "FC Minimal"  # ชื่อฟอนต์จริงจาก metadata
-
-        # Dynamic italic fonts list (can be updated by external tools)
-        self.italic_fonts = [
-            "FC Minimal Medium",     # First choice - รองรับภาษาไทยและ italic
-            "FC Minimal",            # Second choice - รองรับภาษาไทย
-            "Times New Roman",       # Fallback - Windows standard
-            "Arial",
-            "Calibri",
-            "Georgia",
-            "Verdana"
-        ]
-
-    def parse_rich_text(self, text: str) -> list:
-        """
-        Parse text with *italic* and **bold** markers into segments with font information
-
-        Args:
-            text: Text with formatting markers like "This is *italic* and **bold** text"
-
-        Returns:
-            List of dicts with 'text' and 'font_style' keys
-            Example: [
-                {'text': 'This is ', 'font_style': 'normal'},
-                {'text': 'italic', 'font_style': 'italic'},
-                {'text': ' and ', 'font_style': 'normal'},
-                {'text': 'bold', 'font_style': 'bold'},
-                {'text': ' text', 'font_style': 'normal'}
-            ]
-        """
-        logging.info(f"🔍 PARSE_RICH_TEXT: Input text = '{text}'")
-        segments = []
-        current_pos = 0
-
-        import re
-        # Find all patterns in order of appearance
-        # **text** for bold (must be checked first to avoid conflict with *text*)
-        bold_pattern = r'\*\*([^*]+)\*\*'
-        # *text* for italic
-        italic_pattern = r'\*([^*]+)\*'
-
-        # Combine patterns and find all matches
-        all_matches = []
-
-        # Find bold patterns first
-        for match in re.finditer(bold_pattern, text):
-            all_matches.append({
-                'start': match.start(),
-                'end': match.end(),
-                'text': match.group(1),
-                'style': 'bold',
-                'full_match': match.group(0)
-            })
-
-        # Find italic patterns (but exclude those already captured by bold)
-        for match in re.finditer(italic_pattern, text):
-            # Check if this match overlaps with any bold match
-            overlaps = False
-            for bold_match in all_matches:
-                if (match.start() >= bold_match['start'] and match.end() <= bold_match['end']):
-                    overlaps = True
-                    break
-
-            if not overlaps:
-                all_matches.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'text': match.group(1),
-                    'style': 'italic',
-                    'full_match': match.group(0)
-                })
-
-        # Sort matches by position
-        all_matches.sort(key=lambda x: x['start'])
-
-        logging.info(f"🔍 PARSE_RICH_TEXT: Found {len([m for m in all_matches if m['style'] == 'italic'])} italic and {len([m for m in all_matches if m['style'] == 'bold'])} bold patterns")
-
-        for i, match in enumerate(all_matches):
-            # Add normal text before the current pattern
-            if match['start'] > current_pos:
-                normal_text = text[current_pos:match['start']]
-                if normal_text:
-                    segments.append({
-                        'text': normal_text,
-                        'font_style': 'normal'
-                    })
-
-            # Add formatted text
-            segments.append({
-                'text': match['text'],
-                'font_style': match['style']
-            })
-
-            current_pos = match['end']
-
-        # Add remaining normal text
-        if current_pos < len(text):
-            remaining_text = text[current_pos:]
-            if remaining_text:
-                segments.append({
-                    'text': remaining_text,
-                    'font_style': 'normal'
-                })
-
-        # If no patterns found, return the whole text as normal
-        if not segments:
-            segments.append({
-                'text': text,
-                'font_style': 'normal'
-            })
-
-        return segments
-
-    def get_font_tuple(self, base_font_tuple, font_style: str):
-        """
-        Get appropriate font tuple based on style
-
-        Args:
-            base_font_tuple: Tuple like ("Anuphan", 20)
-            font_style: 'normal', 'italic', 'bold', or 'name'
-
-        Returns:
-            Font tuple for tkinter
-        """
-        font_family, font_size = base_font_tuple
-
-        if font_style == 'italic':
-            return ("FC Minimal Medium", font_size, "italic")
-        elif font_style == 'bold':
-            return (font_family, font_size, "bold")
-        elif font_style == 'name':
-            return base_font_tuple  # Names use base font (normal weight)
-        else:
-            return base_font_tuple
-
-    def has_rich_text_markers(self, text: str) -> bool:
-        """Check if text contains rich text formatting markers (*italic* or **bold**)"""
-        return '*' in text
-
-    def parse_rich_text_with_names(self, text: str, names=None) -> list:
-        """Parse text for *italic*, **bold**, and character names.
-        Returns segments with font_style: 'normal', 'bold', 'italic', 'name'."""
-        segments = self.parse_rich_text(text)
-        if not names:
-            return segments
-
-        sorted_names = sorted([n for n in names if len(n) >= 2], key=len, reverse=True)
-        if not sorted_names:
-            return segments
-
-        result = []
-        for segment in segments:
-            style = segment['font_style']
-            if style in ('normal', 'italic'):
-                sub_segs = self._split_text_by_names(segment['text'], sorted_names)
-                for sub_type, sub_text in sub_segs:
-                    if sub_type == 'name':
-                        result.append({'text': sub_text, 'font_style': 'name'})
-                    else:
-                        result.append({'text': sub_text, 'font_style': style})
-            else:
-                result.append(segment)
-
-        return result
-
-    def _split_text_by_names(self, text: str, sorted_names: list) -> list:
-        """Split text by character names with word boundary check."""
-        if not sorted_names:
-            return [('normal', text)]
-        result = []
-        remaining = text
-        while remaining:
-            earliest_pos = len(remaining)
-            earliest_name = None
-            for name in sorted_names:
-                pos = remaining.find(name)
-                if pos != -1 and pos < earliest_pos:
-                    is_word = True
-                    if pos > 0 and (remaining[pos - 1].isalnum() or remaining[pos - 1] == "'"):
-                        is_word = False
-                    end_pos = pos + len(name)
-                    if end_pos < len(remaining) and (remaining[end_pos].isalnum() or remaining[end_pos] == "'"):
-                        is_word = False
-                    if is_word:
-                        earliest_pos = pos
-                        earliest_name = name
-            if earliest_name is None:
-                result.append(('normal', remaining))
-                break
-            if earliest_pos > 0:
-                result.append(('normal', remaining[:earliest_pos]))
-            result.append(('name', earliest_name))
-            remaining = remaining[earliest_pos + len(earliest_name):]
-        return result
+# RichTextFormatter — extracted to tui_rich_text.py for size/maintainability (Phase 1 split)
+from tui_rich_text import RichTextFormatter
 
 
 class Translated_UI(FontObserver):
@@ -1032,6 +288,15 @@ class Translated_UI(FontObserver):
         self.choice_mode_active = False  # Flag สำหรับ Choice Dialog Mode
         self._deferred_render_id = None  # Timer ID for deferred text rendering after mode switch
 
+        # ── Dissolve overlay (PyQt6) — used for battle (68) + cutscene (71) ──
+        # Wired from MBB.create_translated_logs after this UI is constructed.
+        # When set, update_text() routes battle/cutscene chat types to the
+        # overlay (and withdraws the Tkinter root). Dialogue (61) keeps using
+        # the Tkinter UI as before.
+        self.dissolve_overlay = None
+        self._dissolve_active = False  # True while overlay is shown + Tk root hidden
+        self._tk_was_visible_before_dissolve = False  # to restore on mode switch back
+
         # Position tracking for dialogue mode
         self.dialogue_position_x = None  # Store X position before switching to cutscene
         self.dialogue_position_y = None  # Store Y position before switching to cutscene
@@ -1049,6 +314,29 @@ class Translated_UI(FontObserver):
             if mode in saved_positions and isinstance(saved_positions[mode], dict):
                 self.mode_positions[mode] = saved_positions[mode].copy()
                 logging.info(f"💾 Loaded saved {mode} position: {saved_positions[mode]}")
+
+        # ── Task 3 — Per-mode size memory (added on top of existing position storage) ──
+        # Each mode (dialog/battle/cutscene) now remembers its own width × height,
+        # so resizing one mode never affects the others.
+        # Settings key is `tui_geometries` (NOT `tui_sizes`) — `tui_sizes` was a
+        # historical/orphan key that may still exist in the wild and we don't want
+        # to collide with stale data (see CLAUDE.md memory note).
+        # Choice mode is intentionally absent — it's a transient overlay that
+        # should never overwrite the dialog mode's saved size.
+        self.mode_sizes = {
+            "dialog": {"w": None, "h": None},
+            "battle": {"w": None, "h": None},
+            "cutscene": {"w": None, "h": None},
+        }
+
+        saved_geometries = self.settings.get("tui_geometries", {})
+        for mode in ["dialog", "battle", "cutscene"]:
+            if mode in saved_geometries and isinstance(saved_geometries[mode], dict):
+                gw = saved_geometries[mode].get("w")
+                gh = saved_geometries[mode].get("h")
+                if isinstance(gw, int) and isinstance(gh, int) and gw > 0 and gh > 0:
+                    self.mode_sizes[mode] = {"w": gw, "h": gh}
+                    logging.info(f"💾 Loaded saved {mode} size: {gw}×{gh}")
 
         # Log flood prevention for clear_displayed_text
         self._text_cleared = False  # Track if text was already cleared
@@ -1422,9 +710,18 @@ class Translated_UI(FontObserver):
             return "dialog"
 
     def _save_current_position_to_settings(self):
-        """Save current TUI position for current mode to settings"""
+        """Save current TUI position for current mode to settings.
+
+        Choice mode is a transient overlay — saving it would overwrite the
+        underlying dialog mode's remembered position when the choice ends,
+        breaking the user's expected "restore to dialog spot A" behaviour
+        (Task 3). So we silently skip persistence for choice mode.
+        """
         try:
             mode = self._get_current_mode_name()
+            if mode == "choice":
+                return  # transient — don't perturb dialog's saved position
+
             x = self.root.winfo_x()
             y = self.root.winfo_y()
 
@@ -1440,6 +737,64 @@ class Translated_UI(FontObserver):
             logging.info(f"💾 Saved {mode} position: x={x}, y={y}")
         except Exception as e:
             logging.error(f"Error saving position: {e}")
+
+    def _save_current_size_to_settings(self):
+        """Save current TUI size for current mode to settings (Task 3).
+
+        Mirrors _save_current_position_to_settings but for width × height.
+        Called from on_smart_resize_end (Configure-driven, fires after every
+        resize) and _manual_stop_resize (fallback path). Choice mode skipped
+        because choice geometry is computed dynamically and shouldn't
+        overwrite dialog mode's user-tuned size.
+        """
+        try:
+            mode = self._get_current_mode_name()
+            if mode == "choice":
+                return  # transient — see _save_current_position_to_settings
+
+            if not self.root.winfo_exists():
+                return
+
+            w = self.root.winfo_width()
+            h = self.root.winfo_height()
+            # Sanity bounds — never persist 1×1 phantom sizes from race conditions
+            if w < 100 or h < 60:
+                return
+
+            # Update memory
+            self.mode_sizes[mode] = {"w": w, "h": h}
+
+            # Update settings
+            tui_geometries = self.settings.get("tui_geometries", {})
+            tui_geometries[mode] = {"w": w, "h": h}
+            self.settings.set("tui_geometries", tui_geometries)
+            self.settings.save_settings()
+
+            logging.info(f"💾 Saved {mode} size: {w}×{h}")
+        except Exception as e:
+            logging.error(f"Error saving size: {e}")
+
+    def _clamp_to_screen(self, x, y, w, h):
+        """Keep window inside the visible screen bounds (Task 3 edge case).
+
+        If the user changed monitor layouts since their last save, restoring
+        a position from a now-disconnected monitor would push the TUI off-screen.
+        Clamp x/y so at least 100px of the window stays visible on each axis.
+        """
+        try:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            # Allow some negative slack so windows partially off-screen at save
+            # don't snap fully on-screen — but ensure a 100px grab area stays.
+            min_x = -(w - 100)
+            max_x = sw - 100
+            min_y = 0  # never let title-edge go above screen top
+            max_y = sh - 60
+            cx = max(min_x, min(max_x, x))
+            cy = max(min_y, min(max_y, y))
+            return cx, cy
+        except Exception:
+            return x, y
 
     def _load_mode_settings(self, mode):
         """Load color and alpha for specified mode (size is auto-calculated per mode)"""
@@ -1486,9 +841,12 @@ class Translated_UI(FontObserver):
             was_choice_mode = getattr(self, 'choice_mode_active', False)
             prev_chat_type = self.current_chat_type
 
-            # 💾 Save current mode position BEFORE switching
+            # 💾 Save current mode position+size BEFORE switching
+            # Task 3: each mode now keeps its own remembered position AND size,
+            # so swapping modes preserves whatever the user tweaked in each one.
             if self.root.winfo_exists():
                 self._save_current_position_to_settings()
+                self._save_current_size_to_settings()
 
             self.current_chat_type = chat_type
             screen_width = self.root.winfo_screenwidth()
@@ -1502,13 +860,19 @@ class Translated_UI(FontObserver):
                     self.dialogue_position_y = self.root.winfo_y()
                     logging.info(f"💾 Saved dialogue position: ({self.dialogue_position_x}, {self.dialogue_position_y})")
 
-                # ความกว้าง 60%
-                new_width = int(screen_width * 0.6)
-
-                # ความสูงสำหรับ 2 บรรทัด (ประมาณ 100-120px)
-                font_size = self.settings.get("font_size", 24) + 2
-                line_height = font_size * 1.4
-                new_height = int(line_height * 2 + 60)  # 2 lines + extra padding (increased from 40)
+                # 🔧 Task 3 — prefer saved battle size; fall back to auto-calc.
+                # Auto-calc default: 60% screen width × ~2-line height.
+                saved_size = self.mode_sizes["battle"]
+                if saved_size["w"] is not None and saved_size["h"] is not None:
+                    new_width = saved_size["w"]
+                    new_height = saved_size["h"]
+                    logging.info(f"⚔️ Using saved battle size: {new_width}×{new_height}")
+                else:
+                    new_width = int(screen_width * 0.6)
+                    font_size = self.settings.get("font_size", 24) + 2
+                    line_height = font_size * 1.4
+                    new_height = int(line_height * 2 + 60)
+                    logging.info(f"⚔️ Using default battle size: {new_width}×{new_height}")
 
                 # 🎯 Use saved position OR default position
                 saved_pos = self.mode_positions["battle"]
@@ -1521,6 +885,9 @@ class Translated_UI(FontObserver):
                     x = (screen_width - new_width) // 2
                     y = int(screen_height * 0.10)
                     logging.info(f"⚔️ Using default battle position: ({x}, {y})")
+
+                # Clamp position so user-changed monitor layouts don't push window off-screen
+                x, y = self._clamp_to_screen(x, y, new_width, new_height)
 
                 self.root.resizable(True, True)
                 self.root.geometry(f"{new_width}x{new_height}+{x}+{y}")
@@ -1543,14 +910,19 @@ class Translated_UI(FontObserver):
                     logging.info(f"💾 Saved dialogue position: ({self.dialogue_position_x}, {self.dialogue_position_y})")
 
                 # ========== SIZE CHANGES ==========
-
-                # ความกว้าง 90%
-                new_width = int(screen_width * 0.9)
-
-                # ความสูงสำหรับ 2 บรรทัด (เหมือน Battle mode แต่สูงกว่า 30px)
-                font_size = self.settings.get("font_size", 24) + 2
-                line_height = font_size * 1.4
-                new_height = int(line_height * 2 + 90)  # 2 lines + extra padding (increased by 30px)
+                # 🔧 Task 3 — prefer saved cutscene size; fall back to auto-calc.
+                # Auto-calc default: 90% screen width × ~2-line height.
+                saved_size = self.mode_sizes["cutscene"]
+                if saved_size["w"] is not None and saved_size["h"] is not None:
+                    new_width = saved_size["w"]
+                    new_height = saved_size["h"]
+                    logging.info(f"🎬 Using saved cutscene size: {new_width}×{new_height}")
+                else:
+                    new_width = int(screen_width * 0.9)
+                    font_size = self.settings.get("font_size", 24) + 2
+                    line_height = font_size * 1.4
+                    new_height = int(line_height * 2 + 90)
+                    logging.info(f"🎬 Using default cutscene size: {new_width}×{new_height}")
 
                 # 🎯 Use saved position OR default position
                 saved_pos = self.mode_positions["cutscene"]
@@ -1564,6 +936,9 @@ class Translated_UI(FontObserver):
                     bottom_margin = int(screen_height * 0.05)  # 5% margin from bottom
                     y = screen_height - new_height - bottom_margin
                     logging.info(f"🎬 Using default cutscene position: ({x}, {y})")
+
+                # Clamp position so user-changed monitor layouts don't push window off-screen
+                x, y = self._clamp_to_screen(x, y, new_width, new_height)
 
                 # CRITICAL: Unlock window before resizing
                 self.root.resizable(True, False)  # Allow horizontal resize only
@@ -1627,6 +1002,18 @@ class Translated_UI(FontObserver):
 
             else:  # Dialogue mode (61) or default
                 # ========== RESTORE DEFAULT SETTINGS ==========
+                # 🔧 Task 3 — prefer saved dialog size; fall back to settings.json
+                # width/height (which is the historical "default" path).
+                saved_size = self.mode_sizes["dialog"]
+                if saved_size["w"] is not None and saved_size["h"] is not None:
+                    dialog_w = saved_size["w"]
+                    dialog_h = saved_size["h"]
+                    logging.info(f"💬 Using saved dialog size: {dialog_w}×{dialog_h}")
+                else:
+                    dialog_w = self.default_width
+                    dialog_h = self.default_height
+                    logging.info(f"💬 Using default dialog size: {dialog_w}×{dialog_h}")
+
                 # 🎯 Use saved position OR default position
                 saved_pos = self.mode_positions["dialog"]
                 if saved_pos["x"] is not None and saved_pos["y"] is not None:
@@ -1635,14 +1022,17 @@ class Translated_UI(FontObserver):
                     logging.info(f"💬 Using saved dialog position: ({restore_x}, {restore_y})")
                 else:
                     # Default: bottom of screen, centered
-                    restore_x = (screen_width - self.default_width) // 2
+                    restore_x = (screen_width - dialog_w) // 2
                     bottom_margin = int(screen_height * 0.05)  # 5% margin from bottom
-                    restore_y = screen_height - self.default_height - bottom_margin
+                    restore_y = screen_height - dialog_h - bottom_margin
                     logging.info(f"💬 Using default dialog position: ({restore_x}, {restore_y})")
+
+                # Clamp position so user-changed monitor layouts don't push window off-screen
+                restore_x, restore_y = self._clamp_to_screen(restore_x, restore_y, dialog_w, dialog_h)
 
                 # CRITICAL: Unlock window before resizing
                 self.root.resizable(True, False)  # Allow horizontal resize only
-                self.root.geometry(f"{self.default_width}x{self.default_height}+{restore_x}+{restore_y}")
+                self.root.geometry(f"{dialog_w}x{dialog_h}+{restore_x}+{restore_y}")
                 self.root.resizable(False, False)  # Lock back after resize
 
                 # Load dialog mode settings (color, alpha)
@@ -1658,7 +1048,7 @@ class Translated_UI(FontObserver):
                 self.cutscene_mode_active = False
                 self.battle_mode_active = False
                 self.choice_mode_active = False
-                logging.info(f"💬 Switched to DIALOGUE mode: {self.default_width}x{self.default_height} at ({restore_x}, {restore_y})")
+                logging.info(f"💬 Switched to DIALOGUE mode: {dialog_w}x{dialog_h} at ({restore_x}, {restore_y})")
 
             # 🔧 FIX: Clear canvas when switching away from choice mode
             # This prevents stale choice text from being visible during the
@@ -2766,6 +2156,124 @@ class Translated_UI(FontObserver):
                     relx=0.85, rely=0.85, anchor="center"
                 )
 
+    # ─────────────────────────────────────────────────────────────────
+    # Dissolve overlay dispatch helpers (used for ChatType 68/71 only)
+    # ─────────────────────────────────────────────────────────────────
+    def _split_speaker_dialogue(self, text: str) -> tuple[str, str]:
+        """Mirror the speaker-extraction the Tkinter rich path uses.
+        Returns (speaker, dialogue). Empty speaker when there's no `:`.
+        Speaker names are short — guard against false splits."""
+        if not text:
+            return "", ""
+        t = text.strip()
+        if ":" in t:
+            head, tail = t.split(":", 1)
+            head = head.strip()
+            # Strip zero-width chars + bold markers from speaker (matches the
+            # cleaning used in the Tkinter render path so name lookup works)
+            for junk in ("**", "*", "​", "‌", "‍", "﻿"):
+                head = head.replace(junk, "")
+            head = head.strip()
+            if head and len(head) <= 40 and "\n" not in head:
+                return head, tail.strip()
+        return "", t
+
+    def _route_to_dissolve_overlay(
+        self, text: str, chat_type: int, is_lore_text: bool = False,
+    ) -> None:
+        """Send text into the PyQt6 dissolve overlay; hide the Tkinter root.
+
+        Called from update_text when chat_type is 68 (battle) or 71 (cutscene)
+        AND self.dissolve_overlay is wired. Cancels any pending Tkinter fade
+        timers so the legacy UI doesn't fight us."""
+        mode = "battle" if chat_type == 68 else "cutscene"
+
+        # Cancel pending fade/hide timers — leftover Tkinter fade chains can
+        # otherwise reappear and try to manipulate the now-hidden root.
+        # Also kill _deferred_render_id so a previous dialogue's deferred render
+        # can't paint stale text onto the canvas after we've withdrawn root.
+        try:
+            if getattr(self.state, "fade_timer_id", None):
+                self.root.after_cancel(self.state.fade_timer_id)
+                self.state.fade_timer_id = None
+            if getattr(self.state, "window_hide_timer_id", None):
+                self.root.after_cancel(self.state.window_hide_timer_id)
+                self.state.window_hide_timer_id = None
+            if getattr(self, "_deferred_render_id", None):
+                self.root.after_cancel(self._deferred_render_id)
+                self._deferred_render_id = None
+            self.state.is_fading = False
+        except Exception:
+            pass
+
+        # Track current chat type so set_display_mode_for_chat_type's "skip if
+        # already in correct mode" logic stays consistent on subsequent updates.
+        self.current_chat_type = chat_type
+        if chat_type == 68:
+            self.battle_mode_active = True
+            self.cutscene_mode_active = False
+        else:
+            self.cutscene_mode_active = True
+            self.battle_mode_active = False
+        self.choice_mode_active = False
+
+        # Hide the Tkinter root if it's currently visible
+        try:
+            if self.root.winfo_exists():
+                state = self.root.state()
+                if state == "normal" and not self._dissolve_active:
+                    self._tk_was_visible_before_dissolve = True
+                    self.root.withdraw()
+                elif not self._dissolve_active:
+                    # Already withdrawn — remember so we don't deiconify on exit
+                    self._tk_was_visible_before_dissolve = False
+        except Exception as e:
+            logging.debug(f"hide tkinter root for dissolve overlay failed: {e}")
+
+        # Extract speaker (cutscene narration → no speaker per project test
+        # message system; battle/cutscene use the same "speaker: dialogue"
+        # pipeline as dialogue mode).
+        speaker, dialogue = self._split_speaker_dialogue(text)
+
+        # Show + paint the overlay
+        try:
+            # If overlay isn't visible yet, load per-mode geometry first
+            if not self.dissolve_overlay.isVisible():
+                self.dissolve_overlay.show_for_mode(mode)
+            else:
+                # Already visible — switch mode (might be cutscene → battle
+                # transition with no hide in between)
+                self.dissolve_overlay.set_mode(mode)
+            self.dissolve_overlay.set_text(
+                dialogue, speaker=speaker, is_lore=is_lore_text,
+            )
+            self._dissolve_active = True
+        except Exception as e:
+            logging.error(f"dissolve_overlay update failed: {e}", exc_info=True)
+            # If overlay update fails, restore Tkinter root so user isn't blank
+            try:
+                if self._tk_was_visible_before_dissolve:
+                    self.root.deiconify()
+            except Exception:
+                pass
+            raise
+
+    def _exit_dissolve_overlay(self) -> None:
+        """Hide the overlay and restore the Tkinter root if we were the one
+        that hid it. Called when user switches back to dialogue mode."""
+        try:
+            if self.dissolve_overlay is not None:
+                self.dissolve_overlay.hide_overlay()
+        except Exception as e:
+            logging.debug(f"dissolve_overlay.hide_overlay failed: {e}")
+        try:
+            if self._tk_was_visible_before_dissolve and self.root.winfo_exists():
+                self.root.deiconify()
+        except Exception as e:
+            logging.debug(f"deiconify tkinter root after dissolve failed: {e}")
+        self._dissolve_active = False
+        self._tk_was_visible_before_dissolve = False
+
     def update_text(
         self, text: str, is_lore_text: bool = False, force_choice_mode: bool = False, chat_type: int = 61
     ) -> None:
@@ -2783,8 +2291,78 @@ class Translated_UI(FontObserver):
                 logging.warning(f"⚠️ Blocked error message from displaying in TUI: {text}")
                 return
 
+            # ── DISSOLVE OVERLAY DISPATCH ──────────────────────────────────
+            # Battle (68) + Cutscene (71) → render into the PyQt6 dissolve
+            # overlay instead of the legacy Tkinter UI. Dialogue (61) and
+            # everything else keeps the Tkinter path.
+            #
+            # When entering battle/cutscene we hide the Tkinter root window
+            # (`self.root.withdraw()`), and when leaving we restore it. The
+            # Tkinter UI is NEVER destroyed — the user can switch back to
+            # dialogue at any time and we deiconify the same window.
+            #
+            # If the overlay isn't wired (creation failed in MBB.py), we fall
+            # through to the Tkinter path as a safe default.
+            if self.dissolve_overlay is not None and chat_type in (68, 71):
+                try:
+                    self._route_to_dissolve_overlay(
+                        text, chat_type, is_lore_text=is_lore_text,
+                    )
+                except Exception as dispatch_err:
+                    logging.error(
+                        f"Dissolve overlay dispatch failed, falling back "
+                        f"to Tkinter: {dispatch_err}",
+                        exc_info=True,
+                    )
+                    # Fall through to Tkinter path
+                else:
+                    return
+            elif self._dissolve_active and chat_type not in (68, 71):
+                # Switching back to dialogue (or other) — hide the overlay
+                # and restore the Tkinter window before continuing.
+                try:
+                    self._exit_dissolve_overlay()
+                except Exception as exit_err:
+                    logging.error(
+                        f"Failed to exit dissolve overlay cleanly: {exit_err}",
+                        exc_info=True,
+                    )
+
             # Reset text cleared flag when new text arrives
             self._text_cleared = False
+
+            # >>> FADE-RACE FIX: kill any in-progress fade BEFORE rendering new text.
+            # Without this, the fade chain (rescheduled every 25ms) keeps decrementing
+            # alpha right after restore_user_transparency() sets it back — visible
+            # stutter. Worse: if fade reaches alpha=0 mid-render, canvas.delete("all")
+            # wipes the new text being drawn AND execute_tui_hide() withdraws the
+            # window — near-freeze / blank UI in PyInstaller EXE builds where the
+            # race window is wider.
+            #
+            # IMPORTANT: only reset RUNTIME flags here. Do NOT touch user preferences:
+            #   - auto_hide_after_fade: set in toggle_fadeout — clobbering it breaks
+            #     the "BG hides after fade completes" feature for the rest of the
+            #     session.
+            #   - fadeout_enabled: same reasoning.
+            # We also cancel the post-fade window-hide timer so a queued withdraw()
+            # can't fire after we've already shown new text.
+            if self.state.fade_timer_id:
+                try:
+                    self.root.after_cancel(self.state.fade_timer_id)
+                except Exception:
+                    pass
+                self.state.fade_timer_id = None
+            if self.state.window_hide_timer_id:
+                try:
+                    self.root.after_cancel(self.state.window_hide_timer_id)
+                except Exception:
+                    pass
+                self.state.window_hide_timer_id = None
+            self.state.is_fading = False
+            # Bump activity time NOW — any fade callback that leaked past the cancel
+            # (Tk event already queued) will see fresh activity and early-return.
+            self.state.last_activity_time = time.time()
+            # <<< FADE-RACE FIX
 
             # Save chat_type for choice detection in _original_update_text
             self._current_chat_type = chat_type
@@ -3146,7 +2724,22 @@ class Translated_UI(FontObserver):
             # Calculate text positioning based on mode
             text_anchor = self._get_text_anchor()
             if text_anchor == "n":  # Center-aligned for battle/cutscene
+                # 🔧 Task 4 — Battle/Cutscene centering race fix.
+                # When set_display_mode_for_chat_type just resized the window
+                # and the 50ms defer fires, Tk may not have processed the
+                # geometry change yet → canvas.winfo_width() returns the OLD
+                # width and text ends up off-centre. Force pending geometry
+                # to flush BEFORE reading the canvas width.
+                try:
+                    self.components.canvas.update_idletasks()
+                except Exception:
+                    pass
                 canvas_width = self.components.canvas.winfo_width()
+                # Defensive: if canvas hasn't materialised (winfo_width returns 1),
+                # fall back to the window width minus our standard 40px chrome
+                # margin so the text still ends up roughly centred.
+                if canvas_width <= 1:
+                    canvas_width = max(1, self.root.winfo_width() - 40)
                 text_x = canvas_width // 2
             else:  # Left-aligned for dialogue
                 text_x = 10
@@ -3407,7 +3000,22 @@ class Translated_UI(FontObserver):
             small_font = (self.settings.get("font"), small_font_size)
 
             self.state.full_text = text
+            # 🔧 Task 4 — Battle/Cutscene centering race fix.
+            # In battle/cutscene mode the dialog/cutscene branch in
+            # set_display_mode_for_chat_type just resized the window. After
+            # the 50ms render-defer fires we may STILL race ahead of the WM
+            # geometry callback → canvas.winfo_width() returns the OLD width
+            # → centering math (available_width // 2 below) misplaces text.
+            # Force pending geometry to flush so we read the fresh width.
+            if self.battle_mode_active or self.cutscene_mode_active:
+                try:
+                    self.components.canvas.update_idletasks()
+                except Exception:
+                    pass
             available_width = self.components.canvas.winfo_width() - 40
+            # Defensive: canvas not yet realised → fall back to window width.
+            if available_width < 50:
+                available_width = max(50, self.root.winfo_width() - 40)
 
             # 🎯 CHOICE DETECTION — pipe format OR chat_type 70 from C# choice addon
             is_choice_dialogue = self._is_choice_dialogue(text)
@@ -5015,12 +4623,16 @@ class Translated_UI(FontObserver):
         self.check_text_overflow()
 
     def update_transparency(self, alpha: float) -> None:
-        """
-        Update window transparency
-        Args:
-            alpha: Transparency value (0.0 to 1.0)
-        """
-        self.root.attributes("-alpha", alpha)
+        """DEPRECATED — kept as no-op for backwards compatibility.
+
+        TUI background alpha is now controlled SOLELY by the in-TUI color/alpha
+        picker (saved to settings["bg_alpha"]). The legacy settings["transparency"]
+        key used to slam onto the window via this method, overriding the picker.
+        Removed from MBB.apply_settings() / apply_saved_settings() — this stub
+        catches any other caller we missed and warns instead of clobbering."""
+        logging.debug(
+            f"update_transparency({alpha}) ignored — picker controls TUI alpha now"
+        )
 
     def close_window(self) -> None:
         """Close the translation window without stopping translation"""
@@ -5327,11 +4939,42 @@ class Translated_UI(FontObserver):
         self.resize_throttle = 0.016
         self.resize_preview_rect = None
 
+    # ── Win32 native resize hand-off constants ──────────────────────────────
+    # WM_NCLBUTTONDOWN + HTBOTTOMRIGHT make Windows think the user grabbed a
+    # native resize corner. Windows then runs its own modal resize loop until
+    # the mouse button is released — the OS handles motion capture, drag
+    # visualization, and dispatches a single WM_SIZE at the end. Tk picks that
+    # up via its <Configure> binding → on_smart_resize_end → universal restore.
+    # See: https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-nclbuttondown
+    _WM_NCLBUTTONDOWN = 0x00A1
+    _HTBOTTOMRIGHT = 17
+
     def start_resize(self, event: tk.Event) -> None:
+        """Manual resize start (routes to throttled _start_manual_resize).
+
+        ⚠ ROLLED BACK from Win32 WM_NCLBUTTONDOWN hand-off — that approach
+        caused a fatal `PyEval_RestoreThread` GIL crash because SendMessageW
+        is blocking and runs Windows' modal resize loop while Python's main
+        thread is suspended inside a Tk callback. During the modal loop
+        Windows fires WM_PAINT / WM_SIZE back to Tk's window proc; Tk tries
+        to dispatch them but the Python thread state is NULL → process
+        terminates immediately.
+
+        Manual path is now the ONLY path. Lag is mitigated via 16ms throttle
+        inside _manual_on_resize (was unthrottled, called geometry() per
+        motion event). Cursor-escape and hover-miss issues are fully covered
+        by the existing bind_all + on_smart_resize_end safeguards.
         """
-        Initialize window resize operation
-        Args:
-            event: Mouse event containing initial coordinates
+        self._start_manual_resize(event)
+
+    def _start_manual_resize(self, event: tk.Event) -> None:
+        """
+        FALLBACK: original manual resize loop, preserved for safety.
+
+        Only invoked if the Win32 hand-off in start_resize() raises. Should
+        never trigger on a normal Windows install but kept intact so behavior
+        degrades gracefully on weird configs (RDP edge cases, alternate
+        display drivers, future cross-platform porting, etc.).
         """
         self.is_resizing = True
         self.resize_x = event.x_root
@@ -5339,111 +4982,161 @@ class Translated_UI(FontObserver):
         self.resize_w = self.root.winfo_width()
         self.resize_h = self.root.winfo_height()
 
-        # บันทึกตำแหน่ง window เพื่อ lock ไว้ระหว่าง resize
+        # Lock window position during the manual drag
         self.resize_anchor_x = self.root.winfo_x()
         self.resize_anchor_y = self.root.winfo_y()
-
-        # บันทึกขนาดหน้าต่างก่อนเริ่มปรับขนาด เพื่อใช้เป็นจุดอ้างอิง
         self.original_geometry = self.root.geometry()
 
-        # 🔧 Capture mouse globally during drag — when window grows beyond a
-        # threshold, Win32 SetWindowRgn clips the resize_handle and the
-        # ButtonRelease event sent there gets lost. Binding to root_all() makes
-        # the release reach us regardless of where the cursor ends up.
+        # Global mouse capture so ButtonRelease still reaches us if Win32
+        # SetWindowRgn clips the resize_handle out of the viewport mid-drag.
         try:
             self._resize_motion_root_id = self.root.bind_all(
-                "<B1-Motion>", self.on_resize, add="+"
+                "<B1-Motion>", self._manual_on_resize, add="+"
             )
             self._resize_release_root_id = self.root.bind_all(
-                "<ButtonRelease-1>", self.stop_resize, add="+"
+                "<ButtonRelease-1>", self._manual_stop_resize, add="+"
             )
         except Exception as _e:
-            logging.debug(f"start_resize global bind failed: {_e}")
+            logging.debug(f"_start_manual_resize global bind failed: {_e}")
 
-        # หากมีพรีวิวอยู่แล้ว ให้ลบออก
         if hasattr(self, "resize_preview") and self.resize_preview is not None:
-            self.root.after_cancel(self.resize_preview)
+            try:
+                self.root.after_cancel(self.resize_preview)
+            except Exception:
+                pass
             self.resize_preview = None
 
-        # เก็บสถานะสิ่งที่กำลังแสดงอยู่เพื่อกู้คืนหลังปรับขนาดเสร็จ
         self.pre_resize_text = None
         if (
             hasattr(self.components, "text_container")
             and self.components.text_container
         ):
-            self.pre_resize_text = self.components.canvas.itemcget(
-                self.components.text_container, "text"
-            )
-
-        # Professional UI: Silent resize initialization
-        # print("\rStarting window resize...", end="", flush=True)  # Can be enabled for debugging
+            try:
+                self.pre_resize_text = self.components.canvas.itemcget(
+                    self.components.text_container, "text"
+                )
+            except Exception:
+                pass
 
     def on_resize(self, event: tk.Event) -> None:
         """
-        Handle window resizing with throttling - ปรับปรุงประสิทธิภาพ
-        Args:
-            event: Mouse event containing current coordinates
+        Stub kept for binding compatibility.
+
+        With the Win32 hand-off in start_resize(), the OS captures the mouse
+        and runs its own modal resize loop — no <B1-Motion> events reach Tk
+        during that loop. This handler therefore becomes a no-op for the
+        native path. Kept callable so the existing
+        `self.resize_handle.bind("<B1-Motion>", self.on_resize)` binding (and
+        any defensive re-bind elsewhere) doesn't blow up.
+
+        If the FALLBACK manual path is active, _manual_on_resize handles the
+        real work via bind_all() inside _start_manual_resize().
+        """
+        # No-op for native path. Manual fallback wires its own handler.
+        return
+
+    def stop_resize(self, event: Optional[tk.Event] = None) -> None:
+        """
+        Stub kept for binding compatibility.
+
+        For the native Win32 path, SendMessageW() blocks until the user
+        releases the mouse, then on_smart_resize_end() (driven by Tk's
+        <Configure> event) runs the universal layout restore. So this
+        handler has nothing to do.
+
+        For the FALLBACK manual path, _manual_stop_resize is what actually
+        runs (registered via bind_all in _start_manual_resize). We still
+        clean up any leftover bind_all captures here as a safety belt — if
+        the fallback fired and we somehow returned through the regular
+        ButtonRelease binding instead, this prevents zombie all-bindings.
+        """
+        # Defensive: clean up any global captures from the fallback path.
+        # Cheap when there's nothing to clean (idempotent) and prevents the
+        # nasty case where fallback bindings leak past the resize session.
+        try:
+            if getattr(self, "_resize_motion_root_id", None):
+                self.root.unbind_all("<B1-Motion>")
+                self._resize_motion_root_id = None
+            if getattr(self, "_resize_release_root_id", None):
+                self.root.unbind_all("<ButtonRelease-1>")
+                self._resize_release_root_id = None
+        except Exception as _e:
+            logging.debug(f"stop_resize cleanup ignored: {_e}")
+
+        # is_resizing might still be True if the fallback path took over —
+        # clear it here as a final safety net.
+        self.is_resizing = False
+
+    # ── Manual fallback path: full implementation preserved verbatim ────────
+    # These methods are ONLY reached when start_resize()'s Win32 hand-off has
+    # raised an exception. They mirror the original pre-refactor logic so the
+    # user retains a working resize even on edge-case Windows configs where
+    # WM_NCLBUTTONDOWN delegation is unavailable.
+
+    def _manual_on_resize(self, event: tk.Event) -> None:
+        """Manual resize tick — throttled geometry update + light layout repair.
+
+        ⚡ THROTTLE: geometry() now coalesces to ~60 FPS (16ms) via
+        _last_geometry_time check. Without this, mouse motion at 100+ Hz
+        fires 100+ Win32 WM_SIZE round-trips per second → severe lag during
+        drag (this was the user-reported "slow" complaint).
         """
         if not self.is_resizing:
             return
 
         try:
-            # คำนวณขนาดใหม่
+            current_time = time.time()
+
+            # 16ms throttle for geometry — caps at ~60 FPS, plenty smooth
+            if not hasattr(self, "_last_geometry_time"):
+                self._last_geometry_time = 0.0
+            if current_time - self._last_geometry_time < 0.016:
+                return  # Skip this frame — too soon since last geometry call
+            self._last_geometry_time = current_time
+
             dx = event.x_root - self.resize_x
             dy = event.y_root - self.resize_y
 
-            # ค่าความสูงต่ำสุดลดลงจาก 200px เป็น 120px
-            # ค่าความกว้างต่ำสุดยังคงเป็น 300px
+            # Min size: 300 wide × 120 tall
             new_width = max(300, self.resize_w + dx)
-            new_height = max(120, self.resize_h + dy)  # ปรับลดค่าความสูงต่ำสุด
+            new_height = max(120, self.resize_h + dy)
 
-            # กำหนดขนาดใหม่ พร้อม lock ตำแหน่ง
-            self.root.geometry(f"{int(new_width)}x{int(new_height)}+{self.resize_anchor_x}+{self.resize_anchor_y}")
+            # Lock window position so manual drag doesn't drift
+            self.root.geometry(
+                f"{int(new_width)}x{int(new_height)}"
+                f"+{self.resize_anchor_x}+{self.resize_anchor_y}"
+            )
 
-            current_time = time.time()
-
-            # 🔧 LIGHT layout restore during drag — every 150ms keep widgets
-            # visible without expensive ops. Skip debug logging, auto-hide
-            # rebinding, rounded-corner Win32 calls, and update_idletasks —
-            # those go to stop_resize. Goal: keep drag responsive (no UI freeze
-            # → mouse stays on handle).
+            # Light layout restore every 150ms — keeps children visible
+            # without the expensive ops (logging, idletasks, Win32 region,
+            # auto-hide rebind) that go in stop_resize.
             if current_time - self.last_resize_time > 0.15:
                 self.last_resize_time = current_time
                 try:
                     self._restore_layout_light()
                 except Exception as _re:
-                    logging.debug(f"on_resize light restore error: {_re}")
+                    logging.debug(f"_manual_on_resize light restore error: {_re}")
 
         except Exception as e:
-            logging.error(f"Error during resize: {e}")
+            logging.error(f"Error during manual resize: {e}")
 
-    def stop_resize(self, event: Optional[tk.Event] = None) -> None:
-        """
-        End window resize operation and save final settings
-        Args:
-            event: Optional mouse event
-        """
+    def _manual_stop_resize(self, event: Optional[tk.Event] = None) -> None:
+        """FALLBACK: persist final size + run universal layout restore."""
         if not self.is_resizing:
             return
 
-        # 🔧 Release the global drag captures we set in start_resize. Without
-        # this we'd intercept every ButtonRelease in the app for the rest of
-        # the session.
+        # Drop the global bind_all captures from _start_manual_resize
         try:
-            if hasattr(self, "_resize_motion_root_id") and self._resize_motion_root_id:
+            if getattr(self, "_resize_motion_root_id", None):
                 self.root.unbind_all("<B1-Motion>")
-                # Re-bind handle's own motion (we removed the all-bind, but the
-                # handle had its own bind too — stays attached because unbind_all
-                # only clears the all-class binding)
                 self._resize_motion_root_id = None
-            if hasattr(self, "_resize_release_root_id") and self._resize_release_root_id:
+            if getattr(self, "_resize_release_root_id", None):
                 self.root.unbind_all("<ButtonRelease-1>")
                 self._resize_release_root_id = None
         except Exception as _e:
-            logging.debug(f"stop_resize global unbind failed: {_e}")
+            logging.debug(f"_manual_stop_resize global unbind failed: {_e}")
 
         try:
-            # บันทึกขนาดสุดท้ายลงใน settings
             final_w = self.root.winfo_width()
             final_h = self.root.winfo_height()
 
@@ -5451,51 +5144,39 @@ class Translated_UI(FontObserver):
             self.settings.set("height", final_h)
             self.settings.save_settings()
 
-            # 🔧 Keep cached defaults in sync with the new manual size, so the
-            # chat-type switch back to "dialog" mode (which uses self.default_*
-            # from line ~1352) doesn't snap the window back to startup size.
+            # Keep cached defaults in sync so chat-type switch back to dialog
+            # mode doesn't snap window back to startup size.
             self.default_width = final_w
             self.default_height = final_h
 
-            # ตั้งค่า flag เพื่อบอกว่าหยุดการปรับขนาดแล้ว
+            # 💾 Task 3 — persist size for current mode (manual fallback path).
+            # on_smart_resize_end normally handles this via Configure, but in case
+            # the manual path took over (Win32 hand-off failed), save here too.
+            self._save_current_size_to_settings()
+
             self.is_resizing = False
 
-            # *** REMOVED: Reset resize message (no longer needed) ***
-            # self.resize_message_shown = False  # Not needed anymore
-
-            # ตั้งเวลาสำหรับการอัพเดตเนื้อหาหลังจากขนาดหน้าต่างคงที่แล้ว
             def update_content_after_resize():
                 try:
-                    # อัพเดต canvas กับ scroll region
                     self.on_canvas_configure({"width": final_w - 40})
-
-                    # Re-render ข้อความตามขนาดใหม่
-                    if hasattr(self, 'dialogue_text') and self.dialogue_text:
-                        current_type = getattr(self, 'current_chat_type', 61)
+                    if hasattr(self, "dialogue_text") and self.dialogue_text:
+                        current_type = getattr(self, "current_chat_type", 61)
                         self.update_text(self.dialogue_text, chat_type=current_type)
-
-                    # ตรวจสอบข้อความเกินขอบเขต
                     try:
                         self.check_text_overflow()
                         self.update_scrollbar_position()
                     except Exception as e:
                         logging.error(f"Error checking text overflow after resize: {e}")
-
                 except Exception as e:
                     logging.error(f"Error updating content after resize: {e}")
 
-            # รอ 100ms ก่อนอัพเดตเนื้อหา เพื่อให้การแสดงผลมีความนิ่ง
             self.root.after(100, update_content_after_resize)
-            # 🔧 Single full-restore call at release (replaces inline duplicate).
-            # Layout repair + auto-hide rebind + rounded corners — all done once
-            # here, not throttled. Cheap during drag (light restore in on_resize)
-            # → expensive at release (this).
+            # Universal full-restore — same path the native flow uses via
+            # on_smart_resize_end. Single point of truth for layout repair.
             self.root.after(120, self._restore_layout_after_resize_universal)
 
         except Exception as e:
-            logging.error(f"Error in stop_resize: {e}")
-            # Professional UI: Log errors silently
-            # print(f"\rStop resize error: {e}")  # Can be enabled for debugging
+            logging.error(f"Error in _manual_stop_resize: {e}")
 
         self.is_resizing = False
 
@@ -5566,6 +5247,55 @@ class Translated_UI(FontObserver):
 
                 # Optimized scroll region update
                 self.root.after_idle(self._update_scroll_region_optimized)
+
+                # 🔧 Task 4 — Battle/Cutscene defensive re-centering.
+                # If a Configure arrives AFTER the initial render (e.g. the
+                # geometry change from set_display_mode_for_chat_type took
+                # longer than the 50ms render-defer), text items rendered
+                # with anchor='n' need their x coordinate updated to the new
+                # canvas centre. Strategy: compute the delta between the
+                # current main-text x and the new centre x, then shift ALL
+                # centred items (main text + outlines + names) by that delta
+                # so shadow pixel offsets are preserved.
+                if self.battle_mode_active or self.cutscene_mode_active:
+                    try:
+                        new_center_x = safe_width // 2 + 10  # +10 = canvas left padding
+                        canvas = self.components.canvas
+                        # Find a centred reference item to read current x from.
+                        ref_x = None
+                        if (hasattr(self.components, "text_container")
+                                and self.components.text_container):
+                            try:
+                                if canvas.type(self.components.text_container) == "text":
+                                    ref_anchor = canvas.itemcget(self.components.text_container, "anchor")
+                                    if ref_anchor == "n":
+                                        coords = canvas.coords(self.components.text_container)
+                                        if len(coords) >= 2:
+                                            ref_x = coords[0]
+                            except tk.TclError:
+                                pass
+                        if ref_x is not None and ref_x != new_center_x:
+                            delta = new_center_x - ref_x
+                            # Shift every centred text item by delta. This
+                            # preserves shadow offsets (each shadow moves by
+                            # the same amount, so its dx relative to main text
+                            # is unchanged).
+                            for tag in ("text", "dialogue", "rich_text_main",
+                                        "name", "name_outline", "text_outline",
+                                        "dialogue_outline"):
+                                for item in canvas.find_withtag(tag):
+                                    try:
+                                        if canvas.type(item) != "text":
+                                            continue
+                                        if canvas.itemcget(item, "anchor") != "n":
+                                            continue
+                                        coords = canvas.coords(item)
+                                        if len(coords) >= 2:
+                                            canvas.coords(item, coords[0] + delta, coords[1])
+                                    except tk.TclError:
+                                        pass
+                    except Exception as _re_centre_err:
+                        logging.debug(f"battle/cutscene re-centre skipped: {_re_centre_err}")
 
             # Check text overflow with error protection
             try:
@@ -6395,28 +6125,24 @@ class Translated_UI(FontObserver):
                 return
 
             if alpha <= 0:
-                # เมื่อหายไปหมดแล้ว ให้ลบองค์ประกอบทั้งหมดจาก canvas แทนการล้างข้อความ
-
-                # 1. บันทึกสถานะว่าเพิ่งมีการ fade out สมบูรณ์
-                self.state.just_faded_out = True
-
-                # 2. ล้าง canvas ทั้งหมด แทนที่จะเคลียร์แค่ text
-                self.components.canvas.delete("all")
-                self.components.outline_container = []
-                self.components.text_container = None
-
-                # 3. บันทึกสถานะการทำ fade
-                self.state.is_fading = False
-
-                # 4. คืนค่าสถานะต่างๆ เกี่ยวกับข้อความ
-                self.dialogue_text = ""
-                self.state.full_text = ""
-
-                # 5. Phase 3: TUI fade เสร็จแล้วเมื่อ text fade เสร็จ
-                if self.state.auto_hide_after_fade:
-                    self.execute_tui_hide()  # ซ่อน TUI ทันที (fade เสร็จแล้วใน loop)
-
+                # >>> FADE-RACE FIX: defer destructive cleanup so any pending
+                # update_text() events can run first and cancel us. Without this
+                # defer, the cleanup (canvas.delete + execute_tui_hide+withdraw)
+                # runs SYNCHRONOUSLY in the same Tk callback as the alpha
+                # decrement — Tk can't process queued events between alpha=0 and
+                # withdraw(). A new translation arriving 1-80ms before the alpha=0
+                # tick gets queued (safe_after(0, update_text)) but only runs
+                # AFTER our cleanup completes, causing: BG fades out → window
+                # withdraws → window deiconifies → flash.
+                #
+                # By deferring cleanup ~80ms, update_text gets a chance to run
+                # within that window. _do_fade_destructive_cleanup re-checks
+                # is_fading + last_activity_time and aborts if interrupted.
+                self.state.fade_timer_id = self.root.after(
+                    80, self._do_fade_destructive_cleanup
+                )
                 return
+                # <<< FADE-RACE FIX
 
             # ลดความโปร่งใสทีละน้อย
             new_alpha = max(0, alpha - step)
@@ -6555,6 +6281,46 @@ class Translated_UI(FontObserver):
 
         except Exception as e:
             logging.error(f"Error in fade_out_text: {e}")
+            self.state.is_fading = False
+
+    def _do_fade_destructive_cleanup(self):
+        """Run the canvas-clear + window-hide that follows a completed fade.
+
+        Deferred ~80ms after fade reaches alpha=0 to let any queued update_text()
+        events fire first. If a new message arrived during that window, it will
+        have:
+          - cleared is_fading (via update_text entry guards), AND
+          - bumped last_activity_time
+
+        Either signal aborts the destructive work — leaves the freshly-rendered
+        new text visible instead of wiping it and withdrawing the window."""
+        try:
+            self.state.fade_timer_id = None
+
+            # Aborted by update_text() — new content is being rendered, don't wipe it.
+            if not self.state.is_fading:
+                return
+            # Activity within last 200ms — same scenario, slightly different signal.
+            # Bumped by update_text() entry; gives us a 2nd line of defense in case
+            # is_fading was somehow re-set True between cancel and now.
+            if time.time() - self.state.last_activity_time < 0.2:
+                self.state.is_fading = False
+                self.restore_user_transparency()
+                return
+
+            # Safe to do the destructive cleanup now — fade truly completed with
+            # no interruption.
+            self.state.just_faded_out = True
+            self.components.canvas.delete("all")
+            self.components.outline_container = []
+            self.components.text_container = None
+            self.state.is_fading = False
+            self.dialogue_text = ""
+            self.state.full_text = ""
+            if self.state.auto_hide_after_fade:
+                self.execute_tui_hide()
+        except Exception as e:
+            logging.error(f"Error in _do_fade_destructive_cleanup: {e}")
             self.state.is_fading = False
 
     def clean_canvas(self) -> None:
@@ -7851,6 +7617,11 @@ class Translated_UI(FontObserver):
                 self.is_resizing = False
                 self.resize_end_timer = None
 
+                # 💾 Task 3 — persist size for current mode so re-entering this mode
+                # later restores the user's chosen dimensions. The size cache used
+                # by set_display_mode_for_chat_type reads this value.
+                self._save_current_size_to_settings()
+
                 # Full refresh only when resizing stops
                 self.refresh_auto_hide_bindings()
                 self.check_mouse_position_immediate()
@@ -7919,6 +7690,17 @@ class Translated_UI(FontObserver):
                     self.cache_ui_widgets()
                 if hasattr(self, "setup_auto_hide_bindings"):
                     self.setup_auto_hide_bindings()
+            except Exception:
+                pass
+            # ── Re-evaluate hover state at current cursor position ──
+            # After bind_all() churn during resize (or the OS swallowing the
+            # press in the native path), Tk's <Enter>/<Leave> tracking can
+            # drift out of sync with reality. Force a fresh hit-test against
+            # the new widget layout so auto-hide reacts on the very next
+            # cursor movement instead of needing a manual "wiggle".
+            try:
+                if hasattr(self, "check_mouse_position_immediate"):
+                    self.check_mouse_position_immediate()
             except Exception:
                 pass
         except Exception as e:
@@ -8196,30 +7978,59 @@ class Translated_UI(FontObserver):
         return t * t * (3.0 - 2.0 * t)
 
     def set_icons_alpha(self, alpha_value):
-        """ตั้งค่า transparency ของไอคอนทั้งหมด"""
+        """ตั้งค่า transparency ของไอคอนทั้งหมด
+
+        Mode-aware visibility (Task 1):
+          - dialogue / choice (default): show all 4 buttons (close, lock, color, fadeout)
+            + resize_handle.
+          - battle / cutscene: show ONLY close + resize_handle. The other buttons
+            (lock, color, fadeout) stay hidden because the user is fighting /
+            watching a cutscene and won't tweak settings — but they still need
+            an escape (X) and the ability to resize the window.
+          - Hide path (alpha < 0.1) is mode-agnostic: pack_forget everything.
+        """
         try:
+            ALL_BUTTONS = ["close", "lock", "color", "fadeout"]
+
+            # Determine which buttons to display when showing.
+            # _get_current_mode_name() returns 'dialog' | 'battle' | 'cutscene' | 'choice'.
+            # 'choice' inherits dialogue behaviour (all buttons) since it's transient
+            # overlay on top of dialogue context.
+            try:
+                mode = self._get_current_mode_name()
+            except Exception:
+                mode = "dialog"  # safe fallback if helper unavailable
+
+            if mode in ("battle", "cutscene"):
+                visible_buttons = {"close"}
+            else:
+                visible_buttons = set(ALL_BUTTONS)
+
             # Apply alpha simulation to all icon buttons
-            for button_name in ["close", "lock", "color", "fadeout"]:
+            for button_name in ALL_BUTTONS:
                 button = self.components.buttons.get(button_name)
-                if button and button.winfo_exists():
-                    if alpha_value < 0.1:  # Hidden state
-                        # Hide buttons by removing from pack layout
-                        button.pack_forget()
-                    else:
-                        # Show buttons by restoring pack layout
-                        # Check if button is not currently visible
+                if not (button and button.winfo_exists()):
+                    continue
+
+                if alpha_value < 0.1:
+                    # Hidden state → all buttons go away regardless of mode
+                    button.pack_forget()
+                else:
+                    # Show state → only the buttons allowed by current mode
+                    if button_name in visible_buttons:
                         if not button.winfo_viewable() or not button.winfo_ismapped():
-                            # Different pady for close button vs others
                             pady_value = (5, 5) if button_name == "close" else 5
                             button.pack(side=tk.TOP, pady=pady_value)
+                    else:
+                        # Mode says hide this button even on "show" path
+                        button.pack_forget()
 
-            # Apply alpha to resize handle
+            # Resize handle: ALWAYS visible on show (every mode), hidden on alpha<0.1.
+            # Battle/cutscene users still need to adjust window size mid-action.
             if hasattr(self, 'resize_handle') and self.resize_handle and self.resize_handle.winfo_exists():
                 if alpha_value < 0.1:
-                    # Hide resize handle by removing from place layout
                     self.resize_handle.place_forget()
                 else:
-                    # Show resize handle by restoring place layout
                     if not self.resize_handle.winfo_viewable() or not self.resize_handle.winfo_ismapped():
                         self.resize_handle.place(relx=1, rely=1, anchor="se")
 

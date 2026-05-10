@@ -147,12 +147,12 @@ class TextCorrector:
                         speaker = "???"
                         return speaker, content.strip(), DialogueType.CHARACTER
 
-                    # ตรวจสอบในชื่อที่รู้จัก
-                    if speaker in self.names or speaker in self.confirmed_names:
-                        return speaker, content.strip(), DialogueType.CHARACTER
-                    else:
-                        # ถ้าไม่พบชื่อที่ตรงกัน ให้ถือเป็นข้อความทั้งหมด
-                        return None, text, DialogueType.NORMAL
+                    # Trust speaker — text source is Dalamud memory hook (100% accurate)
+                    # The whitelist check (speaker in self.names) was OCR-era logic
+                    # for filtering garbled speaker reads. With Dalamud, every speaker
+                    # in "Speaker: dialogue" format is real and should be honored —
+                    # otherwise new characters / unknown NPCs lose their name in the UI.
+                    return speaker, content.strip(), DialogueType.CHARACTER
 
         # กรณีไม่มีเครื่องหมายคั่น ให้ถือเป็นข้อความทั่วไป
         return None, text, DialogueType.NORMAL
@@ -548,12 +548,12 @@ class TextCorrector:
                         speaker = "???"
                         return speaker, content.strip(), DialogueType.CHARACTER
 
-                    # ตรวจสอบในชื่อที่รู้จัก
-                    if speaker in self.names or speaker in self.confirmed_names:
-                        return speaker, content.strip(), DialogueType.CHARACTER
-                    else:
-                        # ถ้าไม่พบชื่อที่ตรงกัน ให้ถือเป็นข้อความทั้งหมด
-                        return None, text, DialogueType.NORMAL
+                    # Trust speaker — text source is Dalamud memory hook (100% accurate)
+                    # The whitelist check (speaker in self.names) was OCR-era logic
+                    # for filtering garbled speaker reads. With Dalamud, every speaker
+                    # in "Speaker: dialogue" format is real and should be honored —
+                    # otherwise new characters / unknown NPCs lose their name in the UI.
+                    return speaker, content.strip(), DialogueType.CHARACTER
 
         # กรณีไม่มีเครื่องหมายคั่น ให้ถือเป็นข้อความทั่วไป
         return None, text, DialogueType.NORMAL

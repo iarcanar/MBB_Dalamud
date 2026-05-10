@@ -101,7 +101,8 @@ class Settings:
         # กำหนดค่า default ทั้งหมด รวมถึง field ใหม่
         self.default_settings = {
             "api_parameters": self.DEFAULT_API_PARAMETERS.copy(),
-            "transparency": 0.8,
+            # legacy "transparency" key removed — TUI bg alpha lives at "bg_alpha"
+            # (controlled by the in-TUI color/alpha picker, not this default).
             "font_size": 24,
             "font": "Anuphan",  # ฟอนต์เริ่มต้น (bundled)
             # line_spacing + text_transparency removed 2026-04-25 (orphan keys, never read)
@@ -268,7 +269,7 @@ class Settings:
                 self.settings = json.load(f)
         except FileNotFoundError:
             self.settings = {
-                "transparency": 0.8,
+                # legacy "transparency" key removed — see default_settings note
                 "font_size": 24,
                 "font": "Anuphan",
                 "width": 960,
