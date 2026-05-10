@@ -144,6 +144,8 @@ C:\MBB_Dalamud/
 > 3. **Mode switch re-deiconifies** — same root cause as #2 (auto-show firing during cross-mode translations). Same fix.
 >
 > Defensive add: `_route_to_dissolve_overlay` now also cancels `_deferred_render_id` so a queued `_original_update_text` from the previous chat_type can't paint stale text on the now-hidden canvas.
+>
+> **Auto-hide (battle/cutscene have no "stay forever" option):** `set_text()` restarts a 10s `QTimer` (`AUTO_HIDE_MS`); on timeout, fade-out via `QPropertyAnimation(windowOpacity)` 500ms then `hide()`. New translations during fade snap opacity back to 1.0 immediately. If cursor is inside overlay (user dragging/resizing), the timer restarts instead of hiding under their hand.
 
 - PyQt6 `QWidget` with frameless + translucent + `WA_TranslucentBackground`
 - paintEvent: horizontal `QLinearGradient` — 0% alpha → 5% opaque → 95% opaque → 100% alpha → smooth dissolve on left/right edges (no visible border)

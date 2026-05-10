@@ -40,7 +40,10 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import (
+    QAbstractAnimation,
+    QEasingCurve,
     QPoint,
+    QPropertyAnimation,
     QRect,
     QSize,
     Qt,
@@ -91,6 +94,12 @@ GRIP_SIZE = 16
 
 SAVE_DEBOUNCE_MS = 400           # debounce disk writes during drag/resize
 HOVER_POLL_MS = 140              # cursor poll interval
+
+# Auto-hide — battle/cutscene have NO "stay forever" option (per user
+# requirement). After AUTO_HIDE_MS of no new text, fade out + hide.
+# 10s matches the Tk TUI fade-timer default (translated_ui.start_fade_timer).
+AUTO_HIDE_MS = 10000
+FADE_OUT_MS = 500
 
 FONT_FAMILY_PREFERRED = "Anuphan"
 FONT_PATH = os.path.join(
@@ -248,6 +257,20 @@ class DissolveOverlay(QWidget):
         self._hover_timer.timeout.connect(self._poll_hover)
         # Started in showEvent / stopped in hideEvent
 
+        # ── Auto-hide — battle/cutscene MUST disappear after timeout. ──
+        # User explicit requirement: no "stay forever" mode like dialogue,
+        # because there's no UX for it (battle/cutscene text is event-driven).
+        self._auto_hide_timer = QTimer(self)
+        self._auto_hide_timer.setSingleShot(True)
+        self._auto_hide_timer.setInterval(AUTO_HIDE_MS)
+        self._auto_hide_timer.timeout.connect(self._begin_auto_hide)
+
+        # Fade animation — soft visual cue before the overlay disappears.
+        self._fade_anim = QPropertyAnimation(self, b"windowOpacity", self)
+        self._fade_anim.setDuration(FADE_OUT_MS)
+        self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._fade_anim.finished.connect(self._on_fade_finished)
+
     # ──────────────────────────────────────────────────────────────
     # Font loading
     # ──────────────────────────────────────────────────────────────
@@ -284,10 +307,25 @@ class DissolveOverlay(QWidget):
 
     def set_text(self, text: str, speaker: str = "", is_lore: bool = False) -> None:
         """Update the displayed text. Speaker is optional (empty string for
-        cutscene narration). Triggers a single repaint."""
+        cutscene narration). Triggers a single repaint.
+
+        Restarts the auto-hide timer so the overlay disappears AUTO_HIDE_MS
+        after the most recent text. Also cancels any in-progress fade so a
+        late-arriving translation isn't masked behind a half-faded overlay.
+        """
         self._text = (text or "").strip()
         self._speaker = (speaker or "").strip()
         self._is_lore = bool(is_lore)
+
+        # Cancel a fade-out in progress (translation arrived while we were
+        # disappearing) and snap opacity back to 100%.
+        if self._fade_anim.state() == QAbstractAnimation.State.Running:
+            self._fade_anim.stop()
+        if self.windowOpacity() < 1.0:
+            self.setWindowOpacity(1.0)
+
+        # (Re)start auto-hide countdown — every new text resets the clock.
+        self._auto_hide_timer.start()
         self.update()
 
     def show_for_mode(self, mode: str) -> None:
@@ -354,6 +392,12 @@ class DissolveOverlay(QWidget):
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_geometry_now()
+        # Stop fade + auto-hide timers — caller wants instant hide
+        if self._auto_hide_timer.isActive():
+            self._auto_hide_timer.stop()
+        if self._fade_anim.state() == QAbstractAnimation.State.Running:
+            self._fade_anim.stop()
+        self.setWindowOpacity(1.0)  # reset for next show
         self.hide()
 
     def cleanup(self) -> None:
@@ -369,6 +413,51 @@ class DissolveOverlay(QWidget):
                 self._hover_timer.stop()
         except Exception:
             pass
+        try:
+            if self._auto_hide_timer.isActive():
+                self._auto_hide_timer.stop()
+        except Exception:
+            pass
+        try:
+            if self._fade_anim.state() == QAbstractAnimation.State.Running:
+                self._fade_anim.stop()
+        except Exception:
+            pass
+
+    # ──────────────────────────────────────────────────────────────
+    # Auto-hide (timeout-driven, no opt-out)
+    # ──────────────────────────────────────────────────────────────
+    def _begin_auto_hide(self) -> None:
+        """Start the fade-out animation. On finish → hide overlay.
+
+        Called by self._auto_hide_timer after AUTO_HIDE_MS of inactivity.
+        New `set_text` calls cancel this and snap opacity back to 100%.
+
+        Concession: if cursor is currently inside the overlay, the user is
+        likely dragging / resizing / about to close — restart the timer
+        instead of hiding under their hand. Once they move away, auto-hide
+        proceeds normally on the next tick.
+        """
+        if not self.isVisible():
+            return
+        if self._cursor_inside:
+            # User is interacting — defer hide until they move away
+            self._auto_hide_timer.start()
+            return
+        # Already fading? Let it finish.
+        if self._fade_anim.state() == QAbstractAnimation.State.Running:
+            return
+        self._fade_anim.stop()
+        self._fade_anim.setStartValue(self.windowOpacity())
+        self._fade_anim.setEndValue(0.0)
+        self._fade_anim.start()
+
+    def _on_fade_finished(self) -> None:
+        """When the fade-out completes (opacity ≈ 0), actually hide the
+        window. Reset opacity to 1.0 so the next show isn't invisible."""
+        if self.windowOpacity() <= 0.05 and self.isVisible():
+            self.hide()
+            self.setWindowOpacity(1.0)
 
     # ──────────────────────────────────────────────────────────────
     # Internal helpers
@@ -477,10 +566,23 @@ class DissolveOverlay(QWidget):
             self._hover_timer.stop()
         except Exception:
             pass
-        # Reset hover state so next show starts clean
+        # Stop auto-hide + fade so a hidden window doesn't keep firing
+        try:
+            if self._auto_hide_timer.isActive():
+                self._auto_hide_timer.stop()
+        except Exception:
+            pass
+        try:
+            if self._fade_anim.state() == QAbstractAnimation.State.Running:
+                self._fade_anim.stop()
+        except Exception:
+            pass
+        # Reset hover state + opacity so next show starts clean
         self._cursor_inside = False
         self._close_btn.setVisible(False)
         self._grip.setVisible(False)
+        if self.windowOpacity() < 1.0:
+            self.setWindowOpacity(1.0)
         super().hideEvent(event)
 
     def resizeEvent(self, event):  # noqa: N802
