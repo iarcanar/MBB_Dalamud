@@ -67,8 +67,8 @@ class Settings:
 
     DEFAULT_API_PARAMETERS = {
         # Main parameters for the model
-        "model": "gemini-2.5-flash",
-        "displayed_model": "gemini-2.5-flash",
+        "model": "gemini-3.1-flash-lite-preview",
+        "displayed_model": "gemini-3.1-flash-lite-preview",
         "max_tokens": 500,
         "temperature": 0.8,
         "top_p": 0.9,
@@ -284,7 +284,7 @@ class Settings:
                     "C": {"start_x": 0, "start_y": 0, "end_x": 0, "end_y": 0},
                 },
                 "api_parameters": {
-                    "model": "gemini-2.0-flash",
+                    "model": "gemini-3.1-flash-lite-preview",
                     "max_tokens": 500,
                     "temperature": 0.7,
                     "top_p": 0.9,
@@ -1003,14 +1003,14 @@ class Settings:
         """Return the model name for UI display."""
         api_params = self.get_api_parameters()
         return api_params.get(
-            "displayed_model", api_params.get("model", "gemini-2.0-flash")
+            "displayed_model", api_params.get("model", "gemini-3.1-flash-lite-preview")
         )
 
     def get_api_parameters(self):
         """Return the current API parameters."""
         default_params = {
-            "model": "gemini-2.0-flash",
-            "displayed_model": "gemini-2.0-flash",
+            "model": "gemini-3.1-flash-lite-preview",
+            "displayed_model": "gemini-3.1-flash-lite-preview",
             "max_tokens": 500,
             "temperature": 0.7,
             "top_p": 0.9,

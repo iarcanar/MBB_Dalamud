@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # MBB Dalamud Bridge - PyInstaller Specification
-# Version: 1.8.6
+# Version: 1.8.7
 # Build: 04032026-02 (rebuilt 2026-05-01 for v1.8.2 with PyQt6 + cleanup)
 #
 # Build command:

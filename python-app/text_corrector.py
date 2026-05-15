@@ -5,6 +5,7 @@ import os
 from enum import Enum
 import logging
 from resource_utils import resource_path
+from npc_file_utils import get_npc_file_path
 
 
 # DialogueType Enum
@@ -306,32 +307,17 @@ class TextCorrector:
 
     def load_npc_data(self):
         try:
-            # Use resource_path for PyInstaller compatibility
-            file_candidates = ["NPC.json", "npc.json"]
-            file_path = None
-
-            # Try resource_path first (works in both dev and PyInstaller)
-            for candidate in file_candidates:
-                temp_path = resource_path(candidate)
-                if os.path.exists(temp_path):
-                    file_path = temp_path
-                    print(f"Found NPC data file at: {file_path}")
-                    break
-
-            # Fallback: try current directory
-            if not file_path:
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-                for candidate in file_candidates:
-                    temp_path = os.path.join(base_dir, candidate)
-                    if os.path.exists(temp_path):
-                        file_path = temp_path
-                        print(f"Found NPC data file at: {file_path}")
-                        break
-
-            # ถ้าไม่พบไฟล์เลย
-            if not file_path:
-                print("NPC.json file not found in any search locations!")
-                raise FileNotFoundError("NPC.json file not found")
+            # CRITICAL: must use get_npc_file_path() — same resolver that
+            # NPC Manager / NPCDataManager uses for WRITES. resource_path()
+            # would point to sys._MEIPASS (immutable bundled copy) under
+            # PyInstaller, causing this reader to never see characters that
+            # the user adds via NPC Manager (which saves to exe-level path).
+            # See git log "v1.8.7" / claude.md changelog for the bug history.
+            file_path = get_npc_file_path()
+            if not os.path.exists(file_path):
+                print(f"NPC data file not found at: {file_path}")
+                raise FileNotFoundError(f"npc.json not found at {file_path}")
+            print(f"Found NPC data file at: {file_path}")
 
             # เปิดไฟล์ที่พบและโหลดข้อมูล
             with open(file_path, "r", encoding="utf-8") as file:

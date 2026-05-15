@@ -1860,9 +1860,12 @@ class MagicBabelApp:
         self.header_bar.set_version(__version__)
 
         # Load and display game info from NPC.json
+        # MUST use get_npc_file_path() — same as text_corrector / NPCDataManager —
+        # so we read from the live user-editable copy, not the bundled fallback.
         try:
             from Manager import get_game_info_from_json
-            npc_json_path = resource_path("NPC.json")
+            from npc_file_utils import get_npc_file_path
+            npc_json_path = get_npc_file_path()
             game_info = get_game_info_from_json(npc_json_path)
             if game_info and "name" in game_info:
                 self.control_panel.set_swap_text(game_info["name"])

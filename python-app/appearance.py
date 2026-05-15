@@ -1220,7 +1220,14 @@ class AppearanceManager:
         model_label = self.create_styled_label(model_frame, "Model:")
         model_label.pack(side=tk.LEFT)
         model_combo = self.create_styled_combobox(
-            model_frame, values=["gemini-2.0-flash"]
+            model_frame,
+            values=[
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+                "gemini-2.5-pro",
+                "gemini-2.0-flash",
+            ],
         )
         model_combo.pack(side=tk.RIGHT, expand=True, fill=tk.X)
 

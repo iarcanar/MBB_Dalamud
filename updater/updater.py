@@ -35,6 +35,7 @@ import zipfile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import math
 import tkinter as tk
 from tkinter import ttk
 
@@ -450,18 +451,37 @@ def launch_mbb(target_dir: str):
 # ────────────────────────────────────────────────────────────────────
 class UpdaterApp:
     """Single-window Tkinter UI for the updater. State drives the bottom
-    button (Update Now → Launch MBB → Close)."""
+    button (Update Now → Launch MBB → Close).
 
-    # Theme colors — match MBB's "Carbon" palette so it feels like the same app
+    UI layout (640×540):
+      ┌────────────────────────────────────┐
+      │       MBB Updater (24pt bold)      │
+      │   Magicite Babel Bridge (12pt dim) │
+      ├────────────────────────────────────┤
+      │       เวอร์ชั่นของคุณ                │
+      │         v 1.8.6 (40pt bold)         │
+      ├────────────────────────────────────┤
+      │   [spinner] ตรวจสอบ... (animated)  │
+      │       ↓ becomes status badge        │
+      │  ✓ คุณใช้เวอร์ชั่นล่าสุดแล้ว         │
+      └────────────────────────────────────┘
+    """
+
+    # Theme colors — match MBB's "Carbon" palette
     BG = "#0d1117"
     FG = "#e6edf3"
     DIM = "#7d8590"
     SURFACE = "#161b22"
+    SURFACE2 = "#1c2128"
     BORDER = "#30363d"
     ACCENT = "#58a6ff"
+    ACCENT_DIM = "#1f6feb"
     SUCCESS = "#3fb950"
+    SUCCESS_BG = "#0d2818"
     WARN = "#f59e0b"
+    WARN_BG = "#2a1c0a"
     ERR = "#f85149"
+    ERR_BG = "#2d0e0e"
 
     def __init__(self, target_dir: str):
         self.target_dir = target_dir
@@ -470,86 +490,155 @@ class UpdaterApp:
         self.zip_path: str = ""
         self.backup_dir: str = ""
 
+        # Animation state
+        self._spinner_angle = 0
+        self._spinner_after_id = None
+        self._dots_after_id = None
+        self._dots_count = 0
+        self._dots_base_text = ""
+
         self.root = tk.Tk()
         self.root.title("MBB Updater")
-        self.root.geometry("560x480")
+        self.root.geometry("640x620")
         self.root.configure(bg=self.BG)
         self.root.resizable(False, False)
         try:
-            # Optional icon — only if we managed to bundle one
-            icon_path = os.path.join(self.target_dir, "_internal", "assets", "mbb_icon.ico")
-            if os.path.exists(icon_path):
+            icon_path = self._resolve_asset("mbb_icon.ico")
+            if icon_path and os.path.exists(icon_path):
                 self.root.iconbitmap(icon_path)
         except Exception:
             pass
 
-        self.font_h1 = ("Anuphan", 16, "bold")
-        self.font_h2 = ("Anuphan", 12, "bold")
-        self.font_body = ("Anuphan", 10)
-        self.font_small = ("Anuphan", 9)
+        # Header logo (mbb_meteor.png) — must hold a reference on self or
+        # Tkinter garbage-collects the PhotoImage and the label shows blank.
+        self._logo_photo = self._load_logo()
+
+        # Larger, more modern type scale
+        self.font_title = ("Anuphan", 24, "bold")
+        self.font_subtitle = ("Anuphan", 12)
+        self.font_section = ("Anuphan", 11)
+        self.font_version_huge = ("Anuphan", 40, "bold")
+        self.font_status = ("Anuphan", 16, "bold")
+        self.font_body = ("Anuphan", 12)
+        self.font_btn = ("Anuphan", 13, "bold")
+        self.font_small = ("Anuphan", 10)
 
         self._build_ui()
-        # Auto-fetch shortly after mainloop starts (gives UI time to draw)
         self.root.after(150, self._start_check)
+
+    # ─── Asset resolution (dev .py vs frozen .exe) ───
+    def _resolve_asset(self, name: str) -> str:
+        """Look up a bundled asset in MEIPASS (frozen) or fall back to the
+        repo's python-app/assets/ during dev. Returns "" if not found."""
+        # PyInstaller frozen layout — datas are extracted next to the running .exe
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            cand = os.path.join(meipass, name)
+            if os.path.exists(cand):
+                return cand
+        # Dev mode — repo layout: <repo>/updater/updater.py + <repo>/python-app/assets/
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cand = os.path.join(repo_root, "python-app", "assets", name)
+        if os.path.exists(cand):
+            return cand
+        # Last fallback — installed MBB folder (target_dir/_internal/assets)
+        cand = os.path.join(self.target_dir, "_internal", "assets", name)
+        if os.path.exists(cand):
+            return cand
+        return ""
+
+    def _load_logo(self):
+        """Load mbb_meteor.png subsampled to ~150×100 for the header.
+
+        Tk's built-in PhotoImage handles PNG natively in Py3 (no PIL needed —
+        we exclude PIL from updater.spec to keep the exe small). subsample(N)
+        downsamples by integer factor — for 308×201 source, subsample(2) gives
+        154×100, a clean fit above the title text.
+        """
+        path = self._resolve_asset("mbb_meteor.png")
+        if not path:
+            return None
+        try:
+            img = tk.PhotoImage(file=path)
+            return img.subsample(2, 2)
+        except Exception as e:
+            _log(f"_load_logo failed: {e}")
+            return None
 
     def _build_ui(self) -> None:
         # ── Header ──
-        title = tk.Label(
-            self.root, text="MBB Updater",
-            font=self.font_h1, fg=self.FG, bg=self.BG,
-        )
-        title.pack(pady=(22, 2))
+        header = tk.Frame(self.root, bg=self.BG)
+        header.pack(fill="x", pady=(20, 0))
 
-        subtitle = tk.Label(
-            self.root, text=os.path.basename(self.target_dir.rstrip(os.sep)) or self.target_dir,
-            font=self.font_small, fg=self.DIM, bg=self.BG,
-        )
-        subtitle.pack()
+        # Logo (above title) — keeps visual continuity with the main MBB UI
+        if self._logo_photo is not None:
+            tk.Label(
+                header, image=self._logo_photo, bg=self.BG, bd=0,
+            ).pack(pady=(0, 8))
 
-        # ── Versions card ──
-        card = tk.Frame(
-            self.root, bg=self.SURFACE,
-            highlightthickness=1, highlightbackground=self.BORDER,
-        )
-        card.pack(fill="x", padx=24, pady=(18, 14))
-
-        row1 = tk.Frame(card, bg=self.SURFACE)
-        row1.pack(fill="x", padx=18, pady=(14, 4))
         tk.Label(
-            row1, text="ปัจจุบัน:", font=self.font_body,
-            fg=self.DIM, bg=self.SURFACE, width=10, anchor="w",
-        ).pack(side="left")
-        self.lbl_local = tk.Label(
-            row1, text="—", font=self.font_h2,
-            fg=self.FG, bg=self.SURFACE, anchor="w",
-        )
-        self.lbl_local.pack(side="left")
+            header, text="MBB Updater",
+            font=self.font_title, fg=self.FG, bg=self.BG,
+        ).pack()
 
-        row2 = tk.Frame(card, bg=self.SURFACE)
-        row2.pack(fill="x", padx=18, pady=(0, 14))
         tk.Label(
-            row2, text="ล่าสุด:", font=self.font_body,
-            fg=self.DIM, bg=self.SURFACE, width=10, anchor="w",
-        ).pack(side="left")
-        self.lbl_remote = tk.Label(
-            row2, text="กำลังตรวจสอบ…", font=self.font_h2,
-            fg=self.ACCENT, bg=self.SURFACE, anchor="w",
-        )
-        self.lbl_remote.pack(side="left")
+            header, text="Magicite Babel Bridge",
+            font=self.font_subtitle, fg=self.DIM, bg=self.BG,
+        ).pack(pady=(2, 0))
 
-        # ── Status / changelog ──
-        self.status_frame = tk.Frame(self.root, bg=self.BG)
-        self.status_frame.pack(fill="both", expand=True, padx=24)
+        # Thin accent divider
+        sep = tk.Frame(self.root, bg=self.BORDER, height=1)
+        sep.pack(fill="x", padx=80, pady=(20, 0))
 
-        self.lbl_status = tk.Label(
-            self.status_frame, text="",
-            font=self.font_body, fg=self.DIM, bg=self.BG,
-            justify="left", wraplength=510, anchor="nw",
+        # ── Current version (BIG centered) ──
+        ver_section = tk.Frame(self.root, bg=self.BG)
+        ver_section.pack(fill="x", pady=(22, 4))
+
+        tk.Label(
+            ver_section, text="เวอร์ชั่นของคุณ",
+            font=self.font_section, fg=self.DIM, bg=self.BG,
+        ).pack()
+
+        self.lbl_local_huge = tk.Label(
+            ver_section, text="—",
+            font=self.font_version_huge, fg=self.FG, bg=self.BG,
         )
-        self.lbl_status.pack(fill="both", expand=True, anchor="nw")
+        self.lbl_local_huge.pack(pady=(4, 0))
+
+        # ── Status badge / spinner area ──
+        # Single container that swaps between spinner+text (during check)
+        # and a colored status pill (after check completes).
+        self.status_card = tk.Frame(
+            self.root, bg=self.SURFACE2,
+            highlightthickness=0,
+        )
+        self.status_card.pack(fill="x", padx=40, pady=(24, 0), ipady=18)
+
+        self.status_inner = tk.Frame(self.status_card, bg=self.SURFACE2)
+        self.status_inner.pack()
+
+        # Spinner canvas (drawn here, hidden when status badge shows)
+        self.spinner_canvas = tk.Canvas(
+            self.status_inner, width=28, height=28,
+            bg=self.SURFACE2, highlightthickness=0,
+        )
+        self.spinner_canvas.pack(side="left", padx=(0, 12))
+
+        self.lbl_status_text = tk.Label(
+            self.status_inner, text="",
+            font=self.font_status, fg=self.ACCENT, bg=self.SURFACE2,
+        )
+        self.lbl_status_text.pack(side="left")
+
+        # Secondary line for sub-info / changelog notes
+        self.lbl_status_sub = tk.Label(
+            self.status_card, text="",
+            font=self.font_body, fg=self.DIM, bg=self.SURFACE2,
+            justify="center", wraplength=520,
+        )
+        # Pack later when there's content
 
         # ── Progress (hidden until update starts) ──
-        # Use ttk style so progress bar matches dark theme reasonably
         style = ttk.Style()
         try:
             style.theme_use("clam")
@@ -560,30 +649,31 @@ class UpdaterApp:
                 bordercolor=self.BORDER,
                 lightcolor=self.ACCENT,
                 darkcolor=self.ACCENT,
+                thickness=6,
             )
         except Exception:
             pass
         self.progress = ttk.Progressbar(
             self.root, mode="determinate",
             style="MBB.Horizontal.TProgressbar",
-            length=512, maximum=100,
+            length=560, maximum=100,
         )
         self.progress_label = tk.Label(
             self.root, text="", font=self.font_small,
-            fg=self.DIM, bg=self.BG, anchor="w",
+            fg=self.DIM, bg=self.BG,
         )
 
-        # ── Buttons ──
+        # ── Buttons (bottom) ──
         self.btn_frame = tk.Frame(self.root, bg=self.BG)
-        self.btn_frame.pack(side="bottom", fill="x", pady=(8, 18))
+        self.btn_frame.pack(side="bottom", fill="x", pady=(10, 24), padx=24)
 
         self.btn_primary = tk.Button(
             self.btn_frame, text="Update Now",
-            font=self.font_h2,
+            font=self.font_btn,
             fg="#ffffff", bg=self.ACCENT,
             activeforeground="#ffffff", activebackground="#7ec1ff",
             relief="flat", cursor="hand2",
-            padx=24, pady=10, bd=0,
+            padx=28, pady=12, bd=0,
             state="disabled",
             command=self._on_primary_click,
         )
@@ -593,20 +683,134 @@ class UpdaterApp:
             fg=self.FG, bg=self.SURFACE,
             activeforeground=self.FG, activebackground=self.BORDER,
             relief="flat", cursor="hand2",
-            padx=20, pady=8, bd=0,
+            padx=22, pady=10, bd=0,
             command=self._on_close,
         )
-        self.btn_primary.pack(side="right", padx=(8, 24))
+        self.btn_primary.pack(side="right", padx=(10, 0))
         self.btn_secondary.pack(side="right")
 
-    # ─── State helpers ───
-    def _set_status(self, text: str, color: str = "") -> None:
-        self.lbl_status.config(text=text, fg=color or self.DIM)
+    # ─── Animated spinner (Canvas-drawn rotating arc) ───
+    def _draw_spinner(self) -> None:
+        """Draw a rotating arc — modern indeterminate progress style."""
+        c = self.spinner_canvas
+        c.delete("all")
+        # Light background ring
+        c.create_oval(4, 4, 24, 24, outline=self.BORDER, width=2)
+        # Bright rotating arc (90° span)
+        c.create_arc(
+            4, 4, 24, 24,
+            start=self._spinner_angle, extent=90,
+            outline=self.ACCENT, width=2,
+            style="arc",
+        )
+        self._spinner_angle = (self._spinner_angle + 12) % 360
+
+    def _start_spinner(self) -> None:
+        """Begin spinner animation tick."""
+        self._draw_spinner()
+        self._spinner_after_id = self.root.after(40, self._start_spinner)
+
+    def _stop_spinner(self) -> None:
+        """Stop animation + clear canvas."""
+        if self._spinner_after_id:
+            try:
+                self.root.after_cancel(self._spinner_after_id)
+            except Exception:
+                pass
+            self._spinner_after_id = None
+        try:
+            self.spinner_canvas.delete("all")
+        except Exception:
+            pass
+
+    def _hide_spinner(self) -> None:
+        """Stop + remove the spinner canvas from layout entirely."""
+        self._stop_spinner()
+        try:
+            self.spinner_canvas.pack_forget()
+        except Exception:
+            pass
+
+    # ─── Animated dots ("ตรวจสอบ" → "ตรวจสอบ." → ".." → "...") ───
+    def _start_dots_animation(self, base_text: str) -> None:
+        """Cycle dots 0→3 after `base_text` every 400ms."""
+        self._dots_base_text = base_text
+        self._dots_count = 0
+        self._tick_dots()
+
+    def _tick_dots(self) -> None:
+        dots = "." * self._dots_count + " " * (3 - self._dots_count)  # pad to fix width
+        self.lbl_status_text.config(text=f"{self._dots_base_text}{dots}")
+        self._dots_count = (self._dots_count + 1) % 4
+        self._dots_after_id = self.root.after(400, self._tick_dots)
+
+    def _stop_dots_animation(self) -> None:
+        if self._dots_after_id:
+            try:
+                self.root.after_cancel(self._dots_after_id)
+            except Exception:
+                pass
+            self._dots_after_id = None
+
+    # ─── Status badge variants (after check completes) ───
+    def _show_checking(self, text: str = "ตรวจสอบเวอร์ชั่น") -> None:
+        """Show spinner + animated dots."""
+        self.status_card.config(bg=self.SURFACE2)
+        self.status_inner.config(bg=self.SURFACE2)
+        self.spinner_canvas.config(bg=self.SURFACE2)
+        self.lbl_status_text.config(bg=self.SURFACE2, fg=self.ACCENT)
+        try:
+            self.spinner_canvas.pack(side="left", padx=(0, 12))
+        except Exception:
+            pass
+        self._start_spinner()
+        self._start_dots_animation(text)
+        # Hide sub-line
+        try:
+            self.lbl_status_sub.pack_forget()
+        except Exception:
+            pass
+
+    def _show_status_badge(
+        self, icon: str, text: str, sub: str = "",
+        accent: str = "", bg_tint: str = "",
+    ) -> None:
+        """Replace spinner state with a colored final badge.
+
+        icon: leading character/emoji (✓ / ✦ / ⚠ / ✕)
+        text: main status line (large)
+        sub: optional secondary line
+        accent: text color
+        bg_tint: card background color
+        """
+        self._stop_spinner()
+        self._stop_dots_animation()
+        self._hide_spinner()
+
+        accent = accent or self.ACCENT
+        bg_tint = bg_tint or self.SURFACE2
+        self.status_card.config(bg=bg_tint)
+        self.status_inner.config(bg=bg_tint)
+        self.lbl_status_text.config(
+            bg=bg_tint, fg=accent,
+            text=f"{icon}  {text}",
+        )
+        if sub:
+            self.lbl_status_sub.config(bg=bg_tint, fg=self.DIM, text=sub)
+            try:
+                self.lbl_status_sub.pack(pady=(8, 0))
+            except Exception:
+                pass
+        else:
+            try:
+                self.lbl_status_sub.pack_forget()
+            except Exception:
+                pass
 
     def _show_progress(self, percent: float, label: str = "") -> None:
         if not self.progress.winfo_ismapped():
-            self.progress.pack(after=self.status_frame, padx=24, pady=(4, 0), fill="x")
-            self.progress_label.pack(after=self.progress, padx=24, pady=(2, 6), anchor="w")
+            self.progress.pack(padx=40, pady=(14, 0), fill="x")
+            self.progress_label.pack(padx=40, pady=(4, 0))
         self.progress["value"] = percent
         self.progress_label.config(text=label)
 
@@ -619,20 +823,22 @@ class UpdaterApp:
 
     # ─── Phase 1: version check ───
     def _start_check(self) -> None:
+        # Show animated checking state immediately
+        self._show_checking("ตรวจสอบเวอร์ชั่น")
         threading.Thread(target=self._check_thread, daemon=True).start()
 
     def _check_thread(self) -> None:
         # Sanity: target dir must contain an MBB.exe
         if not os.path.exists(os.path.join(self.target_dir, "MBB.exe")):
             self.root.after(0, lambda: self._show_error(
-                f"ไม่พบ MBB.exe ใน:\n{self.target_dir}\n\n"
-                f"กรุณาวาง MBB-Updater.exe ไว้ในโฟลเดอร์เดียวกับ MBB.exe"))
+                f"ไม่พบ MBB.exe ใน {self.target_dir}",
+                sub="กรุณาวาง MBB-Updater.exe ไว้ในโฟลเดอร์เดียวกับ MBB.exe"))
             return
         # Local version
         self.local_version = detect_local_version(self.target_dir)
         _log(f"Local version: {self.local_version!r}")
-        self.root.after(0, lambda: self.lbl_local.config(
-            text=f"v{self.local_version}" if self.local_version else "ตรวจไม่พบ"
+        self.root.after(0, lambda: self.lbl_local_huge.config(
+            text=f"v {self.local_version}" if self.local_version else "ตรวจไม่พบ"
         ))
         # Remote
         try:
@@ -641,38 +847,36 @@ class UpdaterApp:
             _log(f"Remote: {self.remote}")
         except HTTPError as e:
             _log(f"HTTPError {e.code} from GitHub")
-            # Map HTTP status to a user-actionable message — "Server error 404"
-            # is meaningless to most users; "ยังไม่มี release" is.
             if e.code == 404:
-                msg = (
-                    "ยังไม่มี release บน GitHub สำหรับเวอร์ชันใหม่\n\n"
-                    "หมายความว่าทีมพัฒนายังไม่ได้ปล่อยเวอร์ชันใหม่\n"
-                    "ลองตรวจอีกครั้งภายหลัง หรือไปที่หน้าเว็บโครงการ"
-                )
+                # No release on GitHub = nothing newer than what user already has.
+                # Frame this positively (green badge) — user is technically on
+                # the latest version, even if the dev hasn't published one yet.
+                self.root.after(0, self._show_latest_no_release)
+                return
             elif e.code == 403:
-                msg = (
-                    "GitHub บอกว่าเรียก API บ่อยเกินไป (Rate limit)\n\n"
-                    "รอประมาณ 1 ชั่วโมง แล้วลองใหม่อีกครั้ง"
+                msg, sub = (
+                    "GitHub Rate limit",
+                    "เรียก API บ่อยเกินไป — รอประมาณ 1 ชั่วโมงแล้วลองใหม่",
                 )
             elif 500 <= e.code < 600:
-                msg = (
-                    f"GitHub กำลังมีปัญหาฝั่ง server (HTTP {e.code})\n"
-                    f"ลองใหม่ในอีกสักครู่"
+                msg, sub = (
+                    f"GitHub server error (HTTP {e.code})",
+                    "ลองใหม่ในอีกสักครู่",
                 )
             else:
-                msg = f"GitHub server error: HTTP {e.code}"
-            self.root.after(0, lambda m=msg: self._show_error(m))
+                msg, sub = f"GitHub server error: HTTP {e.code}", ""
+            self.root.after(0, lambda m=msg, s=sub: self._show_warn(m, sub=s))
             return
         except URLError as e:
             _log(f"URLError: {e.reason}")
             self.root.after(0, lambda: self._show_error(
-                f"ไม่สามารถเชื่อมต่ออินเทอร์เน็ต:\n{e.reason}\n\n"
-                f"ตรวจการเชื่อมต่อเน็ต / firewall / proxy"))
+                "ไม่สามารถเชื่อมต่ออินเทอร์เน็ต",
+                sub=f"{e.reason} — ตรวจการเชื่อมต่อเน็ต / firewall / proxy"))
             return
         except Exception as e:
             _log(f"fetch error: {e}\n{traceback.format_exc()}")
             self.root.after(0, lambda: self._show_error(
-                f"ตรวจสอบเวอร์ชันล้มเหลว:\n{e}"))
+                "ตรวจสอบเวอร์ชั่นล้มเหลว", sub=str(e)))
             return
         self.root.after(0, self._on_check_done)
 
@@ -680,32 +884,77 @@ class UpdaterApp:
         if not self.remote.get("version"):
             self._show_error("ไม่พบ tag_name ใน GitHub release")
             return
-        self.lbl_remote.config(text=f"v{self.remote['version']}")
         if not self.remote.get("zip_url"):
             self._show_error(
-                "Release นี้ไม่มีไฟล์ .zip\n"
-                "ติดต่อทีมพัฒนาให้แนบไฟล์ MBB-X.Y.Z-Update.zip ใน Release")
+                "Release ไม่มีไฟล์ .zip",
+                sub="ติดต่อทีมพัฒนาให้แนบ MBB-X.Y.Z-Update.zip ใน Release")
             return
         if is_newer(self.remote["version"], self.local_version):
             notes = (self.remote.get("notes") or "").strip() or "(ไม่มีรายละเอียด)"
-            if len(notes) > 600:
-                notes = notes[:600] + "…"
+            if len(notes) > 200:
+                notes = notes[:200] + "…"
             sz_mb = max(1, self.remote.get("zip_size", 0) // (1024 * 1024))
-            self._set_status(
-                f"พบเวอร์ชันใหม่!  ขนาด ~{sz_mb} MB\n\n"
-                f"📝 What's new:\n{notes}",
-                color=self.FG,
+            self._show_status_badge(
+                "✦",
+                f"มีเวอร์ชั่นใหม่  v {self.remote['version']}",
+                sub=f"ขนาด ~{sz_mb} MB · {notes}",
+                accent=self.ACCENT, bg_tint=self.SURFACE2,
             )
-            self.btn_primary.config(state="normal", text="Update Now")
+            self.btn_primary.config(state="normal", text="📥  อัพเดตเลย")
         else:
-            self.lbl_remote.config(fg=self.SUCCESS)
-            self._set_status("✓ คุณใช้เวอร์ชันล่าสุดอยู่แล้ว", color=self.SUCCESS)
-            self.btn_primary.config(
-                text="ปิด", state="normal",
-                bg=self.SURFACE, fg=self.FG,
-                activebackground=self.BORDER,
-                command=self._on_close,
+            self._show_status_badge(
+                "✓",
+                f"คุณใช้เวอร์ชั่นล่าสุดแล้ว",
+                sub=f"v {self.local_version} ตรงกับเวอร์ชั่นล่าสุดบน GitHub",
+                accent=self.SUCCESS, bg_tint=self.SUCCESS_BG,
             )
+            # Hide the redundant "ปิด" — only one close button needed
+            try:
+                self.btn_primary.pack_forget()
+            except Exception:
+                pass
+
+    # ─── Final state helpers ───
+    def _show_error(self, text: str, sub: str = "") -> None:
+        """Red error badge + close-only button."""
+        self._hide_progress()
+        self._show_status_badge(
+            "✕", text, sub=sub,
+            accent=self.ERR, bg_tint=self.ERR_BG,
+        )
+        try:
+            self.btn_primary.pack_forget()
+        except Exception:
+            pass
+
+    def _show_warn(self, text: str, sub: str = "") -> None:
+        """Amber warning badge (transient — not necessarily fatal)."""
+        self._hide_progress()
+        self._show_status_badge(
+            "⚠", text, sub=sub,
+            accent=self.WARN, bg_tint=self.WARN_BG,
+        )
+        try:
+            self.btn_primary.pack_forget()
+        except Exception:
+            pass
+
+    def _show_latest_no_release(self) -> None:
+        """GitHub returned 404 = no published release exists yet. Frame this
+        as positive — user can't possibly have anything older than nothing.
+        Same green badge as the "you're on latest" path so the experience is
+        consistent and reassuring instead of looking like an error."""
+        ver = self.local_version or "?"
+        self._show_status_badge(
+            "✓",
+            "เวอร์ชั่นของคุณเป็นเวอร์ชั่นล่าสุด",
+            sub=f"v {ver} ยังเป็นเวอร์ชั่นใหม่สุดในขณะนี้",
+            accent=self.SUCCESS, bg_tint=self.SUCCESS_BG,
+        )
+        try:
+            self.btn_primary.pack_forget()
+        except Exception:
+            pass
 
     # ─── Phase 2: do the update ───
     def _on_primary_click(self) -> None:
@@ -826,28 +1075,28 @@ class UpdaterApp:
             _log(f"Update failed: {e}\n{traceback.format_exc()}")
             self.root.after(0, lambda: self._on_update_failed(str(e)))
 
-    def _update_status(self, text: str, color: str) -> None:
-        self.root.after(0, lambda: self._set_status(text, color))
+    def _update_status(self, text: str, color: str = "") -> None:
+        """Update the status text during the install phase. Stops the spinner
+        on first call (we have a real progress bar now)."""
+        def apply():
+            self._stop_spinner()
+            self._stop_dots_animation()
+            self._hide_spinner()
+            self.lbl_status_text.config(text=text, fg=color or self.ACCENT)
+        self.root.after(0, apply)
 
     def _on_update_done(self, backed_up: list) -> None:
         self._hide_progress()
-        msg_lines = [
-            f"✅ ติดตั้งเสร็จเรียบร้อย",
-            "",
-            f"v{self.local_version or '?'}  →  v{self.remote['version']}",
-            "",
-            "ข้อมูลผู้ใช้ที่เก็บไว้:",
-        ]
-        if backed_up:
-            for name in backed_up:
-                msg_lines.append(f"  ✓ {name}")
-        else:
-            msg_lines.append("  (ไม่มีข้อมูลผู้ใช้ที่ต้องเก็บ)")
-        msg_lines.append("")
-        msg_lines.append(f"Backup ชั่วคราว: {self.backup_dir}")
-        self._set_status("\n".join(msg_lines), color=self.SUCCESS)
+        kept = ", ".join(backed_up) if backed_up else "(ไม่มี)"
+        self._show_status_badge(
+            "✓",
+            f"ติดตั้งเสร็จ  v {self.remote['version']}",
+            sub=f"v {self.local_version or '?'}  →  v {self.remote['version']}\n"
+                f"ข้อมูลผู้ใช้ที่เก็บไว้: {kept}",
+            accent=self.SUCCESS, bg_tint=self.SUCCESS_BG,
+        )
         self.btn_primary.config(
-            state="normal", text="🚀 Launch MBB",
+            state="normal", text="🚀  เปิด MBB",
             bg=self.SUCCESS,
             activebackground="#4dc764",
             command=self._on_launch,
@@ -855,18 +1104,11 @@ class UpdaterApp:
         self.btn_secondary.config(state="normal", text="ปิด")
 
     def _on_update_failed(self, error: str) -> None:
-        self._hide_progress()
-        msg = f"❌ Update ล้มเหลว:\n{error}"
+        sub = error
         if self.backup_dir and os.path.exists(self.backup_dir):
-            msg += f"\n\nข้อมูลของคุณยังเก็บไว้ที่:\n{self.backup_dir}"
-        self._set_status(msg, color=self.ERR)
-        self.btn_primary.config(
-            state="normal", text="ปิด",
-            bg=self.SURFACE, fg=self.FG,
-            activebackground=self.BORDER,
-            command=self._on_close,
-        )
-        self.btn_secondary.config(state="disabled")
+            sub += f"\nข้อมูลของคุณเก็บไว้ที่ {self.backup_dir}"
+        self._show_error("ติดตั้งล้มเหลว", sub=sub)
+        self.btn_secondary.config(state="normal")
 
     def _on_launch(self) -> None:
         proc = launch_mbb(self.target_dir)
@@ -874,17 +1116,12 @@ class UpdaterApp:
             _log(f"Launched MBB.exe (pid={proc.pid})")
         self._on_close()
 
-    def _show_error(self, msg: str) -> None:
-        self._hide_progress()
-        self._set_status(f"❌ {msg}", color=self.ERR)
-        self.btn_primary.config(
-            state="normal", text="ปิด",
-            bg=self.SURFACE, fg=self.FG,
-            activebackground=self.BORDER,
-            command=self._on_close,
-        )
-
     def _on_close(self) -> None:
+        try:
+            self._stop_spinner()
+            self._stop_dots_animation()
+        except Exception:
+            pass
         try:
             self.root.destroy()
         except Exception:
@@ -897,38 +1134,57 @@ class UpdaterApp:
 def main() -> None:
     global _log_path
 
+    is_frozen = bool(getattr(sys, "frozen", False))
+
     if ARG_STAGE2 in sys.argv:
-        # ── Stage 2 ──
+        # ── Stage 2 (explicit) ──
         target = get_target_dir_from_args()
-        if not target or not os.path.isdir(target):
-            try:
-                from tkinter import messagebox
-                messagebox.showerror(
-                    "MBB Updater",
-                    f"Target directory ไม่ถูกต้อง:\n{target}",
-                )
-            except Exception:
-                pass
-            sys.exit(1)
-        _log_path = os.path.join(target, "MBB-Updater.log")
-        _log("=" * 60)
-        _log(f"Stage 2 starting | target={target}")
-        try:
-            UpdaterApp(target).root.mainloop()
-        except Exception as e:
-            _log(f"UI crashed: {e}\n{traceback.format_exc()}")
-            try:
-                from tkinter import messagebox
-                messagebox.showerror("MBB Updater", f"Updater crashed:\n{e}")
-            except Exception:
-                pass
-            sys.exit(1)
+    elif not is_frozen:
+        # ── Dev mode (running .py via interpreter) ──
+        # Stage 1 doesn't work for .py files (subprocess.Popen can't execute
+        # a .py extension as binary → WinError 216). Skip the temp-relaunch
+        # dance entirely; resolve target from --target arg or sensible default.
+        target = get_target_dir_from_args() or os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "dist_test", "MBB",
+        )
+        sys.stderr.write(
+            f"[dev] Skipping Stage 1 (running .py, not frozen .exe). "
+            f"Using target: {target}\n"
+        )
     else:
-        # ── Stage 1: relaunch from temp ──
-        # Log inside the MBB folder so debug info survives across runs
+        # ── Stage 1: frozen .exe, relaunch from temp ──
         _log_path = os.path.join(os.path.dirname(get_self_path()), "MBB-Updater.log")
         _log("Stage 1: relaunching from %TEMP%")
         stage1_relaunch_from_temp()
+        return  # never reached — stage1_relaunch_from_temp calls sys.exit
+
+    # ── Run UI (Stage 2 path: explicit OR dev-mode short-circuit) ──
+    if not target or not os.path.isdir(target):
+        try:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "MBB Updater",
+                f"Target directory ไม่ถูกต้อง:\n{target!r}\n\n"
+                f"Dev mode: pass --target <MBB folder> or build to dist_test/MBB",
+            )
+        except Exception:
+            pass
+        sys.stderr.write(f"Bad target: {target!r}\n")
+        sys.exit(1)
+    _log_path = os.path.join(target, "MBB-Updater.log")
+    _log("=" * 60)
+    _log(f"Stage 2 starting | target={target} | frozen={is_frozen}")
+    try:
+        UpdaterApp(target).root.mainloop()
+    except Exception as e:
+        _log(f"UI crashed: {e}\n{traceback.format_exc()}")
+        try:
+            from tkinter import messagebox
+            messagebox.showerror("MBB Updater", f"Updater crashed:\n{e}")
+        except Exception:
+            pass
+        sys.exit(1)
 
 
 if __name__ == "__main__":

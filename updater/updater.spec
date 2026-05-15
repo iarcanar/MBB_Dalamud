@@ -12,13 +12,22 @@ import os
 
 spec_root = os.path.abspath(SPECPATH)
 mbb_root = os.path.abspath(os.path.join(spec_root, '..'))
-icon_path = os.path.join(mbb_root, 'python-app', 'assets', 'mbb_icon.ico')
+assets_dir = os.path.join(mbb_root, 'python-app', 'assets')
+icon_path = os.path.join(assets_dir, 'mbb_icon.ico')
+
+# Bundle the header logo + ico so the UI looks consistent with the main app
+_datas = []
+for fname in ('mbb_meteor.png', 'mbb_icon.ico'):
+    _src = os.path.join(assets_dir, fname)
+    if os.path.exists(_src):
+        # ('.' = MEIPASS root in onefile — _resolve_asset() looks here first)
+        _datas.append((_src, '.'))
 
 a = Analysis(
     ['updater.py'],
     pathex=[spec_root],
     binaries=[],
-    datas=[],
+    datas=_datas,
     hiddenimports=[
         # We use psutil to detect/kill running MBB.exe before extraction.
         'psutil',

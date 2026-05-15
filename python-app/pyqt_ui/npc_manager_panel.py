@@ -23,9 +23,9 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QFrame, QTreeWidget, QTreeWidgetItem,
     QStackedWidget, QComboBox, QButtonGroup, QMessageBox, QSizePolicy,
     QTextEdit, QHeaderView, QAbstractItemView,
-    QDialog, QCheckBox, QScrollArea, QFileDialog,
+    QDialog, QCheckBox, QScrollArea, QFileDialog, QApplication,
 )
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap
+from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QCursor
 from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 
 from pyqt_ui.styles import (
@@ -358,7 +358,11 @@ class CycleFilterButton(QPushButton):
 # Click opens the Polaroid view (which carries change/delete actions).
 # ────────────────────────────────────────────────────────────────────
 class CharacterAvatar(QWidget):
-    avatar_clicked = pyqtSignal()    # emitted on left-click (open Polaroid)
+    avatar_clicked = pyqtSignal()         # emitted on left-click (open Polaroid)
+    # NOTE: no hover_menu signals — using timer-based polling in the parent
+    # tab instead. Popup-window menus steal mouse focus on show, which makes
+    # avatar's enter/leave fire in a tight loop (the classic flicker pattern
+    # documented in project_pyqt6_gotchas.md). Polling avoids it entirely.
 
     SIZE = 120
 
@@ -371,9 +375,20 @@ class CharacterAvatar(QWidget):
         self._accent_color = "#58a6ff"
         self._bg_color = "#161b22"
         self._text_color = "#e6edf3"
-        self._hover = False
+        self._hover = False                 # cursor literally over the widget
+        self._force_hover = False           # parent's hover-poll says "menu open"
         self._has_image = False
-        self.setToolTip("คลิกเพื่อดู/เปลี่ยนรูปภาพ")
+        self.setToolTip("hover: เลือกภาพ / Screenshot · คลิก: ดู Polaroid")
+
+    def set_force_hover(self, on: bool):
+        """Driven by the parent tab's hover-poll. While the popup menu is up,
+        Qt fires a fake leaveEvent on us (popup steals mouse focus), which
+        flickers the accent border off. The poll keeps `force_hover` True for
+        as long as the cursor is on us OR on the menu, so the border stays
+        steady the whole time the menu is interactable."""
+        if self._force_hover != on:
+            self._force_hover = on
+            self.update()
 
     def set_image(self, image_path: Optional[str]):
         """Load image from disk; pass None / empty to show placeholder."""
@@ -452,9 +467,11 @@ class CharacterAvatar(QWidget):
             p.setFont(font)
             p.drawText(rect, int(Qt.AlignmentFlag.AlignCenter), self._placeholder_text)
 
-        # Border — theme-aware
+        # Border — theme-aware. Treat "force_hover" (set by parent's poll
+        # while the popup menu is open) the same as a real hover, so the
+        # accent border doesn't strobe off when the popup grabs mouse focus.
         p.setClipping(False)
-        if self._hover:
+        if self._hover or self._force_hover:
             border_color = QColor(self._accent_color)
             border_width = 2.5
         else:
@@ -472,8 +489,8 @@ class CharacterAvatar(QWidget):
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(rect)
 
-        # Hover overlay — subtle accent tint (no text label, just a click hint)
-        if self._hover:
+        # Hover overlay — subtle accent tint (also applied while menu is up)
+        if self._hover or self._force_hover:
             accent = QColor(self._accent_color)
             accent.setAlpha(45)
             p.setClipPath(path)
@@ -481,6 +498,185 @@ class CharacterAvatar(QWidget):
             p.setClipping(False)
 
         p.end()
+
+
+# ────────────────────────────────────────────────────────────────────
+# _AvatarHoverMenu — floating chip beside the avatar
+# Shows on hover, offers 2 actions: choose-from-file / take-screenshot
+# Theme-aware (accent border + bg_surface fill + text colors).
+# Auto-hides via a grace timer when cursor leaves both menu AND avatar.
+# ────────────────────────────────────────────────────────────────────
+class _AvatarHoverMenu(QFrame):
+    pick_image_requested = pyqtSignal()
+    screenshot_requested = pyqtSignal()
+
+    GRACE_MS = 220   # cursor-leave grace period before close (legacy — see _MainTab poll)
+    BTN_W = 230      # widened so "ถ่ายภาพจอ (Screenshot)" fits without ellipsis
+    BTN_H = 40
+
+    def __init__(self, parent=None):
+        # Popup window so it floats over everything but doesn't steal focus
+        # from the underlying panel; hides on click-outside automatically.
+        super().__init__(
+            parent,
+            Qt.WindowType.Popup
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.NoDropShadowWindowHint,
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("avatar_hover_menu")
+
+        # Theme defaults — overridden by set_palette()
+        self._accent = "#58a6ff"
+        self._bg = "#161b22"
+        self._bg2 = "#1c2128"
+        self._text = "#e6edf3"
+        self._text_dim = "#7d8590"
+
+        # Auto-close grace timer (started on cursor leave)
+        self._close_timer = QTimer(self)
+        self._close_timer.setSingleShot(True)
+        self._close_timer.setInterval(self.GRACE_MS)
+        self._close_timer.timeout.connect(self._maybe_close)
+
+        # Layout: vertical stack of 2 buttons w/ icons
+        from PyQt6.QtWidgets import QVBoxLayout
+        wrap = QVBoxLayout(self)
+        wrap.setContentsMargins(8, 8, 8, 8)
+        wrap.setSpacing(4)
+
+        self.btn_pick = QPushButton("เลือกภาพจากไฟล์")
+        self.btn_shot = QPushButton("ถ่ายภาพจอ (Screenshot)")
+        for b in (self.btn_pick, self.btn_shot):
+            b.setObjectName("avatar_menu_btn")
+            b.setFixedSize(self.BTN_W, self.BTN_H)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setIconSize(QSize(18, 18))
+            wrap.addWidget(b)
+
+        # Icons (themed via load helpers if present)
+        try:
+            ico_pick = QIcon(resource_path("assets/images.png"))
+            ico_shot = QIcon(resource_path("assets/camera.png"))
+            self.btn_pick.setIcon(ico_pick)
+            self.btn_shot.setIcon(ico_shot)
+        except Exception as e:
+            log.debug(f"[hover-menu] icon load skipped: {e}")
+
+        # Wire button clicks → signals + close menu
+        self.btn_pick.clicked.connect(self._on_pick)
+        self.btn_shot.clicked.connect(self._on_shot)
+
+        self._apply_qss()
+
+    def set_palette(self, accent: str, bg: str, bg2: str, text: str, text_dim: str):
+        self._accent = accent
+        self._bg = bg
+        self._bg2 = bg2
+        self._text = text
+        self._text_dim = text_dim
+        self._apply_qss()
+
+    def _apply_qss(self):
+        # Outer frame — bright accent border (matches the avatar hover ring)
+        # so the menu feels visually tethered to the avatar instead of floating
+        # in space. 2px is thick enough to read on dark themes; on light
+        # themes the accent itself provides the contrast.
+        self.setStyleSheet(f"""
+            QFrame#avatar_hover_menu {{
+                background: {self._bg2};
+                border: 2px solid {self._accent};
+                border-radius: 12px;
+            }}
+            QPushButton#avatar_menu_btn {{
+                background: {self._bg};
+                color: {self._text};
+                border: 1px solid transparent;
+                border-radius: 7px;
+                padding-left: 14px;
+                text-align: left;
+                font-family: "{FONT_PRIMARY}";
+                font-size: 11pt;
+            }}
+            QPushButton#avatar_menu_btn:hover {{
+                background: {self._accent};
+                color: #ffffff;
+                border-color: {self._accent};
+            }}
+            QPushButton#avatar_menu_btn:pressed {{
+                background: {self._accent};
+                color: #ffffff;
+            }}
+        """)
+
+    def show_beside(self, anchor_widget: QWidget):
+        """Position to the RIGHT of anchor_widget (or LEFT if no room)."""
+        if anchor_widget is None:
+            return
+        try:
+            anchor_global = anchor_widget.mapToGlobal(QPoint(0, 0))
+            ax = anchor_global.x()
+            ay = anchor_global.y()
+            aw = anchor_widget.width()
+            ah = anchor_widget.height()
+            self.adjustSize()
+            mw = self.width()
+            mh = self.height()
+
+            # Prefer right side; fall back to left if it would clip the screen
+            screen = QApplication.primaryScreen()
+            screen_geo = screen.availableGeometry() if screen else None
+            x_right = ax + aw + 12
+            x_left = ax - mw - 12
+            if screen_geo and (x_right + mw > screen_geo.right()):
+                x = max(screen_geo.left(), x_left)
+            else:
+                x = x_right
+            # Vertically center on the avatar
+            y = ay + (ah - mh) // 2
+            if screen_geo:
+                y = max(screen_geo.top(), min(y, screen_geo.bottom() - mh))
+            self.move(x, y)
+            self.show()
+            self.raise_()
+        except Exception as e:
+            log.warning(f"[hover-menu] show_beside failed: {e}")
+
+    def restart_close_timer(self):
+        """Start (or restart) the grace timer — call this when cursor leaves
+        the avatar OR the menu. If cursor enters the OTHER one within GRACE_MS,
+        cancel via cancel_close_timer()."""
+        self._close_timer.start()
+
+    def cancel_close_timer(self):
+        """Cancel a pending close — call when cursor enters menu or avatar."""
+        if self._close_timer.isActive():
+            self._close_timer.stop()
+
+    def _maybe_close(self):
+        """Close only if cursor is OUTSIDE both this menu and (we hope) the
+        anchor avatar. The owner avatar reset-checks itself via leaveEvent."""
+        try:
+            cursor = QCursor.pos()
+            local = self.mapFromGlobal(cursor)
+            if not self.rect().contains(local):
+                self.close()
+        except Exception:
+            self.close()
+
+    # NOTE: enterEvent/leaveEvent removed. Visibility is owned by the parent
+    # tab's QTimer-based hover poll (see _MainTab._poll_avatar_hover). Letting
+    # the menu also start its own grace timer would race against the poll
+    # — close timer fires while poll still says cursor-in-menu → menu vanishes
+    # under the cursor mid-interaction.
+
+    def _on_pick(self):
+        self.close()
+        self.pick_image_requested.emit()
+
+    def _on_shot(self):
+        self.close()
+        self.screenshot_requested.emit()
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -2362,6 +2558,17 @@ class MainCharactersTab(QWidget):
         avatar_row.addStretch()
         self.avatar = CharacterAvatar()
         self.avatar.avatar_clicked.connect(self._on_avatar_clicked)
+        # Hover menu (lazy-created) — offers file picker / screenshot.
+        # Visibility driven by a cursor-position poll (every 80ms) instead of
+        # avatar enter/leave events, because the popup menu would steal mouse
+        # focus on show, triggering avatar.leaveEvent → grace-close → re-enter
+        # = visible flicker loop. See project_pyqt6_gotchas.md.
+        self._hover_menu: Optional["_AvatarHoverMenu"] = None
+        self._hover_outside_since = 0.0   # timestamp cursor first left both targets
+        self._hover_poll_timer = QTimer(self)
+        self._hover_poll_timer.setInterval(80)
+        self._hover_poll_timer.timeout.connect(self._poll_avatar_hover)
+        self._hover_poll_timer.start()
         avatar_row.addWidget(self.avatar)
         avatar_row.addStretch()
         d.addLayout(avatar_row)
@@ -2747,6 +2954,176 @@ class MainCharactersTab(QWidget):
             return
         path = self.dm.get_main_character_image_path(self._current_index)
         self.avatar.set_image(path)
+
+    # ── Hover menu (file picker / screenshot) — POLLING-based ──
+    # Why polling: a Qt.WindowType.Popup grabs mouse focus on show, which
+    # makes the underlying widget (the avatar) receive an immediate leaveEvent.
+    # Event-driven show/hide therefore loops (show → leave → grace-close →
+    # cursor "re-enters" → show ...), causing visible flicker. The poll just
+    # asks "is the cursor over avatar OR menu right now?" every 80ms.
+    HOVER_GRACE_S = 0.18  # cursor must be off both targets this long to close
+
+    def _poll_avatar_hover(self):
+        """Show menu if cursor is on avatar or on the menu; close after a
+        short grace if it's left both. Skips work when no character selected."""
+        try:
+            if self._current_index < 0:
+                # No character selected → ensure menu is hidden + clear forced hover
+                self.avatar.set_force_hover(False)
+                if self._hover_menu is not None and self._hover_menu.isVisible():
+                    self._hover_menu.close()
+                return
+            cursor_global = QCursor.pos()
+            in_avatar = self._global_in_widget(cursor_global, self.avatar)
+            in_menu = (
+                self._hover_menu is not None
+                and self._hover_menu.isVisible()
+                and self._global_in_widget(cursor_global, self._hover_menu)
+            )
+
+            if in_avatar or in_menu:
+                # Inside one of the targets — show menu (idempotent), reset grace,
+                # and force the avatar's accent border ON (Qt's leaveEvent fires
+                # spuriously when the popup grabs focus).
+                self._hover_outside_since = 0.0
+                if self._hover_menu is None:
+                    self._build_hover_menu()
+                if not self._hover_menu.isVisible():
+                    self._hover_menu.show_beside(self.avatar)
+                self.avatar.set_force_hover(True)
+                return
+
+            # Outside both — start grace timer (one-shot)
+            if self._hover_menu is None or not self._hover_menu.isVisible():
+                self.avatar.set_force_hover(False)
+                return
+            import time as _t
+            now = _t.time()
+            if self._hover_outside_since == 0.0:
+                self._hover_outside_since = now
+            elif now - self._hover_outside_since >= self.HOVER_GRACE_S:
+                self._hover_menu.close()
+                self._hover_outside_since = 0.0
+                self.avatar.set_force_hover(False)
+        except Exception as e:
+            log.debug(f"[hover-poll] {e}")
+
+    @staticmethod
+    def _global_in_widget(global_pt: QPoint, widget: Optional[QWidget]) -> bool:
+        if widget is None or not widget.isVisible():
+            return False
+        try:
+            local = widget.mapFromGlobal(global_pt)
+            return widget.rect().contains(local)
+        except Exception:
+            return False
+
+    def _build_hover_menu(self):
+        """Lazy-create the hover menu + apply current theme palette."""
+        self._hover_menu = _AvatarHoverMenu(self)
+        self._hover_menu.pick_image_requested.connect(self._on_change_image)
+        self._hover_menu.screenshot_requested.connect(self._on_screenshot_avatar)
+        try:
+            accent = self.panel.am.get_accent_color()
+            pal = self.panel.am.get_palette() if hasattr(self.panel.am, "get_palette") else {}
+            self._hover_menu.set_palette(
+                accent=accent,
+                bg=pal.get("btn_bg", "#161b22"),
+                bg2=pal.get("bg_titlebar", pal.get("btn_bg", "#1c2128")),
+                text=pal.get("text", "#e6edf3"),
+                text_dim=pal.get("text_dim", "#7d8590"),
+            )
+        except Exception as e:
+            log.debug(f"[hover-menu] palette pull skipped: {e}")
+
+    def _on_screenshot_avatar(self):
+        """Hide panel → fullscreen crop overlay → save cropped pixmap as
+        the selected character's avatar via the existing image pipeline."""
+        if self._current_index < 0:
+            return
+        try:
+            from pyqt_ui.screenshot_tool import ScreenshotCropOverlay
+        except Exception as e:
+            QMessageBox.warning(self, "Screenshot tool",
+                f"ไม่สามารถโหลด screenshot tool: {e}")
+            return
+
+        char_name = self.in_first.text().strip() or "?"
+
+        # Hide NPC Manager temporarily so it doesn't appear in the snapshot.
+        # processEvents to make the hide actually paint before grabWindow.
+        self.panel.hide()
+        QApplication.processEvents()
+        # Tiny extra settle so the window is gone before screen capture
+        QTimer.singleShot(120, lambda: self._launch_screenshot_overlay(char_name))
+
+    def _launch_screenshot_overlay(self, char_name: str):
+        from pyqt_ui.screenshot_tool import ScreenshotCropOverlay
+        # Capture primary screen NOW (after panel is hidden)
+        try:
+            screen = QApplication.primaryScreen()
+            full_pix = screen.grabWindow(0)
+        except Exception as e:
+            self.panel.show()
+            QMessageBox.warning(self, "Screenshot",
+                f"จับภาพหน้าจอไม่ได้: {e}")
+            return
+
+        try:
+            accent = self.panel.am.get_accent_color()
+        except Exception:
+            accent = "#00d4ff"
+
+        overlay = ScreenshotCropOverlay(full_pix, char_name, accent_hex="#00d4ff")
+        overlay.crop_confirmed.connect(self._on_screenshot_cropped)
+        overlay.crop_cancelled.connect(self._on_screenshot_cancelled)
+        # Hold a reference so it isn't garbage-collected
+        self._active_screenshot_overlay = overlay
+        overlay.show()
+        overlay.raise_()
+        overlay.activateWindow()
+
+    def _on_screenshot_cropped(self, cropped_pixmap: QPixmap):
+        """Got the cropped region — save via existing pipeline + restore panel."""
+        try:
+            import tempfile
+            tmp_path = os.path.join(
+                tempfile.gettempdir(),
+                f"mbb_avatar_shot_{int(__import__('time').time())}.png",
+            )
+            ok = cropped_pixmap.save(tmp_path, "PNG")
+            if not ok:
+                raise RuntimeError("QPixmap.save returned False")
+            filename = self.dm.set_main_character_image(self._current_index, tmp_path)
+            if not filename:
+                raise RuntimeError("set_main_character_image returned empty")
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            self._refresh_avatar()
+            self.panel.autosave()
+            self._update_current_row_badge()
+            # Restore panel + show Polaroid with the new shot
+            self.panel.show()
+            self.panel.raise_()
+            self.panel.activateWindow()
+            QTimer.singleShot(120, self._on_avatar_clicked)
+        except Exception as e:
+            self.panel.show()
+            QMessageBox.warning(self, "Screenshot save",
+                f"บันทึก screenshot ไม่สำเร็จ: {e}")
+        finally:
+            self._active_screenshot_overlay = None
+
+    def _on_screenshot_cancelled(self):
+        """User pressed ESC or clicked cancel — just bring NPC Manager back."""
+        try:
+            self.panel.show()
+            self.panel.raise_()
+            self.panel.activateWindow()
+        finally:
+            self._active_screenshot_overlay = None
 
     def _on_avatar_clicked(self):
         """Avatar click — UX:

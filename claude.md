@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.8.6
+**Version:** 1.8.7
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -51,9 +51,68 @@ C:\MBB_Dalamud/
 - [x] NPC Manager database visibility + merge tool (v1.8.4, 2026-05-08)
 - [x] TUI architecture overhaul — Win32 resize + DissolveOverlay + file split (v1.8.5, 2026-05-10)
 - [x] DissolveOverlay coordination fixes — mode reload on switch, JSON cleanup, vertical centering, auto-hide (v1.8.6, 2026-05-10)
+- [x] Frozen-mode npc.json path bug fix + Updater UI rewrite + Screenshot avatar tool + model default → 3.1 Flash Lite (v1.8.7, 2026-05-15)
 - [x] NPC Manager Polaroid view + WebP avatar storage (v1.8.2, 2026-04-27)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
+
+---
+
+## Changelog — v1.8.7 (2026-05-15)
+
+### CRITICAL fix — frozen-mode npc.json path mismatch
+
+**Symptom**: After building EXE, characters added via NPC Manager show in unknown-purple on TUI even though they appear in the database. Old characters work fine. Bug invisible in dev (.py).
+
+**Root cause**: NPCDataManager **writes** via `get_npc_file_path()` → resolves to `MBB/npc.json` (exe-level, user-editable). But `text_corrector.load_npc_data()` **reads** via `resource_path()` → resolves to `sys._MEIPASS/npc.json` (immutable bundled snapshot). After NPC Manager save → reload event → text_corrector re-reads bundled snapshot (no new char) → speaker not in `text_corrector.names` → unknown-purple in TUI.
+
+In dev there's only one `python-app/npc.json` so the mismatch doesn't manifest.
+
+**Fix**: [text_corrector.py:307-322](python-app/text_corrector.py) and [MBB.py:1862-1867](python-app/MBB.py) — both now use `get_npc_file_path()` (same resolver as the writer). Verification grep `grep -rn 'resource_path.*npc' python-app/` returns zero matches.
+
+**Rule going forward** (saved to memory `project_build_pipeline.md`): any code that touches `npc.json` MUST use `get_npc_file_path()`. Reserve `resource_path()` for static bundled assets (fonts, icons). This bug class would have stayed hidden until release without the `_internal/` vs exe-level path divergence.
+
+### Default model → `gemini-3.1-flash-lite-preview`
+
+Fresh install previously defaulted to `gemini-2.0-flash` (or 2.5-flash depending on which fallback fired). Now consistent: `gemini-3.1-flash-lite-preview`. Updated 5 files: [settings.py](python-app/settings.py), [translator_gemini.py](python-app/translator_gemini.py), [model.py](python-app/model.py), [appearance.py](python-app/appearance.py), [pyqt_ui/model_panel.py](python-app/pyqt_ui/model_panel.py). Existing users keep their saved choice.
+
+### Updater UI complete rewrite — `c:\MBB_Dalamud\updater\updater.py`
+
+Old UI was minimal Tk: small window, "ปิด" duplicated, plain text "กำลังตรวจสอบ…". User requested modernization.
+
+**Visual:**
+- Window 640×620 (was 560×480). Logo `mbb_meteor.png` (subsample 154×100) at top, then `MBB Updater` title 24pt + `Magicite Babel Bridge` subtitle 12pt
+- BIG centered current version (40pt bold) under "เวอร์ชั่นของคุณ"
+- Status card swaps between:
+  - **Checking state**: animated rotating-arc spinner (Canvas 28×28, redraws every 40ms) + animated dots ("ตรวจสอบเวอร์ชั่น." → ".." → "...")
+  - **Final state**: colored badge (green/cyan/amber/red) with icon + label + sub-line
+- Buttons bottom-right: primary (accent for action, success for "เปิด MBB" after update) + secondary "ปิด"
+- Bundled assets (`mbb_meteor.png` + `mbb_icon.ico`) added to [updater.spec](updater/updater.spec) datas
+
+**Behavior:**
+- 404 from GitHub no longer shows amber warning. Instead green "✓ เวอร์ชั่นของคุณเป็นเวอร์ชั่นล่าสุด" — positive framing (user can't have anything older than nothing)
+- Auto-hide of "Update Now" button when on latest, so the only choice is "ปิด"
+- Dev-mode short-circuit: running `py updater.py` (not frozen) skips Stage 1 (copy-to-temp + relaunch — would fail because subprocess can't execute .py as binary), goes straight to Stage 2 with auto-target `dist_test/MBB`. Logs `[dev] Skipping Stage 1...` to stderr.
+- Asset resolver `_resolve_asset(name)` checks 3 paths: `sys._MEIPASS` (frozen onefile) → `<repo>/python-app/assets/` (dev) → `<target>/_internal/assets/` (installed fallback).
+
+### NEW: Avatar hover menu + Screenshot crop tool
+
+NPC Manager avatar gets a hover-revealed action menu when a character is selected:
+- **เลือกภาพจากไฟล์** (icon `images.png`) — same flow as old click → file picker
+- **ถ่ายภาพจอ (Screenshot)** (icon `camera.png`) — NEW
+
+**Hover menu** ([_AvatarHoverMenu](python-app/pyqt_ui/npc_manager_panel.py)): popup QFrame, 230×40 buttons, accent border 2px (matches avatar hover ring — feels tethered), bg = theme `bg_titlebar`. Theme-aware via `set_palette()` pulled from `panel.am.get_accent_color()` + `get_palette()` (with fallback).
+
+**Visibility — POLLING-based** (critical pattern, not event-driven): a QTimer in `_MainTab` checks cursor position every 80ms. Show menu when cursor in avatar OR menu rects; close after 180ms grace when outside both. Avatar `set_force_hover(bool)` keeps the accent border steady while menu is open (Qt fires spurious leaveEvent when popup grabs mouse focus → would otherwise strobe the border off). Pattern documented in `project_pyqt6_gotchas.md`.
+
+**Screenshot tool** ([pyqt_ui/screenshot_tool.py](python-app/pyqt_ui/screenshot_tool.py) ~290 lines):
+- Hide NPC Manager → wait 120ms for paint → `QScreen.grabWindow(0)` capture primary screen
+- Show fullscreen `ScreenshotCropOverlay`: captured pixmap as bg, 60% black mask everywhere, **punched-out** crop rect (QPainterPath subtract) + 2px cyan `#00d4ff` border + 8 corner/edge handles
+- Top pill: 2-tone "เลือกหน้าตาตัวละคร: **<Name>**" (label cyan + name white) with inline-drawn camera glyph
+- Bottom hint pill: "คลิก-ลาก..." → after selection: "ENTER ยืนยัน · ESC ยกเลิก"
+- Click-drag = select. Min crop 32×32 (rejects accidental clicks). HiDPI-aware crop extraction (devicePixelRatio scaling)
+- ENTER or double-click in selection → emit `crop_confirmed(QPixmap)` → save temp PNG → `dm.set_main_character_image()` (existing pipeline → 512 WebP) → restore panel + reopen Polaroid
+- ESC → `crop_cancelled` → restore panel only
 
 ---
 

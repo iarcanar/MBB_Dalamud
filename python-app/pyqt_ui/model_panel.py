@@ -221,7 +221,7 @@ class ModelPanel(QWidget):
         params = self.settings.get_api_parameters()
 
         # Model
-        model = params.get("model", "gemini-2.5-flash")
+        model = params.get("model", "gemini-3.1-flash-lite-preview")
         idx = self._model_combo.findText(model)
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
@@ -278,7 +278,7 @@ class ModelPanel(QWidget):
             self._show_status(str(e), error=True)
 
     def _reset_defaults(self):
-        idx = self._model_combo.findText("gemini-2.5-flash")
+        idx = self._model_combo.findText("gemini-3.1-flash-lite-preview")
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
         self._set_slider("max_tokens", 500)

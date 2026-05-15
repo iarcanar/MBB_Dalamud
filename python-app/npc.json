@@ -1646,6 +1646,39 @@
       "gender": "Female",
       "role": "เด็กสาว",
       "relationship": "Ally"
+    },
+    {
+      "firstName": "Miayli",
+      "lastName": "",
+      "gender": "Female",
+      "role": "นายกเทศมนตรี เมือง Treno",
+      "relationship": "Ally",
+      "_added_at": 1778849767.16662
+    },
+    {
+      "firstName": "Public Announcement",
+      "lastName": "",
+      "gender": "Female",
+      "role": "เสียงจากระบบภายในเมือง Solution Nine",
+      "relationship": "Neutral",
+      "_added_at": 1778847231.1548386
+    },
+    {
+      "firstName": "Wayakkwe",
+      "lastName": "",
+      "gender": "Female",
+      "role": "",
+      "relationship": "Ally",
+      "_added_at": 1778846887.078384
+    },
+    {
+      "firstName": "Lumull",
+      "lastName": "",
+      "gender": "Male",
+      "role": "อาสาสมัครเมือง Treno, หลานของ Miayli",
+      "relationship": "Ally",
+      "image": "lumull.webp",
+      "_added_at": 1778850641.0124142
     }
   ],
   "npcs": [
@@ -2114,7 +2147,8 @@
     "ambystoma": "'แอมบิส' หรือเรียกแบบติดตลกว่า 'ปิกาจู้แอมบิส'",
     "thirteenth": "'โลกที่สิบสาม'",
     "Ninth": "'โลกที่เก้า'",
-    "Thirteenth": "โลกที่สิบสาม"
+    "Thirteenth": "โลกที่สิบสาม",
+    "Treno": "เมืองที่ถูกปกคลุมด้วยฟ้าผ่า, หนึ่งในอาณาจักร Alexandria"
   },
   "character_roles": {
     "Y'shtola": "นักวิชาการสาวสุขุม ใช้ 'ฉัน/เธอ' ปกติ (เปลี่ยนเป็น 'ข้า/ท่าน' เฉพาะตอนทางการ) คำพูดคมคาย มั่นใจ ไม่อ้อมค้อม",
@@ -2317,7 +2351,11 @@
     "Ardbert": "น้ำเสียงเข้มแข็ง กล้าหาญ",
     "Thancred": "นักผจญภัยเจ้าสำนวน ใช้ 'ผม/คุณ' ภาษาเก๋มีเสน่ห์ ปนเล่นคำ ไม่โบราณ — สายลับมือเก๋าที่ดูเย่อหยิ่งแต่จริงๆ ห่วงใย",
     "Shiva": "คำพูดเยือกเย็น",
-    "Nashu": "น้ำเสียงน่ารัก เด๋อด๋า, ไม่ประสีประสา"
+    "Nashu": "น้ำเสียงน่ารัก เด๋อด๋า, ไม่ประสีประสา",
+    "Miayli": "เข้มแข็ง เข้าใจโลก อบอุ่น",
+    "Public Announcement": "ผู้ประกาศน้ำเสียงทางการ กระชับ",
+    "Wayakkwe": "เข้มแข็ง สุภาพ",
+    "Lumull": "น้ำเสียงสนุกสนาน active เป็นกันเอง"
   },
   "word_fixes": {},
   "_game_info": {
