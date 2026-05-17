@@ -16,6 +16,7 @@ Architecture:
 import json
 import os
 import logging
+import time
 from typing import Optional
 
 from PyQt6.QtWidgets import (
@@ -2148,6 +2149,20 @@ class NPCManagerPanel(QWidget):
         main_tab = self._tab_pages.get("main")
         if main_tab and hasattr(main_tab, "avatar"):
             main_tab.avatar.set_palette(p)
+            # Hover menu is lazy-built — only re-paint if it already exists,
+            # otherwise it picks up the current palette on first show.
+            _hm = getattr(main_tab, "_hover_menu", None)
+            if _hm is not None:
+                try:
+                    _hm.set_palette(
+                        accent=p.get("accent", primary),
+                        bg=p.get("btn_bg", "#161b22"),
+                        bg2=p.get("bg_titlebar", p.get("btn_bg", "#1c2128")),
+                        text=p.get("text", "#e6edf3"),
+                        text_dim=p.get("text_dim", "#7d8590"),
+                    )
+                except Exception as e:
+                    log.debug(f"[theme] hover menu repaint skipped: {e}")
 
         qss = f"""
             QWidget#npc_bg {{
@@ -2565,6 +2580,13 @@ class MainCharactersTab(QWidget):
         # = visible flicker loop. See project_pyqt6_gotchas.md.
         self._hover_menu: Optional["_AvatarHoverMenu"] = None
         self._hover_outside_since = 0.0   # timestamp cursor first left both targets
+        # Suppress poll for a short window after we explicitly restore the
+        # panel (post-screenshot). Without this, the poll instantly re-opens
+        # the hover menu if cursor is still over the avatar, and that menu
+        # would overlap the Polaroid we're also re-opening. unix-time.
+        self._hover_poll_suppress_until = 0.0
+        # Pre-declare so any pre-screenshot access doesn't AttributeError.
+        self._active_screenshot_overlay = None
         self._hover_poll_timer = QTimer(self)
         self._hover_poll_timer.setInterval(80)
         self._hover_poll_timer.timeout.connect(self._poll_avatar_hover)
@@ -2965,8 +2987,23 @@ class MainCharactersTab(QWidget):
 
     def _poll_avatar_hover(self):
         """Show menu if cursor is on avatar or on the menu; close after a
-        short grace if it's left both. Skips work when no character selected."""
+        short grace if it's left both. Skips work when no character selected
+        OR when this tab is not the currently-visible tab (panel hidden during
+        screenshot, user on NPCS/LORE, etc.). Suppressed briefly after a
+        screenshot restore so the menu doesn't pop over the re-opened Polaroid."""
         try:
+            now = time.time()
+            # Hibernate when panel isn't visible (during screenshot, minimized,
+            # closed). 80ms × 12.5Hz × 3600s = ~450k pointless calls/hour if we
+            # didn't skip these — measurable CPU on idle.
+            if not self.isVisible() or not self.panel.isVisible():
+                if self._hover_menu is not None and self._hover_menu.isVisible():
+                    self._hover_menu.close()
+                self.avatar.set_force_hover(False)
+                return
+            # Skip during post-screenshot restore grace
+            if now < self._hover_poll_suppress_until:
+                return
             if self._current_index < 0:
                 # No character selected → ensure menu is hidden + clear forced hover
                 self.avatar.set_force_hover(False)
@@ -2997,8 +3034,6 @@ class MainCharactersTab(QWidget):
             if self._hover_menu is None or not self._hover_menu.isVisible():
                 self.avatar.set_force_hover(False)
                 return
-            import time as _t
-            now = _t.time()
             if self._hover_outside_since == 0.0:
                 self._hover_outside_since = now
             elif now - self._hover_outside_since >= self.HOVER_GRACE_S:
@@ -3038,11 +3073,15 @@ class MainCharactersTab(QWidget):
 
     def _on_screenshot_avatar(self):
         """Hide panel → fullscreen crop overlay → save cropped pixmap as
-        the selected character's avatar via the existing image pipeline."""
+        the selected character's avatar via the existing image pipeline.
+
+        Multi-monitor: pick the screen the NPC Manager is CURRENTLY on (so
+        the user gets the screen they're looking at, typically same as the
+        game). Falls back to primary if detection fails."""
         if self._current_index < 0:
             return
         try:
-            from pyqt_ui.screenshot_tool import ScreenshotCropOverlay
+            from pyqt_ui.screenshot_tool import ScreenshotCropOverlay  # noqa: F401
         except Exception as e:
             QMessageBox.warning(self, "Screenshot tool",
                 f"ไม่สามารถโหลด screenshot tool: {e}")
@@ -3050,18 +3089,34 @@ class MainCharactersTab(QWidget):
 
         char_name = self.in_first.text().strip() or "?"
 
+        # Pick target screen BEFORE hide — `panel.mapToGlobal` is only
+        # accurate while shown. screenAt returns the QScreen at a global point.
+        target_screen = None
+        try:
+            from PyQt6.QtGui import QGuiApplication
+            center_local = QPoint(self.panel.width() // 2, self.panel.height() // 2)
+            center_global = self.panel.mapToGlobal(center_local)
+            target_screen = QGuiApplication.screenAt(center_global)
+        except Exception as e:
+            log.debug(f"[screenshot] screenAt failed, will fallback to primary: {e}")
+        if target_screen is None:
+            target_screen = QApplication.primaryScreen()
+
         # Hide NPC Manager temporarily so it doesn't appear in the snapshot.
         # processEvents to make the hide actually paint before grabWindow.
         self.panel.hide()
         QApplication.processEvents()
         # Tiny extra settle so the window is gone before screen capture
-        QTimer.singleShot(120, lambda: self._launch_screenshot_overlay(char_name))
+        QTimer.singleShot(
+            120,
+            lambda: self._launch_screenshot_overlay(char_name, target_screen),
+        )
 
-    def _launch_screenshot_overlay(self, char_name: str):
+    def _launch_screenshot_overlay(self, char_name: str, target_screen=None):
         from pyqt_ui.screenshot_tool import ScreenshotCropOverlay
-        # Capture primary screen NOW (after panel is hidden)
+        # Capture the chosen screen (user's actual monitor, not always primary)
         try:
-            screen = QApplication.primaryScreen()
+            screen = target_screen or QApplication.primaryScreen()
             full_pix = screen.grabWindow(0)
         except Exception as e:
             self.panel.show()
@@ -3074,7 +3129,26 @@ class MainCharactersTab(QWidget):
         except Exception:
             accent = "#00d4ff"
 
-        overlay = ScreenshotCropOverlay(full_pix, char_name, accent_hex="#00d4ff")
+        # Construct overlay — guard against constructor exceptions (e.g.,
+        # primaryScreen() returns None on a locked session). Without this,
+        # panel.hide() above succeeded but panel never gets restored → stuck.
+        try:
+            overlay = ScreenshotCropOverlay(
+                full_pix, char_name, accent_hex="#00d4ff",
+                target_screen=screen,
+            )
+        except Exception as e:
+            log.error(f"[screenshot] overlay construct failed: {e}")
+            self.panel.show()
+            self.panel.raise_()
+            self.panel.activateWindow()
+            QMessageBox.warning(self, "Screenshot",
+                f"สร้าง overlay ไม่สำเร็จ: {e}")
+            return
+        # WA_DeleteOnClose: drop the captured ~10MB QPixmap as soon as the
+        # overlay closes (instead of waiting for GC + Python ref drop). Repeated
+        # screenshots otherwise accumulate the background pixmap in memory.
+        overlay.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         overlay.crop_confirmed.connect(self._on_screenshot_cropped)
         overlay.crop_cancelled.connect(self._on_screenshot_cancelled)
         # Hold a reference so it isn't garbage-collected
@@ -3099,8 +3173,11 @@ class MainCharactersTab(QWidget):
                 raise RuntimeError("set_main_character_image returned empty")
             try:
                 os.remove(tmp_path)
-            except Exception:
-                pass
+            except Exception as _rm_err:
+                # Most common: AV scanner holding the file open briefly. Not
+                # fatal — Windows clears %TEMP% periodically. Log so we can
+                # spot a real leak in the field if it accumulates.
+                log.debug(f"[screenshot] tmp cleanup failed: {_rm_err}")
             self._refresh_avatar()
             self.panel.autosave()
             self._update_current_row_badge()
@@ -3108,6 +3185,10 @@ class MainCharactersTab(QWidget):
             self.panel.show()
             self.panel.raise_()
             self.panel.activateWindow()
+            # Suppress hover-poll for 400ms so the menu doesn't re-pop on top
+            # of the Polaroid the moment the panel is back (cursor is likely
+            # still over the avatar's logical position).
+            self._hover_poll_suppress_until = time.time() + 0.4
             QTimer.singleShot(120, self._on_avatar_clicked)
         except Exception as e:
             self.panel.show()
@@ -3122,6 +3203,8 @@ class MainCharactersTab(QWidget):
             self.panel.show()
             self.panel.raise_()
             self.panel.activateWindow()
+            # Same grace as the confirmed path — cursor may still be on avatar
+            self._hover_poll_suppress_until = time.time() + 0.4
         finally:
             self._active_screenshot_overlay = None
 

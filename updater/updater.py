@@ -502,6 +502,11 @@ class UpdaterApp:
         self.root.geometry("640x620")
         self.root.configure(bg=self.BG)
         self.root.resizable(False, False)
+        # Bind X-button close → _on_close so spinner/dots timers get cancelled.
+        # Without this, closing via the OS title-bar destroys the root with
+        # pending `after` callbacks still queued — they fire on the destroyed
+        # widget and raise TclError noise (or worse, crash on shutdown).
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         try:
             icon_path = self._resolve_asset("mbb_icon.ico")
             if icon_path and os.path.exists(icon_path):
@@ -529,7 +534,14 @@ class UpdaterApp:
     # ─── Asset resolution (dev .py vs frozen .exe) ───
     def _resolve_asset(self, name: str) -> str:
         """Look up a bundled asset in MEIPASS (frozen) or fall back to the
-        repo's python-app/assets/ during dev. Returns "" if not found."""
+        repo's python-app/assets/ during dev. Returns "" if not found.
+
+        Defense-in-depth: reject absolute paths or any "../" components in
+        `name`. Today every caller passes a literal filename, but a future
+        caller forwarding user input could traverse out of the asset dirs.
+        """
+        if not name or os.path.isabs(name) or ".." in name.replace("\\", "/").split("/"):
+            return ""
         # PyInstaller frozen layout — datas are extracted next to the running .exe
         meipass = getattr(sys, "_MEIPASS", "")
         if meipass:
@@ -706,7 +718,18 @@ class UpdaterApp:
         self._spinner_angle = (self._spinner_angle + 12) % 360
 
     def _start_spinner(self) -> None:
-        """Begin spinner animation tick."""
+        """Begin spinner animation tick.
+
+        Cancels any existing pending tick first — otherwise calling this
+        twice (e.g., retry path or re-entry) leaks parallel after-callbacks
+        that race each other and double the redraw rate.
+        """
+        if self._spinner_after_id is not None:
+            try:
+                self.root.after_cancel(self._spinner_after_id)
+            except Exception:
+                pass
+            self._spinner_after_id = None
         self._draw_spinner()
         self._spinner_after_id = self.root.after(40, self._start_spinner)
 
@@ -733,7 +756,16 @@ class UpdaterApp:
 
     # ─── Animated dots ("ตรวจสอบ" → "ตรวจสอบ." → ".." → "...") ───
     def _start_dots_animation(self, base_text: str) -> None:
-        """Cycle dots 0→3 after `base_text` every 400ms."""
+        """Cycle dots 0→3 after `base_text` every 400ms.
+
+        Cancels any existing tick first (same reason as _start_spinner).
+        """
+        if self._dots_after_id is not None:
+            try:
+                self.root.after_cancel(self._dots_after_id)
+            except Exception:
+                pass
+            self._dots_after_id = None
         self._dots_base_text = base_text
         self._dots_count = 0
         self._tick_dots()

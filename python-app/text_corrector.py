@@ -5,7 +5,7 @@ import os
 from enum import Enum
 import logging
 from resource_utils import resource_path
-from npc_file_utils import get_npc_file_path
+from npc_file_utils import get_npc_file_path, ensure_npc_file_exists
 
 
 # DialogueType Enum
@@ -313,6 +313,16 @@ class TextCorrector:
             # PyInstaller, causing this reader to never see characters that
             # the user adds via NPC Manager (which saves to exe-level path).
             # See git log "v1.8.7" / claude.md changelog for the bug history.
+            #
+            # ensure_npc_file_exists() creates a minimal default file at the
+            # expected path on first launch (dev mode w/o npc.json yet, or a
+            # broken install). Without this, load would raise FileNotFoundError
+            # and crash TextCorrector init — the old resource_path path tried
+            # multiple fallbacks; we restore that resilience here.
+            try:
+                ensure_npc_file_exists()
+            except Exception as _e:
+                print(f"ensure_npc_file_exists warning: {_e}")
             file_path = get_npc_file_path()
             if not os.path.exists(file_path):
                 print(f"NPC data file not found at: {file_path}")

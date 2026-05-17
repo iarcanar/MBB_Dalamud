@@ -1675,10 +1675,19 @@
       "firstName": "Lumull",
       "lastName": "",
       "gender": "Male",
-      "role": "อาสาสมัครเมือง Treno, หลานของ Miayli",
+      "role": "อาสาสมัครเมือง Treno, หลานของ Miayli, พี่ชายของ Eyaney",
       "relationship": "Ally",
       "image": "lumull.webp",
       "_added_at": 1778850641.0124142
+    },
+    {
+      "firstName": "Eyaney",
+      "lastName": "",
+      "gender": "Female",
+      "role": "Electrope engineer, น้องสาวของ Lumull",
+      "relationship": "Ally",
+      "image": "eyaney.webp",
+      "_added_at": 1778853694.4782565
     }
   ],
   "npcs": [
@@ -2355,7 +2364,8 @@
     "Miayli": "เข้มแข็ง เข้าใจโลก อบอุ่น",
     "Public Announcement": "ผู้ประกาศน้ำเสียงทางการ กระชับ",
     "Wayakkwe": "เข้มแข็ง สุภาพ",
-    "Lumull": "น้ำเสียงสนุกสนาน active เป็นกันเอง"
+    "Lumull": "น้ำเสียงสนุกสนาน active เป็นกันเอง",
+    "Eyaney": "อาเจ๊ สุดโหด, พูดแบบนายช่างสาว"
   },
   "word_fixes": {},
   "_game_info": {

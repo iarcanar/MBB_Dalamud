@@ -661,34 +661,35 @@ class SettingsPanel(QWidget):
     # ── Test Message Pools (6 per type) ──
 
     _TEST_DIALOG = [
-        ("Tataru", "Oh, welcome back! I've been looking into some new business ventures while you were away. Don't worry, I'll handle all the paperwork!"),
-        ("Alphinaud", "We cannot afford to act in haste. Let us gather what intelligence we can before committing to a course of action."),
-        ("Alisaie", "Standing around deliberating won't save anyone. If you won't act, I will."),
-        ("Thancred", "I make no claims to heroism. I simply528 go where I'm needed and do what must be done."),
-        ("Y'shtola", "The aetherial currents here are... wrong. Something has disturbed the natural flow. We must tread carefully."),
-        ("G'raha Tia", "To think I would one day stand beside the Warrior of Light, not as an observer, but as a comrade. It is more than I ever dared dream."),
-        ("Estinien", "Save your sentiments for after the battle. The enemy will not wait for us to finish reminiscing."),
-        ("Urianger", "The stars foretell a confluence of fates. What was sundered shall be made whole, yet the path remaineth shrouded."),
-        ("Krile", "Grandfather always said that the truest measure of a person is not their strength, but their willingness to lend it to others."),
-        ("Wuk Lamat", "Everyone deserves to live with a smile on their face. That's the kind of leader I want to be!"),
+        ("Y'shtola", "The aether here flows wrong. Whatever did this, it was no accident."),
+        ("Wuk Lamat", "I want to be the kind of dawnservant who eats lunch with everyone, not just the nobles!"),
+        ("Alisaie", "If you're done brooding, my brother, perhaps we could actually solve something today."),
+        ("Alphinaud", "Strategy without compassion is just cruelty wearing a clever mask. Let us not forget that."),
+        ("Thancred", "Trouble has a habit of finding me. Today it appears to have brought friends."),
+        ("Tataru", "Don't you worry about a single gil! Tataru Taru has it ALL handled, as always!"),
+        ("Urianger", "Forsooth, the threads of fate do tangle 'round thee once more. Mine heart misgiveth me, yet onward must we tread."),
+        ("Krile", "You don't always have to carry it alone, you know. That's what friends are for."),
+        ("G'raha Tia", "To stand beside you now, in this moment, as your equal... it is everything I hoped for and more."),
+        ("Estinien", "Spare me the speeches. If there's a dragon to slay, point me at it."),
     ]
 
     _TEST_BATTLE = [
-        ("Zenos", "Yes! More! Show me your fury!"),
-        ("Nidhogg", "Thy sins shall be paid in blood!"),
-        ("Emet-Selch", "Such a disappointment."),
-        ("Sephirot", "Kneel before my might!"),
-        ("Thordan VII", "By Halone's grace, I shall strike you down!"),
-        ("???", "You cannot escape your fate, Warrior of Light."),
+        ("Zenos", "Yes! YES! Show me more! Let me feel your hatred sing!"),
+        ("Nidhogg", "Thy kind hath taken everything from me! Now I shall return the favor a thousandfold!"),
+        ("Estinien", "Come then, wyrm! Let us see whose lance bites deeper today!"),
+        ("Emet-Selch", "How utterly tiresome. Must I truly stoop to swatting you myself?"),
+        ("Sephiroth", "You are nothing. A flicker of a flame about to be snuffed out."),
+        ("???", "You should not have come here, hero. This is where your story ends."),
     ]
 
     _TEST_CUTSCENE = [
-        ("", "Hear... Feel... Think... Crystal bearer, your journey has only just begun."),
-        ("", "The night sky stretched endlessly above the Source, a thousand thousand stars bearing silent witness to the tale about to unfold."),
-        ("", "And so it was that the Warrior of Light set forth once more, guided by hope and burdened by duty, into the unknown."),
-        ("", "In that moment, the weight of every sacrifice, every loss, every hard-won victory pressed upon your heart like a prayer."),
-        ("", "The crystal's light flickered, and with it, the last echo of a world that once was."),
-        ("", "Remember us. Remember that we once lived."),
+        # Narrative omniscient voice — no named speaker. ChatType 71 is for
+        # scene descriptions, not character dialogue (characters speak via
+        # ChatType 61 even during cutscenes). All speakers must stay "".
+        ("", "And in the silence that followed, the realm itself seemed to hold its breath, waiting for a hero who might never come."),
+        ("", "The crystal's light dimmed at last, and with it the final echo of an age the world would soon forget it had ever known."),
+        ("", "Snow drifted across the battlefield, softening the shapes of the fallen until the cruelty of what had passed became almost gentle."),
+        ("", "Through the rift between stars, a voice older than memory whispered a promise — and the wind carried it across every shore that ever was."),
     ]
 
     def _inject_test_dialog(self):

@@ -511,6 +511,13 @@ class Translated_UI(FontObserver):
                 "fade.png", (button_size, button_size)
             )
 
+            # โหลดรูปภาพ chat.png สำหรับปุ่มเปิด translated_logs
+            # (ปุ่ม shortcut เพื่อเรียก LOG ui จาก TUI โดยตรง — มีประโยชน์ตอนผู้ใช้
+            # อยู่โหมด MINI ซึ่งไม่มีปุ่ม LOG บน main MBB)
+            self.chat_image = AssetManager.load_icon(
+                "chat.png", (button_size, button_size)
+            )
+
             # ★ เพิ่ม: โหลดไอคอน TUI_BG.png สำหรับปุ่ม color picker
             try:
                 self.tui_bg_image = AssetManager.load_icon(
@@ -530,6 +537,7 @@ class Translated_UI(FontObserver):
             self.arrow_image = None
             self.fadeout_image = None
             self.tui_bg_image = None
+            self.chat_image = None
             # Set fallback icon values if needed
 
     def apply_rounded_corners_to_ui(self, radius=None, clear_first=False):
@@ -1799,6 +1807,23 @@ class Translated_UI(FontObserver):
             # activebackground=saved_bg_color, # <--- ลบออก
         )
         self.components.buttons["fadeout"].pack(side=tk.TOP, pady=5)
+
+        # ปุ่มเปิด translated_logs (LOG ui shortcut from TUI).
+        # Useful when user is in MINI mode where the main MBB LOG button is
+        # hidden — they'd otherwise have to expand back to MAIN to toggle logs.
+        # Hidden in battle/cutscene mode (handled in set_icons_alpha).
+        if hasattr(self, "chat_image") and self.chat_image:
+            self.components.buttons["log"] = tk.Button(
+                self.components.control_area,
+                image=self.chat_image,
+                command=self._on_open_translated_logs,
+                bd=0,
+                highlightthickness=0,
+                relief="flat",
+                compound="center",
+                cursor="hand2",
+            )
+            self.components.buttons["log"].pack(side=tk.TOP, pady=5)
 
         # Phase 5: auto-hide ทำงานแบบอัตโนมัติกับ fade out แล้ว (ไม่ต้องใช้ right-click)
 
@@ -8018,20 +8043,34 @@ class Translated_UI(FontObserver):
         """Ease-in-out animation curve"""
         return t * t * (3.0 - 2.0 * t)
 
+    def _on_open_translated_logs(self):
+        """TUI 'log' button — toggle the translated_logs UI via main_app.
+
+        Same behavior as the MBB main window's LOG button. Useful when the
+        user is in MINI mode (main MBB collapsed) and can't reach that button
+        without expanding back."""
+        try:
+            if self.main_app and hasattr(self.main_app, "toggle_translated_logs"):
+                self.main_app.toggle_translated_logs()
+            else:
+                logging.warning("[TUI log btn] main_app.toggle_translated_logs unavailable")
+        except Exception as e:
+            logging.error(f"[TUI log btn] toggle failed: {e}")
+
     def set_icons_alpha(self, alpha_value):
         """ตั้งค่า transparency ของไอคอนทั้งหมด
 
         Mode-aware visibility (Task 1):
-          - dialogue / choice (default): show all 4 buttons (close, lock, color, fadeout)
+          - dialogue / choice (default): show all 5 buttons (close, lock, color, fadeout, log)
             + resize_handle.
           - battle / cutscene: show ONLY close + resize_handle. The other buttons
-            (lock, color, fadeout) stay hidden because the user is fighting /
+            (lock, color, fadeout, log) stay hidden because the user is fighting /
             watching a cutscene and won't tweak settings — but they still need
             an escape (X) and the ability to resize the window.
           - Hide path (alpha < 0.1) is mode-agnostic: pack_forget everything.
         """
         try:
-            ALL_BUTTONS = ["close", "lock", "color", "fadeout"]
+            ALL_BUTTONS = ["close", "lock", "color", "fadeout", "log"]
 
             # Determine which buttons to display when showing.
             # _get_current_mode_name() returns 'dialog' | 'battle' | 'cutscene' | 'choice'.

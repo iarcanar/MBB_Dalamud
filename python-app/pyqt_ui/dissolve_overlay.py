@@ -14,9 +14,10 @@ Visual design (proven in demo_dissolve_tui.py):
         100% → fully transparent
     → soft "dissolve" feel into the game scene at the left + right edges
   - Text drawn fully opaque on top of the gradient
-  - Per-mode font color matches translated_ui v4 style:
-        battle   → #FF6B00 (orange)
-        cutscene → #FFD700 (gold)
+  - Per-mode font color (v1.8.8 — cutscene switched gold → turquoise):
+        battle   → #FF6B00 (orange) — vivid alert/combat
+        cutscene → #40E0D0 (turquoise) — cool, magical, cinematic
+        Speaker color: battle uses WHITE for contrast; cutscene matches body.
   - Speaker name (smaller, same color, bold) above the dialogue line
 
 Production additions over the demo:
@@ -86,7 +87,7 @@ BG_COLOR_RGB = (20, 22, 28)      # Carbon-adjacent dark slate
 BG_ALPHA = 230                   # 230/255 ≈ 90% opaque inside the plateau
 
 COLOR_BATTLE = "#FF6B00"         # vibrant orange — matches TUI v4
-COLOR_CUTSCENE = "#FFD700"       # gold — matches TUI v4
+COLOR_CUTSCENE = "#40E0D0"       # turquoise — v1.8.8 (was gold #FFD700)
 COLOR_SPEAKER_FALLBACK = "#FFE6C8"
 
 CLOSE_BTN_SIZE = 22
@@ -682,13 +683,23 @@ class DissolveOverlay(QWidget):
         pad_y = 12
         inner_w = max(50, w - 2 * pad_x)
 
-        # Speaker color — same as text for battle/cutscene per claude.md TUI v4
-        speaker_color = QColor(self._text_color)
-        # Slightly lighter for body to give 2-line hierarchy
+        # Body color = mode color (orange for battle, turquoise for cutscene)
         body_color = QColor(self._text_color)
 
+        # Speaker color rule (v1.8.8 visual update):
+        #   - battle  → WHITE (#FFFFFF) — high contrast vs the orange body text,
+        #               makes the speaker name pop out as a "label" against the
+        #               translation it owns
+        #   - cutscene → mode color (turquoise) — keeps the cinematic single-tone
+        #                feel; cutscene speakers are often empty (narration) anyway
+        # The lore override below wins over both — never break that.
+        if self._current_mode == "battle":
+            speaker_color = QColor("#FFFFFF")
+        else:  # cutscene (or any future mode that's not battle)
+            speaker_color = QColor(self._text_color)
+
         speaker = self._speaker
-        # Cutscene narration has no speaker (per project Test Message system)
+        # Lore items get a dim grey speaker+body regardless of mode color
         if self._is_lore:
             speaker = ""
             body_color = QColor("#cccccc")

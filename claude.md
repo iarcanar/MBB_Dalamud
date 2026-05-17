@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.8.7
+**Version:** 1.8.8
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -52,9 +52,66 @@ C:\MBB_Dalamud/
 - [x] TUI architecture overhaul — Win32 resize + DissolveOverlay + file split (v1.8.5, 2026-05-10)
 - [x] DissolveOverlay coordination fixes — mode reload on switch, JSON cleanup, vertical centering, auto-hide (v1.8.6, 2026-05-10)
 - [x] Frozen-mode npc.json path bug fix + Updater UI rewrite + Screenshot avatar tool + model default → 3.1 Flash Lite (v1.8.7, 2026-05-15)
+- [x] QA hardening (overlay leak, panel restore, poll hibernation, multi-monitor, theme refresh) + cutscene→turquoise + battle speaker→white + curated FFXIV-flavored test messages (v1.8.8, 2026-05-15)
 - [x] NPC Manager Polaroid view + WebP avatar storage (v1.8.2, 2026-04-27)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
+
+---
+
+## Changelog — v1.8.8 (2026-05-15)
+
+### QA hardening pass (post v1.8.7 QA audit — 6 MUST FIX + 6 SHOULD FIX)
+
+**Screenshot tool stability:**
+- `WA_DeleteOnClose` on `ScreenshotCropOverlay` — captured ~10MB QPixmap now released as soon as overlay closes (was lingering via Python ref + waiting for GC; repeated screenshots accumulated)
+- try/except around `ScreenshotCropOverlay(...)` construction — if constructor raises (e.g., `primaryScreen()` returns None on a locked session), panel.hide() above succeeded → panel was stranded hidden. Now restores on failure with clear error.
+- `_active_screenshot_overlay = None` pre-declared in `_MainTab.__init__` — pre-screenshot access no longer AttributeErrors.
+
+**Multi-monitor screenshot:**
+- `_on_screenshot_avatar` now picks the screen NPC Manager is **currently on** (via `QGuiApplication.screenAt(panel center)`) before hiding the panel. Both `grabWindow` AND overlay geometry use that screen. Users on secondary monitor get the correct snapshot (was always primary).
+
+**Hover poll efficiency:**
+- `_poll_avatar_hover` early-returns when `panel.isVisible() == False` — hibernates during screenshot mode + minimized/closed states. ~12.5Hz × hours = measurable CPU saved on idle.
+- `_hover_poll_suppress_until` timestamp — 400ms grace after screenshot restore (confirm OR cancel paths). Prevents hover menu from popping over the Polaroid that re-opens immediately after capture.
+- `import time` hoisted to module top (was per-tick import).
+
+**Hover menu theme awareness:**
+- `_apply_theme` now also refreshes `_hover_menu.set_palette(...)` if the lazy-built instance exists. Theme change is now reflected on the hover menu without app restart.
+
+**Updater (`updater/updater.py`):**
+- `root.protocol("WM_DELETE_WINDOW", self._on_close)` — X-button now triggers `_on_close` which cancels spinner + dots timers. Was leaking pending `after` callbacks on title-bar close → TclError noise (rare crash on shutdown).
+- `_start_spinner` + `_start_dots_animation` cancel previous `after_id` before starting. Defensive against double-start (today only called once at launch, but the latent race was real).
+- `_resolve_asset` rejects absolute paths and `..` components — defense-in-depth path traversal guard.
+
+**text_corrector resilience (`text_corrector.py`):**
+- `load_npc_data` calls `ensure_npc_file_exists()` before reading. Was a regression from v1.8.7 path fix — old code tried multiple fallbacks, new code raised `FileNotFoundError` if npc.json missing. Restored resilience for fresh installs without breaking the frozen-mode path fix.
+
+**Dead code removal:**
+- `settings.py:1035` — removed `if model == "gemini-2.0-flash" → displayed_model = "gemini-2.0-flash"` special-case (VALID_MODELS validator above already syncs `displayed_model` for all models).
+
+**Misc:**
+- `os.remove(tmp_path)` after screenshot save now `log.debug` on failure instead of silent pass (so AV-scanner-locked tmp files can be diagnosed in the field).
+
+### TUI visual polish (DissolveOverlay v4.5)
+
+**Battle: speaker → white** ([pyqt_ui/dissolve_overlay.py paintEvent](python-app/pyqt_ui/dissolve_overlay.py))
+- Speaker name now renders in `#FFFFFF` (white) for battle mode — high-contrast label against the orange `#FF6B00` body text. Was same-color (both orange) per the original v4 design but visually flat.
+- Cutscene speaker stays mode-color (matches body) — cinematic single-tone feel preferred for cutscene narration anyway.
+
+**Cutscene: gold → turquoise**
+- `COLOR_CUTSCENE` changed from `#FFD700` (gold) → `#40E0D0` (turquoise). Both body + speaker.
+- Cool, magical, distinct from dialog cyan `#38bdf8` (cutscene = green-teal tint; dialog = blue tint — visually separable at a glance).
+
+### Test Hook curated FFXIV-flavored messages
+
+Test panel buttons (Dialog/Battle/Cutscene) previously had generic placeholder one-liners. Replaced with **20 curated inspired-by lines** in character voices from the npc.json database. Original writing in the FFXIV-fan-sub style — exercises real-time translation behavior (Gemini hasn't memorized them as canned translations).
+
+- **Dialog (10)** — 10 distinct Scions/NPCs covering varied tones: scholarly (Y'shtola), earnest (Wuk Lamat), snarky (Alisaie), diplomatic (Alphinaud), dry (Thancred), bubbly (Tataru), deeply archaic (Urianger — stress-tests character_roles "archaic" register), warm (Krile), heartfelt (G'raha Tia), gruff (Estinien)
+- **Battle (6)** — aggressive/intense: Zenos (ecstatic bloodlust), Nidhogg (vengeful), Estinien (dragoon challenge — contrasts his calm dialog voice), Emet-Selch (condescending), Sephiroth, ???
+- **Cutscene (4)** — narrative omniscient only (`speaker=""`) per FFXIV convention: cutscenes describe scenes; characters speaking use ChatType 61 (dialog). Covers 4 cinematic moods (somber/forgotten/melancholic/cosmic).
+
+Post-test verification checklist (Urianger ข้า/ท่าน, Emet-Selch ข้า/เจ้า theatrical, Hythlodaeus warmer than Emet, etc.) saved in conversation history for spot-checking translation register accuracy.
 
 ---
 

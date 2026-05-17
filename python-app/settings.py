@@ -1032,9 +1032,8 @@ class Settings:
             params["model"] = fallback
             params["displayed_model"] = fallback
 
-        # ปรับค่า displayed_model
-        if params.get("model") == "gemini-2.0-flash":
-            params["displayed_model"] = "gemini-2.0-flash"
+        # (Removed dead 2.0-flash special-case — the VALID_MODELS validator
+        #  above already keeps displayed_model in sync for all models.)
 
         if "temperature" in params:
             params["temperature"] = round(params["temperature"], 2)

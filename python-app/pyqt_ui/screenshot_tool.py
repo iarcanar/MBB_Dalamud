@@ -86,7 +86,11 @@ class ScreenshotCropOverlay(QWidget):
         character_name: str,
         accent_hex: str = DEFAULT_ACCENT,
         parent: Optional[QWidget] = None,
+        target_screen=None,
     ):
+        """target_screen: QScreen the overlay should cover. Required for
+        multi-monitor setups so the overlay appears on the same monitor as
+        the captured background. Falls back to primary if None."""
         super().__init__(parent)
         self._background = background_pixmap
         self._character_name = (character_name or "?").strip() or "?"
@@ -109,13 +113,13 @@ class ScreenshotCropOverlay(QWidget):
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
-        # Cover primary screen exactly
-        screen = QApplication.primaryScreen()
-        geo = screen.availableGeometry() if screen else None
-        if geo is None:
+        # Cover the target screen exactly (multi-monitor aware). Use full
+        # geometry (not availableGeometry) so we cover the taskbar too —
+        # otherwise users can't crop near screen edges.
+        screen = target_screen or QApplication.primaryScreen()
+        if screen is None:
             self.setGeometry(0, 0, 1920, 1080)
         else:
-            # Use full geometry (not available) so we cover the taskbar too
             self.setGeometry(screen.geometry())
 
         # Fonts
