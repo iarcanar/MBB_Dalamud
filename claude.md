@@ -2,7 +2,7 @@
 
 ## Project Information
 
-**Version:** 1.8.8
+**Version:** 1.8.9
 **Build:** 04032026-01
 **Project Name:** MBB Dalamud Custom Repository Distribution
 
@@ -53,13 +53,48 @@ C:\MBB_Dalamud/
 - [x] DissolveOverlay coordination fixes — mode reload on switch, JSON cleanup, vertical centering, auto-hide (v1.8.6, 2026-05-10)
 - [x] Frozen-mode npc.json path bug fix + Updater UI rewrite + Screenshot avatar tool + model default → 3.1 Flash Lite (v1.8.7, 2026-05-15)
 - [x] QA hardening (overlay leak, panel restore, poll hibernation, multi-monitor, theme refresh) + cutscene→turquoise + battle speaker→white + curated FFXIV-flavored test messages (v1.8.8, 2026-05-15)
+- [x] Cloud Sync Phase A — npc.json database sync from iarcanar/MBB_NPCData (public+plaintext) + Import data button rename + unified action group UI (v1.8.9, 2026-05-18)
 - [x] NPC Manager Polaroid view + WebP avatar storage (v1.8.2, 2026-04-27)
 - [ ] Custom repository setup (Phase 2)
 - [ ] PyInstaller packaging (Phase 3)
 
 ---
 
-## Changelog — v1.8.8 (2026-05-15)
+## Changelog — v1.8.9 (2026-05-18)
+
+### Cloud Sync Phase A — public/plaintext cloud distribution
+
+Cherry-pick merge UX from cloud-hosted npc.json. **Plan saved in `project_cloud_npc_sync_plan.md`** memory (Phase B = encryption + private repo, Phase C = paid tier gate — deferred).
+
+**Cloud side ([iarcanar/MBB_NPCData](https://github.com/iarcanar/MBB_NPCData) — new public repo):**
+- `manifest.json` at repo root — always-current pointer with schema_version, data_version (date-based), data_url, data_sha256, data_size_bytes, stats, min_mbb_version, release_notes_th
+- `data/npc.json` — latest curated database
+- `data/archive/npc-<version>.json` — per-release snapshots (rollback target)
+- `.gitattributes` — forces `data/*.json` as binary so git doesn't LF-normalize on commit (sha256 integrity depends on byte-exact preservation)
+
+**Publish workflow ([scripts/build_npc_release.py](scripts/build_npc_release.py), ~210 lines):**
+- Reads local `python-app/npc.json` → computes stats + sha256
+- Auto-resolves next data_version (today's date, suffix `.N` if same-day re-release)
+- 2-commit flow: push data first (commit #1), download from raw URL to get authoritative sha256 (handles GitHub CDN line-ending quirks), generate manifest, push (commit #2)
+- `--dry-run` flag for safety, `--notes "release notes"` for human-readable changelog
+- Cleans temp clone after
+
+**MBB side ([python-app/npc_cloud_sync.py](python-app/npc_cloud_sync.py), ~315 lines):**
+- `check_for_update(local_version)` → `UpdateCheckResult` dataclass (has_update / manifest / error fields drive UI state machine)
+- `download_and_verify(manifest)` → parsed dict (sha256 mismatch raises — never trust unverified data)
+- Cache-busting query string on manifest URL (raw CDN ignores it but harmless; data file sha-verified so no need)
+- `Accept-Encoding: identity` to bypass auto-decompression that would skew sha256
+- Caches last-fetched manifest to `%LOCALAPPDATA%/MBB_Dalamud/cloud_cache/` for offline display
+
+**NPC Manager integration:**
+- Header buttons restructured into **unified action group** (`QFrame#npc_action_group`): single border-radius wraps both buttons + 1px vertical divider between them. Communicates "both are bring-data-in operations, different sources"
+- Renamed **Merge → "Import data"** (2-line text, 80×46px)
+- New **Cloud Sync** button (2-line, 110×46px) with `assets/cloud.png` icon (white + transparent, tinted dark on light themes via existing `tint_pixmap()` + `is_light_theme()` pattern — same as reload icon)
+- Click flow: check → confirm dialog (shows release notes + size) → download → existing `_MergeDialog` cherry-pick UI (reused from v1.8.4 — same diff/merge semantics, just sourced from cloud HTTPS instead of local file picker)
+- Settings persistence via `QSettings("MBB", "NPCManager")` — `cloud_sync.last_version` + `cloud_sync.last_check_at`
+- **CRITICAL PyQt6 pattern**: cross-thread results marshaled via `pyqtSignal` (auto-queued connection) — initial `QTimer.singleShot(0, ...)` from worker thread silently no-op'd because the timer fires on the calling thread, not UI thread. Documented in code comments.
+
+**Auto-check on startup**: deferred to A.5 (current Phase A = manual click). Real release cadence first to validate the UX.
 
 ### QA hardening pass (post v1.8.7 QA audit — 6 MUST FIX + 6 SHOULD FIX)
 

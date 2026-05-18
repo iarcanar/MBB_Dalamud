@@ -1315,6 +1315,11 @@ class NPCManagerPanel(QWidget):
     """Modern PyQt6 NPC Manager — replaces legacy Tkinter NPCManagerCard."""
 
     on_data_saved = pyqtSignal()  # Fires after successful save (so MBB can reload translator)
+    # Cross-thread signals for Cloud Sync — workers emit; slots run on UI thread
+    # via Qt's auto-queued connection (this is the canonical PyQt6 pattern,
+    # NOT QTimer.singleShot from worker thread which silently no-ops).
+    _cloud_check_complete = pyqtSignal(object, object)         # (result, error_str)
+    _cloud_download_complete = pyqtSignal(object, object, object)  # (manifest, data, error_str)
 
     def __init__(self, appearance_manager, on_close_callback=None,
                  on_save_callback=None):
@@ -1345,6 +1350,12 @@ class NPCManagerPanel(QWidget):
         self._search_input = None
         self._footer_label = None
         self._tab_description_label = None
+
+        # Cross-thread cloud-sync signal wiring (default connection type =
+        # AutoConnection → since slots live on UI thread + workers emit from
+        # background threads, this resolves to QueuedConnection automatically).
+        self._cloud_check_complete.connect(self._on_cloud_check_done)
+        self._cloud_download_complete.connect(self._on_cloud_download_done)
 
         self._init_window()
         self._build_ui()
@@ -1448,20 +1459,56 @@ class NPCManagerPanel(QWidget):
         h.addWidget(self._db_status_label)
         h.addStretch()
 
-        # Merge button — pull entries from another npc.json (a friend's file,
-        # an older backup, etc.) into the current database. Opens a diff
-        # modal so the user picks exactly which rows to import.
-        self._btn_merge = QPushButton("Merge")
-        self._btn_merge.setObjectName("npc_merge_btn")
-        self._btn_merge.setFixedSize(64, 28)
+        # Action group — Import data + Cloud Sync as a SINGLE unified widget
+        # with a vertical "|" divider between them. Visually communicates that
+        # both are "bring data in" operations, just different sources.
+        # Architecture: QFrame container with unified border-radius + border;
+        # 2 transparent-background QPushButtons inside; 1 QFrame as 1px VLine.
+        action_group = QFrame()
+        action_group.setObjectName("npc_action_group")
+        action_group.setFixedHeight(46)
+        ag_layout = QHBoxLayout(action_group)
+        ag_layout.setContentsMargins(0, 0, 0, 0)
+        ag_layout.setSpacing(0)
+
+        # ── LEFT: Import data ──
+        self._btn_merge = QPushButton("Import\ndata")
+        self._btn_merge.setObjectName("npc_action_btn_left")
+        self._btn_merge.setFixedSize(80, 44)  # 44 = 46 - 2px for group border
         self._btn_merge.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_merge.setToolTip(
-            "Merge ข้อมูลจากไฟล์ npc.json อื่น\n"
+            "Import ข้อมูลจากไฟล์ npc.json อื่น\n"
             "(เปรียบเทียบ + เลือกข้อมูลที่จะรวมเข้าฐานปัจจุบัน)"
         )
         self._btn_merge.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
         self._btn_merge.clicked.connect(self._on_merge_request)
-        h.addWidget(self._btn_merge)
+        ag_layout.addWidget(self._btn_merge)
+
+        # ── MIDDLE: 1px divider line ──
+        self._action_divider = QFrame()
+        self._action_divider.setObjectName("npc_action_divider")
+        self._action_divider.setFixedWidth(1)
+        self._action_divider.setFixedHeight(28)  # shorter than buttons → looks intentional
+        ag_layout.addWidget(self._action_divider, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # ── RIGHT: Cloud Sync ──
+        # NOTE: text "Cloud\nSync" — NO emoji prefix. Icon comes from
+        # _update_cloud_icon() loading assets/cloud.png (theme-tinted on light).
+        self._btn_cloud_sync = QPushButton("Cloud\nSync")
+        self._btn_cloud_sync.setObjectName("npc_action_btn_right")
+        self._btn_cloud_sync.setFixedSize(110, 44)  # +icon space
+        self._btn_cloud_sync.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_cloud_sync.setToolTip(
+            "อัพเดตฐานข้อมูลจาก Cloud\n"
+            "(ดึงเวอร์ชั่นล่าสุดจาก github + เลือกข้อมูลที่จะ merge)"
+        )
+        self._btn_cloud_sync.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
+        self._btn_cloud_sync.clicked.connect(self._on_cloud_sync_request)
+        # Apply cloud.png icon (white + transparent — tint dark on light themes)
+        self._update_cloud_icon()
+        ag_layout.addWidget(self._btn_cloud_sync)
+
+        h.addWidget(action_group)
 
         # Manual reload button — re-reads npc.json from disk for the
         # cases the auto-save pipeline can't cover: external edits,
@@ -1885,6 +1932,159 @@ class NPCManagerPanel(QWidget):
                    else f"✓ Merge {n_applied} รายการ")
             self.autosave(msg)
 
+    # ─── Cloud Sync (Phase A — public + plaintext) ───
+    # Same merge UX as the local Merge button, just sources the target data
+    # from iarcanar/MBB_NPCData via https instead of a local file picker.
+    # Network IO is threaded — UI doesn't freeze if cloud is slow.
+    def _on_cloud_sync_request(self):
+        """Step 1: check manifest in background thread."""
+        import threading
+        from PyQt6.QtCore import QSettings
+        # Read last-synced version (per-user, persisted via QSettings)
+        try:
+            qs = QSettings("MBB", "NPCManager")
+            local_ver = qs.value("cloud_sync.last_version", "", type=str) or ""
+        except Exception:
+            local_ver = ""
+        # UI feedback — disable + spinner-style text (kept short to fit button)
+        self._cloud_sync_set_busy(True, "⏳ ตรวจสอบ")
+        threading.Thread(
+            target=self._cloud_check_worker,
+            args=(local_ver,),
+            daemon=True,
+        ).start()
+
+    def _cloud_check_worker(self, local_version: str):
+        """Background thread. Runs the manifest fetch, marshals result back
+        to the UI thread via pyqtSignal (auto-queued connection — safe across
+        threads). DO NOT use QTimer.singleShot here: it would fire the timer
+        in this worker thread, never reaching the UI."""
+        try:
+            from npc_cloud_sync import check_for_update
+            result = check_for_update(local_version)
+        except Exception as e:
+            log.error(f"[cloud-sync] worker crashed: {e}", exc_info=True)
+            result = None
+            error = str(e)
+        else:
+            error = None
+        self._cloud_check_complete.emit(result, error)
+
+    def _on_cloud_check_done(self, result, hard_error: str | None):
+        """UI thread. result is UpdateCheckResult or None on hard crash."""
+        self._cloud_sync_set_busy(False)
+        if hard_error:
+            QMessageBox.warning(self, "Cloud Sync",
+                f"เกิดข้อผิดพลาด:\n{hard_error}")
+            return
+        if result is None:
+            return
+        if result.error:
+            QMessageBox.warning(self, "Cloud Sync", result.error)
+            return
+        m = result.manifest
+        if not result.has_update:
+            QMessageBox.information(
+                self, "Cloud Sync",
+                f"✓ ใช้ฐานข้อมูลเวอร์ชั่นล่าสุดแล้ว  ·  v{m.data_version}\n\n"
+                f"main: {m.stats.get('main', '?')} · "
+                f"npcs: {m.stats.get('npcs', '?')} · "
+                f"lore: {m.stats.get('lore', '?')}"
+            )
+            return
+        # Has update — confirm download
+        notes = m.release_notes_th.strip() or "(ไม่มีรายละเอียด)"
+        if len(notes) > 300:
+            notes = notes[:300] + "…"
+        local_label = f"v{result.local_version}" if result.local_version else "(ยังไม่เคย sync)"
+        confirm = QMessageBox.question(
+            self, "พบเวอร์ชั่นใหม่",
+            f"พบฐานข้อมูลเวอร์ชั่นใหม่บน cloud\n\n"
+            f"ของคุณ:  {local_label}\n"
+            f"ของใหม่: v{m.data_version}\n"
+            f"ขนาด:   {m.data_size_bytes // 1024} KB\n\n"
+            f"รายละเอียด: {notes}\n\n"
+            f"ดาวน์โหลดและ merge?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        # Step 2: download in another worker
+        import threading
+        self._cloud_sync_set_busy(True, "⏳ ดาวน์โหลด")
+        threading.Thread(
+            target=self._cloud_download_worker, args=(m,), daemon=True,
+        ).start()
+
+    def _cloud_download_worker(self, manifest):
+        """Background thread — download + sha256 verify. Emits signal to
+        marshal result to UI thread (see _cloud_check_worker note)."""
+        try:
+            from npc_cloud_sync import download_and_verify
+            data = download_and_verify(manifest)
+            err = None
+        except Exception as e:
+            log.error(f"[cloud-sync] download failed: {e}", exc_info=True)
+            data = None
+            err = str(e)
+        self._cloud_download_complete.emit(manifest, data, err)
+
+    def _on_cloud_download_done(self, manifest, data, error: str | None):
+        """UI thread. Hand off to existing _MergeDialog for cherry-pick UI."""
+        self._cloud_sync_set_busy(False)
+        if error:
+            QMessageBox.critical(self, "Cloud Sync",
+                f"ดาวน์โหลดล้มเหลว:\n{error}")
+            return
+        if not isinstance(data, dict):
+            QMessageBox.critical(self, "Cloud Sync",
+                "ข้อมูลที่ดาวน์โหลดมาไม่ถูกต้อง")
+            return
+        # Normalize so _MergeDiff sees all expected keys (mirrors _on_merge_request)
+        for k in ("main_characters", "npcs"):
+            data.setdefault(k, [])
+        for k in ("lore", "character_roles", "word_fixes", "_game_info"):
+            data.setdefault(k, {})
+        # Open the same merge dialog as the local file Merge — UX consistency.
+        dlg = _MergeDialog(self, f"Cloud v{manifest.data_version}", data)
+        result = dlg.exec()
+        n_applied = dlg.applied_count if result == QDialog.DialogCode.Accepted else 0
+        dlg.deleteLater()
+        # Always update last_version on successful download — even if user
+        # picked 0 to apply, they've "seen" this version and don't need it
+        # offered again. Re-running Cloud Sync still works (forces re-check).
+        try:
+            from PyQt6.QtCore import QSettings
+            qs = QSettings("MBB", "NPCManager")
+            qs.setValue("cloud_sync.last_version", manifest.data_version)
+            qs.setValue("cloud_sync.last_check_at", float(__import__('time').time()))
+        except Exception as e:
+            log.debug(f"[cloud-sync] persist version failed: {e}")
+        if n_applied > 0:
+            page = self._tab_pages.get(self._current_tab)
+            if hasattr(page, "refresh"):
+                try:
+                    search_text = self._search_input.text() if self._search_input else ""
+                    page.refresh(search_text)
+                except Exception as e:
+                    log.warning(f"refresh after cloud sync failed: {e}")
+            msg = (f"✓ Cloud sync {n_applied} รายการ · ใช้ในการแปลทันที"
+                   if self.on_save_callback
+                   else f"✓ Cloud sync {n_applied} รายการ")
+            self.autosave(msg)
+
+    def _cloud_sync_set_busy(self, busy: bool, label: str = ""):
+        """Toggle Cloud Sync button busy state + label. Default non-busy text
+        is the 2-line "Cloud\\nSync" — same as the button's initial setText.
+        Don't pass ☁ emoji here; the cloud GLYPH comes from cloud.png via
+        _update_cloud_icon() and emoji would double up the visual."""
+        try:
+            self._btn_cloud_sync.setEnabled(not busy)
+            self._btn_cloud_sync.setText(label if busy else "Cloud\nSync")
+        except Exception:
+            pass
+
     def _on_search_changed(self, text: str):
         page = self._tab_pages.get(self._current_tab)
         if hasattr(page, "refresh"):
@@ -2008,6 +2208,27 @@ class NPCManagerPanel(QWidget):
         self._btn_reload.setIcon(QIcon(pix))
         self._btn_reload.setIconSize(QSize(16, 16))
         self._btn_reload.setText("")
+
+    def _update_cloud_icon(self):
+        """Load assets/cloud.png for the Cloud Sync button. Icon is white +
+        transparent — tint dark on light themes for guaranteed contrast
+        (same pattern as _update_reload_icon)."""
+        if not hasattr(self, "_btn_cloud_sync") or not self._btn_cloud_sync:
+            return
+        icon_path = resource_path("assets/cloud.png")
+        if not os.path.exists(icon_path):
+            return  # silently fall back to text-only — user just sees "Cloud\nSync"
+        pix = QPixmap(icon_path)
+        try:
+            bg = self.am.get_accent_color()
+            if is_light_theme(bg):
+                text_color = getattr(self, "palette", {}).get("text", "#1f2328")
+                pix = tint_pixmap(pix, text_color)
+        except Exception:
+            pass
+        self._btn_cloud_sync.setIcon(QIcon(pix))
+        self._btn_cloud_sync.setIconSize(QSize(20, 20))
+        # Keep text — icon sits on the LEFT of "Cloud\nSync" label by default
 
     def _update_pin_icon(self):
         """Use the same pin.png/unpin.png as MBB header_bar.
@@ -2143,6 +2364,7 @@ class NPCManagerPanel(QWidget):
         # Refresh icons that need invert on light theme
         self._update_pin_icon()
         self._update_reload_icon()
+        self._update_cloud_icon()
         if hasattr(self, "_resize_grip") and self._resize_grip:
             self._resize_grip.set_invert(is_light_theme(p["bg"]))
         # Refresh CharacterAvatar palette in MainCharactersTab
@@ -2206,6 +2428,40 @@ class NPCManagerPanel(QWidget):
                 background: {p['bg_medium']};
                 border: 1px solid {p['accent']};
                 color: {p['accent']};
+            }}
+            /* Action group — Import data + Cloud Sync unified frame */
+            QFrame#npc_action_group {{
+                background: {p['btn_bg']};
+                border: 1px solid {p['border_active']};
+                border-radius: 6px;
+            }}
+            QPushButton#npc_action_btn_left,
+            QPushButton#npc_action_btn_right {{
+                background: transparent;
+                color: {p['text']};
+                border: none;
+                padding: 2px 6px;
+            }}
+            QPushButton#npc_action_btn_left {{
+                border-top-left-radius: 5px;
+                border-bottom-left-radius: 5px;
+            }}
+            QPushButton#npc_action_btn_right {{
+                border-top-right-radius: 5px;
+                border-bottom-right-radius: 5px;
+            }}
+            QPushButton#npc_action_btn_left:hover,
+            QPushButton#npc_action_btn_right:hover {{
+                background: {p['bg_medium']};
+                color: {p['accent']};
+            }}
+            QPushButton#npc_action_btn_left:disabled,
+            QPushButton#npc_action_btn_right:disabled {{
+                color: {p['text_dim']};
+            }}
+            QFrame#npc_action_divider {{
+                background: {p['border_active']};
+                border: none;
             }}
             QPushButton#npc_close {{
                 background: transparent;
