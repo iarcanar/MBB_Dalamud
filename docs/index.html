@@ -248,26 +248,26 @@
         .cinematic-banner {
             position: relative;
             width: 100%;
-            height: 340px;
+            height: 400px;
             overflow: hidden;
             background-color: #060d1a;
         }
         @media (max-width: 768px) {
-            .cinematic-banner { height: 220px; }
-            /* Center the video so character stays visible (desktop right-shift is too aggressive on narrow screens) */
+            .cinematic-banner { height: 260px; }
+            /* Keep character centered on narrow screens; shift up slightly to preserve face */
             .banner-glitch .glitch-base,
             .banner-glitch .glitch-r,
             .banner-glitch .glitch-b {
-                object-position: 62% center;
+                object-position: 50% 30%;
             }
             /* Softer dissolve — fade earlier so video isn't covered by a giant black panel */
             .cinematic-banner .dissolve-overlay {
                 background: linear-gradient(to right,
                     rgba(6,13,26,0.92) 0%,
-                    rgba(6,13,26,0.65) 18%,
-                    rgba(6,13,26,0.25) 38%,
-                    rgba(6,13,26,0.05) 52%,
-                    transparent 65%
+                    rgba(6,13,26,0.6) 18%,
+                    rgba(6,13,26,0.2) 32%,
+                    rgba(6,13,26,0.05) 42%,
+                    transparent 52%
                 );
             }
             /* Tame the heavy logo glow at narrow viewport */
@@ -284,12 +284,12 @@
             height: 100%;
             background: linear-gradient(to right,
                 #060d1a 0%,
-                #060d1a 20%,
-                rgba(6,13,26,0.95) 28%,
-                rgba(6,13,26,0.7) 38%,
-                rgba(6,13,26,0.3) 48%,
-                rgba(6,13,26,0.08) 55%,
-                transparent 62%
+                #060d1a 18%,
+                rgba(6,13,26,0.92) 24%,
+                rgba(6,13,26,0.6) 30%,
+                rgba(6,13,26,0.25) 36%,
+                rgba(6,13,26,0.06) 42%,
+                transparent 48%
             );
             z-index: 2;
             pointer-events: none;
@@ -502,69 +502,115 @@
         .zoomable-image { display: block; width: 100%; transition: filter 0.35s ease; }
         .image-container:hover .zoomable-image { filter: brightness(1.04); }
 
-        /* ── Gallery Caption Badge ── */
-        .gallery-badge {
-            position: absolute;
-            bottom: 12px; left: 12px;
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 6px 14px;
-            border-radius: 99px;
-            background: rgba(15, 18, 35, 0.75);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-            pointer-events: none;
-            transition: all 0.35s ease;
-            z-index: 2;
+        /* ── Gallery v2: figure + caption below ── */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.85rem 0.85rem;
+            align-items: stretch;
         }
-        .gallery-badge .badge-dot {
-            width: 6px; height: 6px;
+        @media (min-width: 1024px) {
+            .gallery-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 1.5rem 1.25rem;
+            }
+        }
+        .gallery-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+            margin: 0;
+            min-width: 0;
+        }
+        .gallery-item.is-hero {
+            grid-column: 1 / -1;
+        }
+        @media (min-width: 1024px) {
+            .gallery-item.is-hero { grid-column: span 2; }
+        }
+        .gallery-item-frame {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            border-radius: 0.9rem;
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(15, 18, 35, 0.55);
+            border: 1px solid rgba(99, 102, 241, 0.18);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
+            transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+        }
+        .gallery-item:hover .gallery-item-frame {
+            transform: translateY(-3px);
+            border-color: rgba(129, 140, 248, 0.55);
+            box-shadow:
+                0 14px 32px rgba(0, 0, 0, 0.45),
+                0 0 28px rgba(99, 102, 241, 0.18);
+        }
+        /* Standard non-carousel frame images */
+        .gallery-item-frame > img:not(.carousel-slide) {
+            display: block;
+            width: 100%;
+            height: auto;
+            transition: filter 0.35s ease;
+        }
+        /* Carousel slides — sizing only; display toggled by .carousel-slide / .active below */
+        .gallery-item-frame > .carousel-slide {
+            width: 100%;
+            height: auto;
+            transition: filter 0.35s ease;
+        }
+        .gallery-item:hover .gallery-item-frame > img {
+            filter: brightness(1.06);
+        }
+        /* Variant: frame img absolutely fills (used when the card must match a row-mate's natural height) */
+        .gallery-item-frame.is-fill > img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+        /* Caption — clean row under the frame */
+        .gallery-item-caption {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0 0.25rem;
+            min-height: 1.4rem;
+        }
+        .caption-dot {
+            width: 7px; height: 7px;
             border-radius: 50%;
             background: #818cf8;
-            box-shadow: 0 0 8px rgba(129, 140, 248, 0.6);
+            box-shadow: 0 0 9px rgba(129, 140, 248, 0.55);
             flex-shrink: 0;
+            transition: transform 0.35s ease, background 0.35s ease, box-shadow 0.35s ease;
         }
-        .gallery-badge span {
-            font-size: 0.78rem;
+        .gallery-item:hover .caption-dot {
+            background: #a5b4fc;
+            box-shadow: 0 0 14px rgba(165, 180, 252, 0.85);
+            transform: scale(1.18);
+            animation: caption-dot-pulse 1.4s ease-in-out infinite;
+        }
+        .caption-text {
+            font-size: 0.88rem;
             font-weight: 500;
             color: #c7d2fe;
-            letter-spacing: 0.02em;
-            white-space: nowrap;
+            letter-spacing: 0.01em;
+            line-height: 1.35;
+            transition: color 0.3s ease;
         }
-        .group:hover .gallery-badge {
-            border-color: rgba(129, 140, 248, 0.65);
-            background: rgba(15, 18, 35, 0.88);
-            box-shadow:
-                0 4px 20px rgba(0, 0, 0, 0.5),
-                0 0 20px rgba(99, 102, 241, 0.25),
-                0 0 40px rgba(99, 102, 241, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            animation: badge-shimmer 1.5s ease-in-out;
-        }
-        .group:hover .gallery-badge .badge-dot {
-            background: #a5b4fc;
-            box-shadow: 0 0 14px rgba(165, 180, 252, 0.9);
-            animation: dot-pulse 1s ease-in-out infinite;
-        }
-        .group:hover .gallery-badge span {
-            color: #e0e7ff;
-        }
-        @keyframes badge-shimmer {
-            0%   { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 8px rgba(99,102,241,0.1), inset 0 1px 0 rgba(255,255,255,0.06); }
-            40%  { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 28px rgba(99,102,241,0.35), 0 0 50px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.12); }
-            100% { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(99,102,241,0.25), 0 0 40px rgba(99,102,241,0.1), inset 0 1px 0 rgba(255,255,255,0.1); }
-        }
-        @keyframes dot-pulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 14px rgba(165,180,252,0.9); }
-            50%      { transform: scale(1.4); box-shadow: 0 0 20px rgba(165,180,252,1); }
+        .gallery-item:hover .caption-text { color: #eef1ff; }
+        @keyframes caption-dot-pulse {
+            0%, 100% { transform: scale(1.18); }
+            50%      { transform: scale(1.42); }
         }
 
         /* ── Gallery Carousel ── */
-        .gallery-carousel { position: relative; }
         .carousel-slide {
             display: none;
-            border-radius: 0.75rem;
         }
         .carousel-slide.active { display: block; }
         .carousel-arrow {
@@ -705,7 +751,7 @@
         .banner-glitch .glitch-base {
             width: 100%; height: 100%;
             object-fit: cover;
-            object-position: 70% center;
+            object-position: 50% 35%;
             display: block;
         }
         /* RGB split layers — duplicate imgs stacked on top */
@@ -715,7 +761,7 @@
             top: 0; left: 0;
             width: 100%; height: 100%;
             object-fit: cover;
-            object-position: 70% center;
+            object-position: 50% 35%;
             opacity: 0;
             pointer-events: none;
             z-index: 2;
@@ -950,24 +996,16 @@
                 margin: 0 auto;
             }
 
-            /* ── Bento gallery: 2 cols on mobile (carousel stays full) ── */
-            .bento-mobile-grid {
-                grid-template-columns: repeat(2, 1fr) !important;
-                gap: 0.5rem !important;
+            /* ── Gallery v2: mobile tightening ── */
+            .gallery-grid {
+                gap: 0.6rem 0.6rem !important;
             }
-            .bento-mobile-grid .bento-full-row {
-                grid-column: 1 / -1;
-            }
-            .bento-mobile-grid .gallery-badge {
-                padding: 4px 8px;
-                bottom: 6px; left: 6px;
-            }
-            .bento-mobile-grid .gallery-badge span {
-                font-size: 0.6rem;
-            }
-            .bento-mobile-grid .gallery-badge .badge-dot {
-                width: 4px; height: 4px;
-            }
+            .gallery-item { gap: 0.45rem; }
+            .caption-text { font-size: 0.74rem; }
+            .caption-dot { width: 6px; height: 6px; }
+            .gallery-item-frame { border-radius: 0.7rem; }
+            /* On mobile the NPC card pairs with normal-aspect frames — give .is-fill a stable 16:9 box */
+            .gallery-item-frame.is-fill { aspect-ratio: 16 / 9; }
 
             /* ── UI Compare card on mobile ── */
             .ui-compare-header { padding: 0.6rem 0.8rem; font-size: 0.7rem; }
@@ -1047,12 +1085,13 @@
 
         /* ── Small phone overrides (<380px) ── */
         @media (max-width: 380px) {
-            .cinematic-banner { height: 160px; }
+            .cinematic-banner { height: 200px; }
             .cinematic-banner .banner-logo-group { width: 36%; max-width: 130px; }
             .cinematic-banner .banner-version { font-size: 0.6rem; }
             .eyebrow { font-size: 0.58rem; letter-spacing: 0.12em; }
             .glass-panel h3 { font-size: 1.15rem !important; }
-            .bento-mobile-grid { grid-template-columns: 1fr !important; }
+            .gallery-grid { grid-template-columns: 1fr !important; }
+            .gallery-item.is-hero { grid-column: 1 / -1; }
             .secondary-features-grid { grid-template-columns: 1fr !important; }
             .secondary-features-grid .card:last-child { max-width: 100%; }
             .ui-compare-grid { grid-template-columns: 1fr !important; gap: 0.75rem !important; }
@@ -1301,54 +1340,82 @@
                 คำแปลปรากฏทันทีที่ตัวละครพูด — ไม่ต้องตั้งค่า ไม่ต้อง crop จอ
             </p>
 
-            <!-- Bento Grid -->
-            <div class="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 bento-mobile-grid">
-                <!-- Large: span 2 cols — Screenshot Carousel -->
-                <div class="lg:col-span-2 bento-full-row rounded-xl overflow-hidden relative" id="galleryCarousel">
-                    <div class="gallery-carousel">
-                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/translation_01_ildhk5.png"
-                             alt="Screenshot" class="carousel-slide active zoomable-image w-full rounded-xl">
+            <!-- Gallery v2 — figure/frame/caption-below pattern -->
+            <div class="max-w-6xl mx-auto gallery-grid">
+                <!-- Hero carousel (spans 2 cols on desktop, full width on mobile) -->
+                <figure class="gallery-item is-hero">
+                    <div class="gallery-item-frame" id="galleryCarousel">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1779193508/dialog_v1813-01_ataelf.jpg"
+                             alt="Screenshot" class="carousel-slide active zoomable-image">
                         <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284837/Screenshot_2026-03-12_094540_uryfhe.png"
-                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                             alt="Screenshot" class="carousel-slide zoomable-image">
                         <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284834/Screenshot_2026-03-12_094254_iajydb.png"
-                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                             alt="Screenshot" class="carousel-slide zoomable-image">
                         <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284834/Screenshot_2026-03-12_095605_s70a84.png"
-                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
-                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284833/Screenshot_2026-03-12_093141_nrcfig.png"
-                             alt="Screenshot" class="carousel-slide zoomable-image w-full rounded-xl">
+                             alt="Screenshot" class="carousel-slide zoomable-image">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1779193508/dialog_v1813-02_vwcima.jpg"
+                             alt="Screenshot" class="carousel-slide zoomable-image">
+                        <button class="carousel-arrow carousel-prev" onclick="carouselNav(-1)" aria-label="Previous">
+                            <i data-lucide="chevron-left" style="width:20px;height:20px;stroke-width:2.5"></i>
+                        </button>
+                        <button class="carousel-arrow carousel-next" onclick="carouselNav(1)" aria-label="Next">
+                            <i data-lucide="chevron-right" style="width:20px;height:20px;stroke-width:2.5"></i>
+                        </button>
+                        <div class="carousel-dots" id="carouselDots"></div>
                     </div>
-                    <!-- Nav arrows -->
-                    <button class="carousel-arrow carousel-prev" onclick="carouselNav(-1)" aria-label="Previous">
-                        <i data-lucide="chevron-left" style="width:20px;height:20px;stroke-width:2.5"></i>
-                    </button>
-                    <button class="carousel-arrow carousel-next" onclick="carouselNav(1)" aria-label="Next">
-                        <i data-lucide="chevron-right" style="width:20px;height:20px;stroke-width:2.5"></i>
-                    </button>
-                    <!-- Dots -->
-                    <div class="carousel-dots" id="carouselDots"></div>
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>ภาพจากการเล่นจริง</span></div>
-                </div>
-                <!-- Feature screenshots — first one fills height on desktop to match carousel -->
-                <div class="image-container rounded-xl overflow-hidden relative group lg:min-h-full">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/translation_08_yheik9.png"
-                         alt="การแปลบทสนทนา" class="zoomable-image w-full lg:h-full rounded-xl lg:object-cover">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>NPC Manager — รู้จักชื่อทุกตัว</span></div>
-                </div>
-                <div class="image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284804/choice_02_vjepgu.png"
-                         alt="ตัวเลือกใน dialogue" class="zoomable-image w-full rounded-xl">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>แปลตัวเลือก — ตัดสินใจได้มั่นใจ</span></div>
-                </div>
-                <div class="image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772801198/cutscene_01_g2tlhm.png"
-                         alt="การแปล Cutscene" class="zoomable-image w-full rounded-xl">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>Cutscene — ไม่พลาดซีนสำคัญ</span></div>
-                </div>
-                <div class="image-container rounded-xl overflow-hidden relative group">
-                    <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798256/translation_04_mc0elh.png"
-                         alt="Wide-Context Translation" class="zoomable-image w-full rounded-xl">
-                    <div class="gallery-badge"><div class="badge-dot"></div><span>Wide-Context — แปลสม่ำเสมอ</span></div>
-                </div>
+                    <figcaption class="gallery-item-caption">
+                        <span class="caption-dot"></span>
+                        <span class="caption-text">ภาพจากการเล่นจริงในเกม FFXIV</span>
+                    </figcaption>
+                </figure>
+
+                <!-- NPC Manager — fills row height to match carousel -->
+                <figure class="gallery-item">
+                    <div class="gallery-item-frame is-fill">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798259/translation_08_yheik9.png"
+                             alt="NPC Manager" class="zoomable-image">
+                    </div>
+                    <figcaption class="gallery-item-caption">
+                        <span class="caption-dot"></span>
+                        <span class="caption-text">NPC Manager — รู้จักชื่อทุกตัว</span>
+                    </figcaption>
+                </figure>
+
+                <!-- Choice translation -->
+                <figure class="gallery-item">
+                    <div class="gallery-item-frame">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773284804/choice_02_vjepgu.png"
+                             alt="ตัวเลือกใน dialogue" class="zoomable-image">
+                    </div>
+                    <figcaption class="gallery-item-caption">
+                        <span class="caption-dot"></span>
+                        <span class="caption-text">แปลตัวเลือก — ตัดสินใจได้มั่นใจ</span>
+                    </figcaption>
+                </figure>
+
+                <!-- Cutscene -->
+                <figure class="gallery-item">
+                    <div class="gallery-item-frame">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1779193509/cutscene_v1813-01_gohbmk.jpg"
+                             alt="การแปล Cutscene" class="zoomable-image">
+                    </div>
+                    <figcaption class="gallery-item-caption">
+                        <span class="caption-dot"></span>
+                        <span class="caption-text">Cutscene — ไม่พลาดซีนสำคัญ</span>
+                    </figcaption>
+                </figure>
+
+                <!-- Wide-Context -->
+                <figure class="gallery-item">
+                    <div class="gallery-item-frame">
+                        <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1772798256/translation_04_mc0elh.png"
+                             alt="Wide-Context Translation" class="zoomable-image">
+                    </div>
+                    <figcaption class="gallery-item-caption">
+                        <span class="caption-dot"></span>
+                        <span class="caption-text">Wide-Context — แปลสม่ำเสมอ</span>
+                    </figcaption>
+                </figure>
             </div>
 
             <!-- UI Compare — separated pair -->
@@ -1473,7 +1540,7 @@
                         <!-- Image: combined UI elements -->
                         <div class="lg:w-5/12 flex-shrink-0 flex justify-center">
                             <div class="ui-showcase-aura">
-                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1773286369/UI_element01_aill6z.png"
+                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1779195531/UI_element01_svp4xk.png"
                                      alt="MBB UI Elements" class="zoomable-image" style="width:100%;height:auto;display:block;">
                             </div>
                         </div>
@@ -1776,12 +1843,17 @@
                                         ดาวน์โหลดไฟล์ <strong class="text-white">MBB-1.8.4.zip</strong> (~100 MB)
                                         แล้วแตกไฟล์ไปวางที่ใดก็ได้บนเครื่อง — โปรแกรมพร้อมใช้งานในตัว ไม่ต้องติดตั้ง Python
                                     </p>
-                                    <a href="https://github.com/iarcanar/MBB_Dalamud/releases/latest"
-                                       target="_blank" rel="noopener"
-                                       class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold mb-4">
-                                        <i data-lucide="download" style="width:16px;height:16px;stroke-width:2.5;flex-shrink:0"></i>
-                                        ดาวน์โหลด MBB-1.8.4.zip
-                                    </a>
+                                    <p id="cs-notice-step2" class="text-xs text-amber-200/85 mb-2 max-w-md"
+                                       style="opacity:0; transform:translateY(4px); transition:opacity .4s ease, transform .4s ease;"
+                                       aria-live="polite">
+                                        เรากำลังจะปล่อยให้ดาวน์โหลดแบบ public เร็วๆนี้.. โปรดติดตามที่หน้าเว็บไซต์นี้
+                                    </p>
+                                    <button type="button"
+                                            class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold mb-4"
+                                            onclick="(function(n){n.style.opacity='1';n.style.transform='translateY(0)';})(document.getElementById('cs-notice-step2'))">
+                                        <i data-lucide="clock" style="width:16px;height:16px;stroke-width:2.5;flex-shrink:0"></i>
+                                        Coming Soon
+                                    </button>
                                     <div class="bg-rose-900/40 border border-rose-500/30 rounded-lg p-3 mb-4">
                                         <p class="text-rose-200 text-sm flex items-start gap-2">
                                             <i data-lucide="alert-triangle" class="text-rose-400 flex-shrink-0 mt-0.5" style="width:15px;height:15px;stroke-width:2"></i>
@@ -2108,12 +2180,19 @@
             <h2 class="text-2xl md:text-3xl font-bold mb-3 text-white download-cta-heading">พร้อมทลายกำแพงภาษาแล้วหรือยัง?</h2>
             <p class="text-sm text-gray-400 mb-8">สัมผัสเนื้อเรื่อง FFXIV ที่คุณรักได้ลึกซึ้งยิ่งขึ้น</p>
 
+            <!-- Click-revealed public-release notice (sits above the button) -->
+            <p id="cs-notice" class="text-xs text-amber-200/85 mb-3 max-w-md mx-auto text-center px-2"
+               style="opacity:0; transform:translateY(4px); transition:opacity .4s ease, transform .4s ease;"
+               aria-live="polite">
+                เรากำลังจะปล่อยให้ดาวน์โหลดแบบ public เร็วๆนี้.. โปรดติดตามที่หน้าเว็บไซต์นี้
+            </p>
+
             <div class="flex flex-col sm:flex-row gap-3 justify-center items-center">
-                <a href="https://github.com/iarcanar/MBB_Dalamud/releases/latest"
-                   target="_blank" rel="noopener"
-                   class="btn-primary px-8 py-3.5 rounded-full font-semibold text-base shadow-lg inline-flex items-center download-cta-btn">
-                    <i data-lucide="download" class="mr-2" style="width:16px;height:16px;stroke-width:2.5"></i>ดาวน์โหลด v1.8.4
-                </a>
+                <button type="button" id="cs-btn"
+                        class="btn-primary px-8 py-3.5 rounded-full font-semibold text-base shadow-lg inline-flex items-center download-cta-btn"
+                        onclick="(function(n){n.style.opacity='1';n.style.transform='translateY(0)';})(document.getElementById('cs-notice'))">
+                    <i data-lucide="clock" class="mr-2" style="width:16px;height:16px;stroke-width:2.5"></i>Coming Soon
+                </button>
                 <a href="#install" class="text-gray-300 hover:text-white transition text-sm inline-flex items-center gap-1.5">
                     <i data-lucide="book-open" style="width:14px;height:14px"></i>วิธีติดตั้ง
                 </a>
@@ -2239,6 +2318,9 @@
 
     <!-- NAV JUMP BUTTONS -->
     <div class="nav-jump">
+        <a href="manual/index.html" class="nav-jump-btn" title="คู่มือ developer / AI reference" style="text-decoration:none">
+            <i data-lucide="book-open" style="width:16px;height:16px;stroke-width:2.2"></i>
+        </a>
         <button id="jumpUp" class="nav-jump-btn" title="กลับไปด้านบน">
             <i data-lucide="chevron-up" style="width:16px;height:16px;stroke-width:2.2"></i>
         </button>
@@ -2409,6 +2491,33 @@
             };
             // First glitch after 4-8s
             setTimeout(triggerGlitch, 4000 + Math.random() * 4000);
+
+            // Smooth loop dissolve — fade banner near start/end of each video loop
+            // so the cut between last/first frame doesn't visibly jolt.
+            const baseVid = banner.querySelector('.glitch-base');
+            if(baseVid){
+                const FADE = 0.75;      // fade-in / fade-out duration (s)
+                const MIN_ALPHA = 0.0;  // fade fully to bg so loop seam is hidden
+                let rafId = 0;
+                const loopFade = () => {
+                    const d = baseVid.duration;
+                    if(d && !isNaN(d) && d > 0){
+                        const t = baseVid.currentTime;
+                        let alpha = 1;
+                        if(t > d - FADE){
+                            alpha = (d - t) / FADE;
+                        } else if(t < FADE){
+                            alpha = t / FADE;
+                        }
+                        // ease (cubic) for a softer perceptual fade
+                        alpha = Math.max(0, Math.min(1, alpha));
+                        const eased = alpha * alpha * (3 - 2 * alpha);
+                        banner.style.opacity = (MIN_ALPHA + (1 - MIN_ALPHA) * eased).toFixed(3);
+                    }
+                    rafId = requestAnimationFrame(loopFade);
+                };
+                rafId = requestAnimationFrame(loopFade);
+            }
         }
 
         // ── Smooth Scroll for anchor links ──
