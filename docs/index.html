@@ -1613,55 +1613,61 @@
                 <!-- 4: NPC Manager -->
                 <div id="npc-manager" class="p-6 md:p-10 border-b border-white/[0.055]">
 
-                    <!-- HERO: Role customization — main highlight -->
-                    <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center mb-8">
-                        <!-- Image (wider — shows 2 panels: list view + Polaroid view) -->
-                        <div class="lg:w-6/12 flex-shrink-0">
-                            <div class="image-container rounded-xl overflow-hidden">
-                                <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249384/UI_element01_npc_y1tru9.png"
-                                     alt="NPC Manager + Character Viewer"
-                                     class="zoomable-image w-full rounded-xl shadow-lg">
-                            </div>
+                    <!-- HERO: Role customization — image-first, description below -->
+                    <div class="mb-8">
+                        <!-- Image — full width, prominent (shows list view + Polaroid view) -->
+                        <div class="image-container rounded-xl overflow-hidden max-w-5xl mx-auto mb-8">
+                            <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249384/UI_element01_npc_y1tru9.png"
+                                 alt="NPC Manager + Character Viewer"
+                                 class="zoomable-image w-full rounded-xl shadow-lg">
                         </div>
-                        <!-- Main feature: Role customization -->
-                        <div class="lg:w-6/12">
-                            <p class="eyebrow flex items-center gap-2">
-                                <i data-lucide="crown" style="width:12px;height:12px;stroke-width:2.5"></i>
-                                NPC Manager · ฟีเจอร์เด่น
-                            </p>
-                            <h3 class="text-3xl font-bold mb-3 text-white leading-tight npc-hero-heading">แต่งน้ำเสียงตัวละคร<br><span class="grad-text">ตามใจชอบ</span></h3>
-                            <p class="text-gray-300 mb-5 leading-relaxed">กำหนด Role ในแท็บ <strong class="text-white">ROLES</strong> — AI จะจดจำโทนที่คุณตั้งไว้และใช้ทุกครั้งที่ตัวละครนั้นพูด ไม่ว่าจะเป็นบทสนทนา คัตซีน หรือแบทเทิล</p>
-                            <!-- Before/After example — larger, prominent -->
-                            <div class="rounded-xl overflow-hidden border border-white/[0.08]">
-                                <div class="bg-slate-800/90 px-4 py-3 border-b border-white/[0.06]">
-                                    <span class="text-gray-500 font-mono text-[11px] uppercase tracking-widest">ปกติ — Emet-Selch</span>
-                                    <p class="text-gray-200 text-base mt-1.5">"เจ้าไม่มีวันเข้าใจหรอก"</p>
-                                </div>
-                                <div class="bg-gradient-to-br from-indigo-950/80 to-purple-950/60 px-4 py-3">
-                                    <span class="text-indigo-400 font-mono text-[11px] uppercase tracking-widest">Role: หยิ่งยโส + เย้ยหยัน</span>
-                                    <p class="text-indigo-100 text-base mt-1.5">"ฮ่า... จะให้ข้าอธิบายซ้ำอีกรอบไหม เผื่อสมองจะตามทันสักที"</p>
-                                </div>
+                        <!-- Description below — 2-col on desktop: text + before/after example -->
+                        <div class="max-w-5xl mx-auto">
+                            <div class="text-center mb-6">
+                                <p class="eyebrow inline-flex items-center gap-2 justify-center">
+                                    <i data-lucide="crown" style="width:12px;height:12px;stroke-width:2.5"></i>
+                                    NPC Manager · ฟีเจอร์เด่น
+                                </p>
+                                <h3 class="text-3xl font-bold mb-3 text-white leading-tight npc-hero-heading">แต่งน้ำเสียงตัวละคร <span class="grad-text">ตามใจชอบ</span></h3>
+                                <p class="text-gray-300 leading-relaxed max-w-2xl mx-auto">ปรับ Role ของตัวละครได้จากหน้า <strong class="text-white">MAIN</strong> โดยตรง — AI จะจดจำโทนที่คุณตั้งไว้และใช้ทุกครั้งที่ตัวละครนั้นพูด ไม่ว่าจะเป็นบทสนทนา คัตซีน หรือแบทเทิล</p>
                             </div>
-                            <!-- New in v1.8.4 — feature badges -->
-                            <div class="mt-5">
-                                <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-2">ใหม่ใน v1.8.4</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="bg-emerald-900/40 border border-emerald-500/30 text-emerald-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                                        <i data-lucide="image-plus" style="width:12px;height:12px;stroke-width:2"></i>
-                                        อัพโหลดภาพตัวละครเอง
-                                    </span>
-                                    <span class="bg-indigo-900/40 border border-indigo-500/30 text-indigo-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                                        <i data-lucide="git-merge" style="width:12px;height:12px;stroke-width:2"></i>
-                                        Merge ข้อมูลจากไฟล์อื่น
-                                    </span>
-                                    <span class="bg-cyan-900/40 border border-cyan-500/30 text-cyan-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                                        <i data-lucide="zap" style="width:12px;height:12px;stroke-width:2"></i>
-                                        แก้แล้วใช้ในการแปลทันที
-                                    </span>
-                                    <span class="bg-purple-900/40 border border-purple-500/30 text-purple-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                                        <i data-lucide="bar-chart-3" style="width:12px;height:12px;stroke-width:2"></i>
-                                        แสดงสถานะ + เวลาอัปเดต
-                                    </span>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                                <!-- Before/After example -->
+                                <div class="rounded-xl overflow-hidden border border-white/[0.08]">
+                                    <div class="bg-slate-800/90 px-4 py-3 border-b border-white/[0.06]">
+                                        <span class="text-gray-500 font-mono text-[11px] uppercase tracking-widest">ปกติ — Emet-Selch</span>
+                                        <p class="text-gray-200 text-base mt-1.5">"เจ้าไม่มีวันเข้าใจหรอก"</p>
+                                    </div>
+                                    <div class="bg-gradient-to-br from-indigo-950/80 to-purple-950/60 px-4 py-3">
+                                        <span class="text-indigo-400 font-mono text-[11px] uppercase tracking-widest">Role: หยิ่งยโส + เย้ยหยัน</span>
+                                        <p class="text-indigo-100 text-base mt-1.5">"ฮ่า... จะให้ข้าอธิบายซ้ำอีกรอบไหม เผื่อสมองจะตามทันสักที"</p>
+                                    </div>
+                                </div>
+                                <!-- Feature badges -->
+                                <div>
+                                    <p class="text-[11px] text-gray-500 uppercase tracking-widest mb-2">ความสามารถใน NPC Manager</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span class="bg-amber-900/40 border border-amber-500/30 text-amber-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                            <i data-lucide="sparkles" style="width:12px;height:12px;stroke-width:2"></i>
+                                            ปรับ Role ในหน้า MAIN
+                                        </span>
+                                        <span class="bg-emerald-900/40 border border-emerald-500/30 text-emerald-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                            <i data-lucide="image-plus" style="width:12px;height:12px;stroke-width:2"></i>
+                                            อัพโหลดภาพตัวละครเอง
+                                        </span>
+                                        <span class="bg-indigo-900/40 border border-indigo-500/30 text-indigo-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                            <i data-lucide="git-merge" style="width:12px;height:12px;stroke-width:2"></i>
+                                            Merge ข้อมูลจากไฟล์อื่น
+                                        </span>
+                                        <span class="bg-cyan-900/40 border border-cyan-500/30 text-cyan-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                            <i data-lucide="zap" style="width:12px;height:12px;stroke-width:2"></i>
+                                            แก้แล้วใช้ในการแปลทันที
+                                        </span>
+                                        <span class="bg-purple-900/40 border border-purple-500/30 text-purple-200 text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                            <i data-lucide="cloud-download" style="width:12px;height:12px;stroke-width:2"></i>
+                                            Cloud Sync ฐานข้อมูลล่าสุด
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2114,12 +2120,12 @@
     </section>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- UPDATE GUIDE — v1.8.4+                             -->
+    <!-- UPDATE GUIDE — Auto-updater                        -->
     <!-- ═══════════════════════════════════════════════════ -->
     <section id="update" class="py-12 md:py-16 dark-section">
         <div class="container mx-auto px-4 md:px-8 max-w-4xl">
             <div class="text-center mb-8">
-                <p class="text-xs text-gray-500 uppercase mb-2" style="letter-spacing:0.18em;">For existing users · v1.8.4+</p>
+                <p class="text-xs text-gray-500 uppercase mb-2" style="letter-spacing:0.18em;">For existing users · อัพเดตในคลิกเดียว</p>
                 <h2 class="text-2xl md:text-3xl font-bold inline-block text-white">
                     อัพเดตเป็น<span class="grad-text">เวอร์ชั่นใหม่</span>
                 </h2>
@@ -2127,7 +2133,7 @@
 
             <div class="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-6 md:p-8 backdrop-blur-sm">
                 <p class="text-gray-300 mb-6 leading-relaxed">
-                    ตั้งแต่ v1.8.4 เป็นต้นไป — ในโฟลเดอร์ MBB ของคุณจะมีไฟล์
+                    ในโฟลเดอร์ MBB ของคุณจะมีไฟล์
                     <code class="bg-slate-700 text-cyan-300 rounded px-1.5 py-0.5 text-sm">MBB-Updater.exe</code>
                     ติดมาด้วย ใช้สำหรับอัพเดตเป็นเวอร์ชั่นใหม่ <strong class="text-white">โดยไม่ต้องดาวน์โหลด zip ใหม่ทั้งหมด</strong>
                 </p>
