@@ -1613,24 +1613,33 @@
                 <!-- 4: NPC Manager -->
                 <div id="npc-manager" class="p-6 md:p-10 border-b border-white/[0.055]">
 
-                    <!-- HERO: Role customization — image-first, description below -->
+                    <!-- HERO: Role customization — heading first, then image, then supporting content -->
                     <div class="mb-8">
+                        <!-- Heading + description ABOVE image -->
+                        <div class="max-w-3xl mx-auto text-center mb-8">
+                            <p class="eyebrow inline-flex items-center gap-2 justify-center">
+                                <i data-lucide="crown" style="width:12px;height:12px;stroke-width:2.5"></i>
+                                NPC Manager · ฟีเจอร์เด่น
+                            </p>
+                            <h3 class="text-3xl md:text-4xl font-bold mb-3 text-white leading-tight npc-hero-heading">แต่งน้ำเสียงตัวละคร <span class="grad-text">ตามใจชอบ</span></h3>
+                            <p class="text-gray-300 leading-relaxed">
+                                เปิด <strong class="text-white">NPC Manager</strong> ได้จากปุ่ม
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 text-sm font-medium align-middle mx-0.5">
+                                    <i data-lucide="users" style="width:12px;height:12px;stroke-width:2"></i>NPC Manager
+                                </span>
+                                บน UI หลักของ MBB
+                                — ปรับ Role ของตัวละครได้จากแท็บ <strong class="text-white">MAIN</strong> โดยตรง
+                                AI จะจดจำโทนที่คุณตั้งไว้และใช้ทุกครั้งที่ตัวละครนั้นพูด ไม่ว่าจะเป็นบทสนทนา คัตซีน หรือแบทเทิล
+                            </p>
+                        </div>
                         <!-- Image — full width, prominent (shows list view + Polaroid view) -->
                         <div class="image-container rounded-xl overflow-hidden max-w-5xl mx-auto mb-8">
                             <img src="https://res.cloudinary.com/docoo51xb/image/upload/v1778249384/UI_element01_npc_y1tru9.png"
                                  alt="NPC Manager + Character Viewer"
                                  class="zoomable-image w-full rounded-xl shadow-lg">
                         </div>
-                        <!-- Description below — 2-col on desktop: text + before/after example -->
+                        <!-- Supporting content below image — 2-col grid: before/after example + feature badges -->
                         <div class="max-w-5xl mx-auto">
-                            <div class="text-center mb-6">
-                                <p class="eyebrow inline-flex items-center gap-2 justify-center">
-                                    <i data-lucide="crown" style="width:12px;height:12px;stroke-width:2.5"></i>
-                                    NPC Manager · ฟีเจอร์เด่น
-                                </p>
-                                <h3 class="text-3xl font-bold mb-3 text-white leading-tight npc-hero-heading">แต่งน้ำเสียงตัวละคร <span class="grad-text">ตามใจชอบ</span></h3>
-                                <p class="text-gray-300 leading-relaxed max-w-2xl mx-auto">ปรับ Role ของตัวละครได้จากหน้า <strong class="text-white">MAIN</strong> โดยตรง — AI จะจดจำโทนที่คุณตั้งไว้และใช้ทุกครั้งที่ตัวละครนั้นพูด ไม่ว่าจะเป็นบทสนทนา คัตซีน หรือแบทเทิล</p>
-                            </div>
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                                 <!-- Before/After example -->
                                 <div class="rounded-xl overflow-hidden border border-white/[0.08]">
