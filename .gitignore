@@ -100,6 +100,10 @@ docs/_build/
 .claude/
 .claude/**/*
 
+# Power-user font cache (root-level only — python-app/fonts/ stays tracked).
+# Users drop their own fonts into /fonts/ if they want; not a shipped feature.
+/fonts/
+
 # Dev session notes (temporary, not part of source)
 ASSET_DEBUG_BUILD05.md
 BUILD06_FIX_SUMMARY.md
