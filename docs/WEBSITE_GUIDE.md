@@ -84,6 +84,8 @@
 .image-container:hover::after { top: 155%; }
 ```
 
+**Image corner radius protocol — 4px uniform.** All cropped/screenshot images on the landing page MUST use `rounded` (Tailwind 4px / 0.25rem) on **both** the wrapper div AND the `<img>` element. Do not use `rounded-xl` (12px) or larger — UI screenshots have functional elements (resize handles, icons, badges) at their corners that get visually clipped by aggressive radii. Apply to both wrapper + img because the wrapper's `overflow: hidden` + `padding` lets the inner img's own radius show through. Verify on both desktop AND `@media (max-width: 640px)` paths.
+
 ### 2.5 Feature Icon Circles
 
 ```css
