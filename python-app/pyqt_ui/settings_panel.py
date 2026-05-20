@@ -309,6 +309,7 @@ class SettingsPanel(QWidget):
                          "แสดงคำแปลซีนต่อสู้", True)
         self._add_toggle(c_layout, "enable_conversation_logging",
                          "บันทึกประวัติการแปล", False)
+        self._add_log_path_info(c_layout)
         self._add_toggle(c_layout, "enable_starting_key_visual",
                          "เริ่มโปรแกรมด้วยภาพ artwork", True)
 
@@ -447,6 +448,71 @@ class SettingsPanel(QWidget):
 
         layout.addLayout(row)
         self._toggles[key] = cb
+
+    def _add_log_path_info(self, layout):
+        """Path display + open-folder button under the conversation_logging
+        toggle, so users know where logs land and can jump straight to them.
+
+        Width-safe: label uses a SHORT compact text with tooltip carrying the
+        full path. minimum width 0 + Preferred size policy + minimum-size hint
+        suppression prevents this row from forcing the scroll content wider
+        than the panel (which would push all other rows off-screen)."""
+        import os
+        from resource_utils import get_app_dir
+
+        # Must match conversation_logger.__init__ — logs land next to the app
+        log_dir = os.path.join(get_app_dir(), "logs", "conversation_logs")
+
+        row = QHBoxLayout()
+        row.setContentsMargins(8, 0, 4, 4)
+        row.setSpacing(6)
+
+        # Compact path label — full path lives in the tooltip. Sized so it
+        # never forces the panel wider than its parent scroll area.
+        path_lbl = QLabel("\U0001F4C1 ...\\conversation_logs")
+        path_lbl.setObjectName("settings_log_path")
+        path_lbl.setFont(QFont(FONT_MONO, 8))
+        path_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.45);")
+        path_lbl.setToolTip(f"บันทึกที่:\n{log_dir}")
+        path_lbl.setMinimumWidth(0)
+        path_lbl.setSizePolicy(QSizePolicy.Policy.Preferred,
+                               QSizePolicy.Policy.Preferred)
+        row.addWidget(path_lbl, stretch=1)
+
+        # Open-folder button (compact, fixed width — doesn't grow)
+        btn = QPushButton("เปิดโฟลเดอร์")
+        btn.setObjectName("settings_log_open_btn")
+        btn.setFont(QFont(FONT_PRIMARY, 9))
+        btn.setFixedHeight(22)
+        btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            "QPushButton#settings_log_open_btn {"
+            f"  background: {self.palette['btn_bg']};"
+            f"  color: {self.palette['text']};"
+            f"  border: 1px solid {self.palette['border_subtle']};"
+            "  border-radius: 4px; padding: 2px 8px;"
+            "}"
+            "QPushButton#settings_log_open_btn:hover {"
+            f"  background: {self.palette['accent']};"
+            f"  color: {self.palette['toggled_text']};"
+            "}"
+        )
+        btn.clicked.connect(lambda: self._open_log_folder(log_dir))
+        row.addWidget(btn)
+
+        layout.addLayout(row)
+
+    def _open_log_folder(self, path):
+        """Open the conversation log dir in Windows Explorer. Creates the
+        directory first if it doesn't exist yet (toggle never turned on)."""
+        import os
+        import subprocess
+        try:
+            os.makedirs(path, exist_ok=True)
+            subprocess.Popen(['explorer', path])
+        except Exception as e:
+            log.error(f"Failed to open log folder '{path}': {e}")
 
     def _make_section_btn(self, text):
         btn = QPushButton(text)

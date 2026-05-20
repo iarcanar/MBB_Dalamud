@@ -278,7 +278,69 @@ class DalamudImmediateHandler:
             self.logger.debug(f"[เริ่มแปล] เริ่มแปลข้อความใหม่...")
             # <<< AUDIT_FIX_M1
 
+            # ────────────────────────────────────────────────────────────────
+            # PRE-FLIGHT for DissolveOverlay modes (ChatType 68 / 71) — v1.8.10
+            # ────────────────────────────────────────────────────────────────
+            # Without this, the first cutscene/battle line "flashes" the old
+            # TUI dialog content for ~1 second before translation completes
+            # and `_route_to_dissolve_overlay` finally hides it. The flash is
+            # caused by `_trigger_tui_auto_show` firing as soon as the thread
+            # sets `_translating_in_progress=True` (status update path) — at
+            # which point chat_type isn't yet known to MBB.py, so its
+            # `_dissolve_active` guard hasn't been armed.
+            #
+            # Pre-flight: we know chat_type HERE. Set `_dissolve_active=True`
+            # synchronously (guards `_do_tui_auto_show`) and schedule a
+            # Tk-thread withdraw so any stale dialog content disappears
+            # immediately. The later `_route_to_dissolve_overlay` (when the
+            # translation completes) is idempotent against both side effects.
+            #
+            # Placement notes:
+            #  - AFTER all early returns (cache hit, already-translating,
+            #    is_running/is_translating, translator/ui_updater missing)
+            #    so we only pre-flight when a thread is actually about to
+            #    run and consume the flag. Otherwise `_dissolve_active=True`
+            #    could stick forever and break dialogue auto-show.
+            #  - Cache hit calls `_show_immediately` synchronously and
+            #    handles its own dispatch — no flash window, no pre-flight
+            #    needed.
+            #
+            # Cleanup: see `finally` block at the end of the thread.
+            was_pre_flighted = False
+            if chat_type in (68, 71):
+                try:
+                    _preflight_ui = getattr(self.main_app_ref, "translated_ui", None)
+                    if _preflight_ui is not None:
+                        _preflight_ui._dissolve_active = True
+
+                        def _pre_flight_withdraw_tk(ui_ref=_preflight_ui):
+                            """Runs on Tk main thread — withdraw + mark visibility."""
+                            try:
+                                if not ui_ref.root.winfo_exists():
+                                    return
+                                if ui_ref.root.state() == "normal":
+                                    ui_ref._tk_was_visible_before_dissolve = True
+                                    ui_ref.root.withdraw()
+                                else:
+                                    ui_ref._tk_was_visible_before_dissolve = False
+                            except Exception:
+                                pass
+
+                        self.main_app_ref.safe_after(0, _pre_flight_withdraw_tk)
+                        was_pre_flighted = True
+                        self.logger.info(
+                            f"[DISSOLVE-DBG] PRE-FLIGHT armed _dissolve_active "
+                            f"+ scheduled TK withdraw (ChatType {chat_type})"
+                        )
+                except Exception as _pe:
+                    self.logger.debug(f"[DISSOLVE-DBG] PRE-FLIGHT failed: {_pe}")
+
             def translate_and_show_immediately():
+                # Track whether _show_immediately was actually invoked — used in
+                # the finally block below to decide whether the pre-flight
+                # `_dissolve_active=True` should be rolled back (no display ⇒ no
+                # `_route_to_dissolve_overlay` ⇒ flag would otherwise stick).
+                _translation_displayed = False
                 try:
                     start_time = time.time()
 
@@ -363,6 +425,7 @@ class DalamudImmediateHandler:
                         self.logger.debug(f"[แสดงทันที] แสดงคำแปลทันที (ChatType {chat_type})!")
                         # <<< AUDIT_FIX_M1
                         self._show_immediately(translated_text, chat_type)
+                        _translation_displayed = True  # pre-flight cleanup guard
 
                         # *** ADD TO HISTORY: เพิ่มข้อความแปลจริงลงใน history สำหรับ Previous Dialog ***
                         if hasattr(self, 'main_app_ref') and self.main_app_ref:
@@ -416,6 +479,26 @@ class DalamudImmediateHandler:
                                 self.main_app_ref._translating_in_progress = False
                                 self.main_app_ref.safe_after(0, self.main_app_ref.update_info_label_with_model_color)
                         except:
+                            pass
+
+                    # ── PRE-FLIGHT cleanup ──
+                    # If we armed `_dissolve_active=True` (pre-flight) but never
+                    # reached `_show_immediately` (translation error / system
+                    # shutdown / cache race), reset the flag so the next dialogue
+                    # message (ChatType 61) can trigger normal `_do_tui_auto_show`
+                    # and bring the TUI dialog back. Without this, `_dissolve_active`
+                    # stays True forever and the TUI stays hidden until manually
+                    # toggled — broken UX.
+                    if was_pre_flighted and not _translation_displayed:
+                        try:
+                            _ui = getattr(self.main_app_ref, "translated_ui", None)
+                            if _ui is not None:
+                                _ui._dissolve_active = False
+                                self.logger.info(
+                                    "[DISSOLVE-DBG] PRE-FLIGHT cleanup: reset "
+                                    "_dissolve_active=False (translation not displayed)"
+                                )
+                        except Exception:
                             pass
 
             # Start translation thread immediately

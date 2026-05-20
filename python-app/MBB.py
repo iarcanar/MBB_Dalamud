@@ -33,7 +33,7 @@ from tkinter import (
 )  # เพิ่ม Checkbutton, BooleanVar
 from tkinter import Label  # เพิ่ม import Label
 import math  # เพิ่ม import math
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageFilter
 import win32gui
 import win32con
 from ctypes import windll
@@ -543,13 +543,37 @@ class MagicBabelApp:
         self.cpu_check_interval = 1.0
         self.last_cpu_check = time.time()
 
-        # --- ส่วน Splash Screen (เหมือนเดิม) ---
+        # --- ส่วน Splash Screen ---
+        # Rounded corners + bright cyan version text at bottom-center.
+        # Supports both .png and .jpg (project ships MBBvisual.jpg as of 2026-05-19).
         def show_splash():
             splash = tk.Toplevel(root)
             splash.overrideredirect(True)
             splash.attributes("-topmost", True)
             try:
-                image = Image.open(resource_path("assets/MBBvisual.png"))
+                # ── Resolve splash image (try multiple extensions/fallbacks) ──
+                splash_candidates = [
+                    "assets/MBBvisual.jpg",
+                    "assets/MBBvisual.png",
+                    "assets/MBBvisual.jpeg",
+                    "assets/MBBvisual_mar26.png",
+                    "assets/MBBvisual_legacy.png",
+                ]
+                image = None
+                resolved_path = None
+                for candidate in splash_candidates:
+                    try:
+                        path = resource_path(candidate)
+                        image = Image.open(path)
+                        resolved_path = candidate
+                        break
+                    except (FileNotFoundError, OSError):
+                        continue
+                if image is None:
+                    raise FileNotFoundError(
+                        f"No splash image found. Tried: {', '.join(splash_candidates)}"
+                    )
+
                 image = image.convert("RGBA")
                 SPLASH_WIDTH = 1280
                 SPLASH_HEIGHT = 720
@@ -562,7 +586,168 @@ class MagicBabelApp:
                     new_width = SPLASH_WIDTH
                     new_height = int(SPLASH_WIDTH / original_ratio)
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(image)
+
+                # ── Apply rounded corner mask ──
+                # Corner radius ~2% of width (~22px at 1080 wide — subtle).
+                # Halved from earlier max(28, w//24) ≈ 45px per prototype review.
+                corner_radius = max(14, new_width // 48)
+                mask = Image.new("L", (new_width, new_height), 0)
+                ImageDraw.Draw(mask).rounded_rectangle(
+                    [(0, 0), (new_width - 1, new_height - 1)],
+                    radius=corner_radius,
+                    fill=255,
+                )
+                # Composite onto opaque black bg using rounded mask
+                # (Outside the mask stays #000 → transparentcolor catches it)
+                rounded = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 255))
+                rounded.paste(image, (0, 0), mask)
+
+                # ── [meteor icon] [version text] group at bottom-center ──
+                # Layout matches docs/manual/prototype.html final spec (2026-05-20):
+                # icon height ≈ 3.7× font, 4px gap, no dark bar background —
+                # text relies on its own cyan glow + dark drop shadow stack.
+                CYAN = (0, 229, 255)  # #00e5ff — matches landing page / manual theme
+
+                version_text = f"v{__version__}"
+                font_size = max(22, new_width // 44)  # ~24px at 1080 wide
+                try:
+                    font = ImageFont.truetype(
+                        resource_path("fonts/Anuphan.ttf"), font_size
+                    )
+                except Exception:
+                    try:
+                        font = ImageFont.truetype("arial.ttf", font_size)
+                    except Exception:
+                        font = ImageFont.load_default()
+
+                # Measure version text
+                tmp_draw = ImageDraw.Draw(rounded)
+                bbox = tmp_draw.textbbox((0, 0), version_text, font=font)
+                text_w = bbox[2] - bbox[0]
+                text_h = bbox[3] - bbox[1]
+
+                # Load meteor icon (height = 3.7× font ≈ 88px at font 24)
+                icon_h_target = max(60, int(font_size * 3.7))
+                icon_img = None
+                try:
+                    icon_img = Image.open(
+                        resource_path("assets/mbb_meteor.png")
+                    ).convert("RGBA")
+                    aspect = icon_img.width / icon_img.height
+                    icon_img = icon_img.resize(
+                        (int(icon_h_target * aspect), icon_h_target),
+                        Image.Resampling.LANCZOS,
+                    )
+                except Exception as ex:
+                    print(f"[splash] meteor icon load failed: {ex} — text only")
+
+                # Group: [icon] [4px gap] [text] centered horizontally
+                gap_px = 4
+                icon_w = icon_img.width if icon_img is not None else 0
+                icon_h = icon_img.height if icon_img is not None else 0
+                group_w = icon_w + (gap_px if icon_img is not None else 0) + text_w
+                group_left = (new_width - group_w) // 2
+
+                # Text position — bottom-aligned, font-bbox offsets corrected
+                bottom_margin = max(36, int(new_height * 0.07))
+                text_x = (
+                    group_left
+                    + icon_w
+                    + (gap_px if icon_img is not None else 0)
+                    - bbox[0]
+                )
+                text_y = new_height - bottom_margin - text_h - bbox[1]
+
+                # Icon vertical-centered on text center (icon overflows top/bottom)
+                text_center_y = text_y + bbox[1] + text_h // 2
+                icon_y = text_center_y - icon_h // 2 if icon_img is not None else 0
+
+                # ── Composite meteor icon (halo + dark shadow + sharp) ──
+                if icon_img is not None:
+                    icon_alpha = icon_img.split()[3]
+                    # Cyan halo behind icon (tone-matches text glow)
+                    halo_solid = Image.new("RGBA", icon_img.size, (*CYAN, 140))
+                    halo_silhouette = Image.new("RGBA", icon_img.size, (0, 0, 0, 0))
+                    halo_silhouette.paste(halo_solid, (0, 0), icon_alpha)
+                    halo_layer = Image.new(
+                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
+                    )
+                    halo_layer.paste(halo_silhouette, (group_left, icon_y))
+                    halo_layer = halo_layer.filter(
+                        ImageFilter.GaussianBlur(radius=8)
+                    )
+                    rounded = Image.alpha_composite(rounded, halo_layer)
+                    # Dark drop shadow for legibility
+                    shadow_solid = Image.new("RGBA", icon_img.size, (0, 0, 0, 210))
+                    shadow_silhouette = Image.new(
+                        "RGBA", icon_img.size, (0, 0, 0, 0)
+                    )
+                    shadow_silhouette.paste(shadow_solid, (0, 0), icon_alpha)
+                    shadow_layer = Image.new(
+                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
+                    )
+                    shadow_layer.paste(
+                        shadow_silhouette, (group_left + 1, icon_y + 2)
+                    )
+                    shadow_layer = shadow_layer.filter(
+                        ImageFilter.GaussianBlur(radius=4)
+                    )
+                    rounded = Image.alpha_composite(rounded, shadow_layer)
+                    # Sharp icon on top
+                    sharp_icon_layer = Image.new(
+                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
+                    )
+                    sharp_icon_layer.paste(icon_img, (group_left, icon_y), icon_img)
+                    rounded = Image.alpha_composite(rounded, sharp_icon_layer)
+
+                # ── Dark drop-shadow halo for version text (replaces removed bar) ──
+                for blur_r, alpha, offset in [(18, 150, (0, 0)), (6, 200, (0, 2))]:
+                    shadow_layer = Image.new(
+                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
+                    )
+                    ImageDraw.Draw(shadow_layer).text(
+                        (text_x + offset[0], text_y + offset[1]),
+                        version_text,
+                        font=font,
+                        fill=(0, 0, 0, alpha),
+                    )
+                    shadow_layer = shadow_layer.filter(
+                        ImageFilter.GaussianBlur(radius=blur_r)
+                    )
+                    rounded = Image.alpha_composite(rounded, shadow_layer)
+
+                # ── Cyan glow halo for version text ──
+                for blur_r, alpha in [(12, 90), (6, 140), (2, 200)]:
+                    glow_layer = Image.new(
+                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
+                    )
+                    ImageDraw.Draw(glow_layer).text(
+                        (text_x, text_y),
+                        version_text,
+                        font=font,
+                        fill=(*CYAN, alpha),
+                    )
+                    glow_layer = glow_layer.filter(
+                        ImageFilter.GaussianBlur(radius=blur_r)
+                    )
+                    rounded = Image.alpha_composite(rounded, glow_layer)
+
+                # ── Sharp version text on top (dark shadow + bright cyan) ──
+                sharp_draw = ImageDraw.Draw(rounded)
+                sharp_draw.text(
+                    (text_x + 1, text_y + 2),
+                    version_text,
+                    font=font,
+                    fill=(0, 0, 0, 230),
+                )
+                sharp_draw.text(
+                    (text_x, text_y),
+                    version_text,
+                    font=font,
+                    fill=(*CYAN, 255),
+                )
+
+                photo = ImageTk.PhotoImage(rounded)
                 screen_width = splash.winfo_screenwidth()
                 screen_height = splash.winfo_screenheight()
                 x = (screen_width - new_width) // 2
@@ -578,6 +763,11 @@ class MagicBabelApp:
                     splash.attributes("-alpha", alpha)
                     splash.update()
                     time.sleep(0.02)
+                print(
+                    f"[splash] Loaded {resolved_path} · "
+                    f"size={new_width}x{new_height} · "
+                    f"corner_r={corner_radius} · version=v{__version__}"
+                )
                 return splash, photo
             except Exception as e:
                 print(f"Error loading splash screen: {e}")
@@ -2670,6 +2860,20 @@ class MagicBabelApp:
         # Also update control panel Model field
         if hasattr(self, 'control_panel') and self.control_panel:
             self.control_panel.set_info(self.settings.get_displayed_model())
+
+        # Sync Mini UI status dot — mirrors [DALAMUD:*] color signal
+        # so users on Mini mode see the same translating/idle/stopped state.
+        if hasattr(self, 'mini_ui') and self.mini_ui:
+            try:
+                if getattr(self, '_translating_in_progress', False):
+                    mini_state = 'translating'   # cyan — message in flight
+                elif getattr(self.mini_ui, 'is_translating', False):
+                    mini_state = 'active'        # green — system on, idle
+                else:
+                    mini_state = 'idle'          # gray — translation stopped
+                self.mini_ui.set_activity_state(mini_state)
+            except Exception:
+                pass
 
     def _is_tui_visible(self):
         """ตรวจสอบว่า TUI กำลังแสดงอยู่หรือไม่"""
@@ -5685,6 +5889,72 @@ class MagicBabelApp:
                 if hasattr(self, "hide_loading_indicator"):
                     self.hide_loading_indicator()
 
+    def restart_app(self):
+        """Spawn a new MBB instance with --from-restart, then exit this one.
+
+        Triggered by Settings panel "RESTART APP" button (after countdown 3..2..1).
+        The new process passes `--from-restart` so it polls for the singleton
+        mutex release instead of failing on duplicate detection.
+
+        Re-entry guard: clicking RESTART twice quickly during the countdown
+        only spawns one replacement.
+        """
+        if getattr(self, "_restarting", False):
+            self.logging_manager.log_info("[restart] already in progress — ignored")
+            return
+        self._restarting = True
+
+        try:
+            import subprocess
+
+            if getattr(sys, "frozen", False):
+                # PyInstaller .exe — relaunch the same .exe
+                cmd = [sys.executable, "--from-restart"]
+                cwd = os.path.dirname(sys.executable)
+            else:
+                # Dev mode — relaunch via python interpreter
+                cmd = [sys.executable, os.path.abspath(__file__), "--from-restart"]
+                cwd = os.path.dirname(os.path.abspath(__file__))
+
+            # Detached process group so the new instance is independent of this
+            # one — it must survive after sys.exit() kills the parent.
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            creationflags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+
+            self.logging_manager.log_info(
+                f"[restart] Spawning new instance: {' '.join(cmd)} (cwd={cwd})"
+            )
+            subprocess.Popen(
+                cmd,
+                creationflags=creationflags,
+                close_fds=True,
+                cwd=cwd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            # Spawn failed — DON'T exit (user would lose the app entirely).
+            # Clear the flag so they can retry.
+            self._restarting = False
+            self.logging_manager.log_error(f"[restart] spawn failed: {e}")
+            try:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.critical(
+                    None,
+                    "Restart Failed",
+                    f"ไม่สามารถเริ่มโปรแกรมใหม่ได้\n\n{e}\n\nกรุณาปิดและเปิดเอง",
+                )
+            except Exception:
+                pass
+            return
+
+        # Exit this instance — exit_program does full cleanup + sys.exit(0).
+        # The new process's mutex-polling loop will wait for our exit.
+        self.logging_manager.log_info("[restart] Exiting old instance...")
+        self.exit_program()
+
     def exit_program(self):
         self.stop_translation()
         self.hide_show_area()
@@ -6567,6 +6837,83 @@ Traceback:
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import QTimer
+
+    # ────────────────────────────────────────────────────────────────
+    # Single-instance lock (Windows kernel mutex)
+    # ────────────────────────────────────────────────────────────────
+    # Prevents two MBB processes from running concurrently. Without this,
+    # double-clicking the launcher causes:
+    #   - Two splash screens
+    #   - Both processes write to settings.json (last writer wins, can
+    #     corrupt user's tui_positions / theme / model selection)
+    #   - Named-pipe collision with Dalamud bridge (one process can't bind)
+    #
+    # The mutex is held until the process exits. Windows kernel auto-releases
+    # it on process death (including kill / crash) — no cleanup needed.
+    #
+    # Restart flow (`--from-restart` cmdline flag): the new process polls
+    # briefly waiting for the old process to release the mutex, then acquires
+    # it normally. This way the mutex lock is unbroken — a THIRD instance
+    # launched during restart still sees the lock and gets blocked.
+    _MUTEX_NAME = "MBB_Dalamud_SingleInstance_v1"
+    _ERROR_ALREADY_EXISTS = 183
+    _mbb_singleton_mutex = None  # kept alive in module scope until exit
+
+    def _try_acquire_singleton(is_restart: bool):
+        """Returns (handle, acquired_bool). On True, caller holds the mutex
+        for the process lifetime (Windows auto-releases on exit)."""
+        try:
+            kernel32 = ctypes.windll.kernel32
+        except Exception:
+            return None, False
+        if is_restart:
+            # Old process is dying. Poll for mutex release up to ~1.5s.
+            import time as _t
+            for _ in range(30):  # 30 * 50ms = 1.5s
+                handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+                if not handle:
+                    return None, False
+                if kernel32.GetLastError() != _ERROR_ALREADY_EXISTS:
+                    return handle, True
+                kernel32.CloseHandle(handle)
+                _t.sleep(0.05)
+            return None, False  # timeout — proceed unlocked (best-effort)
+        # Normal launch — single attempt
+        handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+        if not handle:
+            return None, False
+        if kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+            kernel32.CloseHandle(handle)
+            return None, False
+        return handle, True
+
+    try:
+        _is_restart_launch = "--from-restart" in sys.argv
+        _mbb_singleton_mutex, _acquired = _try_acquire_singleton(_is_restart_launch)
+        if not _acquired and not _is_restart_launch:
+            # Duplicate launch detected (normal mode) — alert and exit
+            try:
+                _MB_ICONINFORMATION = 0x40
+                _MB_TOPMOST = 0x00040000
+                ctypes.windll.user32.MessageBoxW(
+                    None,
+                    (
+                        "MBB กำลังเปิดอยู่แล้ว\n\n"
+                        "กรุณาปิดหน้าต่างเดิมก่อนเปิดใหม่\n"
+                        "(หรือดู taskbar / system tray ว่ามีหน้าต่างถูกซ่อนอยู่)"
+                    ),
+                    "Magicite Babel Bridge",
+                    _MB_ICONINFORMATION | _MB_TOPMOST,
+                )
+            except Exception:
+                pass
+            sys.exit(0)
+        if _is_restart_launch and not _acquired:
+            print("[single-instance] restart: mutex still held after 1.5s — proceeding unlocked")
+    except Exception as e:
+        # Non-Windows / permission issue — allow startup (best-effort lock)
+        print(f"[single-instance] mutex check skipped: {e}")
+        _mbb_singleton_mutex = None
 
     # Windows taskbar: unique AppUserModelID so icon/grouping works
     try:

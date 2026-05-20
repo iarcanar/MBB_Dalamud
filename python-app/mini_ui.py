@@ -69,9 +69,12 @@ def _refresh_mini_theme():
     _THEME_CACHE = None
 
 
-# Status colors are SEMANTIC (not theme-specific) — kept fixed
-_STATUS_IDLE = "#555555"   # gray dot when not translating
-_STATUS_ACTIVE = "#4CAF50" # green dot when translating
+# Status colors are SEMANTIC (not theme-specific) — kept fixed.
+# Match Main UI's `update_info_label_with_model_color` semantics so users see
+# the same color signal in both views.
+_STATUS_IDLE = "#555555"         # gray  — translation system OFF (Stop pressed)
+_STATUS_ACTIVE = "#4CAF50"       # green — translation system ON, idle baseline
+_STATUS_TRANSLATING = "#00FFFF"  # cyan  — message arriving / translation in flight
 
 # Legacy constants (some functions reference these directly — pull live from theme)
 def _bg_dark(): return _themed("bg")
@@ -106,6 +109,8 @@ class MiniUI:
         self._dot_label = None
         self._dot_idle_img = None
         self._dot_active_img = None
+        self._dot_translating_img = None
+        self._current_activity_state = "idle"  # tracks last state for theme rebuild
 
         self._create_dot_images()
         self.load_icons()
@@ -117,7 +122,8 @@ class MiniUI:
         scale = 4  # render at 4x then downscale for smooth edges
         big = dot_size * scale
         for color_hex, attr in [(_STATUS_IDLE, "_dot_idle_img"),
-                                (_STATUS_ACTIVE, "_dot_active_img")]:
+                                (_STATUS_ACTIVE, "_dot_active_img"),
+                                (_STATUS_TRANSLATING, "_dot_translating_img")]:
             img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             r = int(color_hex[1:3], 16)
@@ -216,9 +222,16 @@ class MiniUI:
         self.mini_loading_label.pack(side=tk.TOP, pady=(0, 0))
 
         # ── Status dot (PIL anti-aliased smooth circle) ──
+        # Initial image follows the LAST known activity state so theme rebuilds
+        # don't clobber an active/translating dot back to gray.
+        initial_img = {
+            "translating": self._dot_translating_img,
+            "active": self._dot_active_img,
+            "idle": self._dot_idle_img,
+        }.get(self._current_activity_state, self._dot_idle_img)
         self._dot_label = tk.Label(
             main_frame,
-            image=self._dot_idle_img,
+            image=initial_img,
             bg=_themed("bg"),
             bd=0,
         )
@@ -449,7 +462,8 @@ class MiniUI:
             self.toggle_translation_callback()
 
     def _set_status_dot(self, color):
-        """Update the status dot image (smooth PIL-rendered)"""
+        """Update the status dot image (smooth PIL-rendered).
+        Legacy 2-color API — kept for blink_mini_ui compatibility."""
         try:
             if self._dot_label:
                 img = self._dot_active_img if color == _STATUS_ACTIVE else self._dot_idle_img
@@ -457,8 +471,35 @@ class MiniUI:
         except tk.TclError:
             pass
 
+    def set_activity_state(self, state):
+        """3-state dot driver mirroring Main UI's [DALAMUD:*] color signal.
+
+        state: 'idle' | 'active' | 'translating'
+          - idle:        gray  — translation OFF (Stop pressed)
+          - active:      green — translation ON, awaiting next message
+          - translating: cyan  — message arrived / translation in flight
+
+        Called from MBB.update_info_label_with_model_color() so both UIs
+        share one trigger and stay in sync. Safe to call when dot label
+        was destroyed (theme rebuild race) — TclError swallowed.
+        """
+        self._current_activity_state = state
+        try:
+            if not self._dot_label:
+                return
+            img = {
+                "translating": self._dot_translating_img,
+                "active": self._dot_active_img,
+                "idle": self._dot_idle_img,
+            }.get(state, self._dot_idle_img)
+            self._dot_label.config(image=img)
+        except tk.TclError:
+            pass
+
     def update_translation_status(self, is_translating):
-        """Update translation status and switch play/pause icon."""
+        """Update translation status and switch play/pause icon.
+        Delegates dot color to set_activity_state so all callers share
+        one update path (no skew between Start/Stop and message arrival)."""
         try:
             self.is_translating = is_translating
             self.mini_ui_blinking = is_translating
@@ -466,11 +507,11 @@ class MiniUI:
             if is_translating:
                 if hasattr(self, 'play_pause_button') and self.play_pause_button:
                     self.play_pause_button.config(image=self.pause_icon)
-                self._set_status_dot(_STATUS_ACTIVE)
+                self.set_activity_state("active")
             else:
                 if hasattr(self, 'play_pause_button') and self.play_pause_button:
                     self.play_pause_button.config(image=self.play_icon)
-                self._set_status_dot(_STATUS_IDLE)
+                self.set_activity_state("idle")
 
             if hasattr(self, "mini_ui") and self.mini_ui.winfo_exists():
                 self.mini_ui.update_idletasks()

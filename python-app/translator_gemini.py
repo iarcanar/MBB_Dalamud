@@ -108,7 +108,7 @@ class TranslatorGemini:
         genai.configure(api_key=self.api_key)
 
         # Initialize default values first
-        self.model_name = "gemini-3.1-flash-lite-preview"
+        self.model_name = "gemini-3.1-flash-lite"
         self.max_tokens = 500
         self.temperature = 0.7
         self.top_p = 0.9
@@ -132,13 +132,13 @@ class TranslatorGemini:
                 with open("settings.json", "r") as f:
                     settings_data = json.load(f)
                     api_params = settings_data.get("api_parameters", {})
-                    self.model_name = api_params.get("model", "gemini-3.1-flash-lite-preview")
+                    self.model_name = api_params.get("model", "gemini-3.1-flash-lite")
                     self.max_tokens = api_params.get("max_tokens", 500)
                     self.temperature = api_params.get("temperature", 0.7)
                     self.top_p = api_params.get("top_p", 0.9)
                     self.current_role_mode = api_params.get("role_mode", "rpg_general")
             except (FileNotFoundError, json.JSONDecodeError):
-                self.model_name = "gemini-3.1-flash-lite-preview"
+                self.model_name = "gemini-3.1-flash-lite"
                 self.max_tokens = 500
                 self.temperature = 0.7
                 self.top_p = 0.9
@@ -219,12 +219,7 @@ class TranslatorGemini:
 
     def get_current_parameters(self):
         """Return current translation parameters"""
-        # สำหรับ Gemini จะแสดงชื่อรุ่นที่ง่ายต่อการอ่าน
         displayed_model = self.model_name
-        if self.model_name == "gemini-1.5-pro":
-            displayed_model = "gemini-1.5-pro"
-        elif self.model_name == "gemini-1.5-flash":
-            displayed_model = "gemini-1.5-flash"
 
         return {
             "model": self.model_name,
@@ -321,14 +316,9 @@ class TranslatorGemini:
 
             if model is not None:
                 valid_models = [
-                    "gemini-3.1-flash-lite-preview",
-                    "gemini-2.5-flash",
                     "gemini-2.5-flash-lite",
-                    "gemini-2.5-pro",
-                    "gemini-2.0-flash",
-                    "gemini-3.1-flash-lite-preview",
-                    "gemini-1.5-pro",
-                    "gemini-1.5-flash",
+                    "gemini-3.1-flash-lite",
+                    "gemini-2.5-flash",
                 ]
                 if model not in valid_models:
                     raise ValueError(

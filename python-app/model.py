@@ -361,7 +361,7 @@ class ModelSettings:
         ).pack(anchor="w", pady=(0, 5))
 
         # Custom styled combobox
-        self.model_var = tk.StringVar(value="gemini-3.1-flash-lite-preview")
+        self.model_var = tk.StringVar(value="gemini-3.1-flash-lite")
         model_combo_frame = tk.Frame(
             model_frame, bg=self.colors["bg_tertiary"], relief="flat", bd=1
         )
@@ -370,7 +370,7 @@ class ModelSettings:
         self.model_combo = ttk.Combobox(
             model_combo_frame,
             textvariable=self.model_var,
-            values=["gemini-3.1-flash-lite-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash"],
+            values=["gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash"],
             state="readonly",
             font=("Segoe UI", 11),
         )
@@ -695,7 +695,7 @@ class ModelSettings:
         self.role_var.set(role_mode)
 
         # Set model
-        model = current_params.get("model", "gemini-3.1-flash-lite-preview")
+        model = current_params.get("model", "gemini-3.1-flash-lite")
         self.model_var.set(model)
 
         # Set parameters

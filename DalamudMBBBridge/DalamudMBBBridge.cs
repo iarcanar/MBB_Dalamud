@@ -96,14 +96,14 @@ namespace DalamudMBBBridge
                 AddonLifecycle.RegisterListener(AddonEvent.PreSetup, "_BattleTalk", OnBattleTalkAddon);
                 AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_BattleTalk", OnBattleTalkAddon);
 
-                // CUTSCENE DIAGNOSTIC MODE - Discover actual addon names
-                // Register universal diagnostic for cutscene discovery
-                AddonLifecycle.RegisterListener(AddonEvent.PreSetup, OnCutsceneDiagnostic);
-                AddonLifecycle.RegisterListener(AddonEvent.PostSetup, OnCutsceneDiagnostic);
-                AddonLifecycle.RegisterListener(AddonEvent.PreRefresh, OnCutsceneDiagnostic);
-
-
-                // 🎯 ECHOGLOSSIAN-BASED: Primary cutscene addon (confirmed working)
+                // 🎯 ECHOGLOSSIAN-BASED: Primary cutscene addon
+                // Capture surface = PreSetup + PreRefresh ONLY (matches Echoglossian
+                // exactly). v1.8.11 attempt with PostUpdate/PostRefresh registrations
+                // CRASHED THE GAME because PostUpdate fires every frame and the
+                // heavy iteration we did per frame caused GC churn + native crashes.
+                // DO NOT re-add PostUpdate / PostRefresh — Echoglossian uses those
+                // only for applying NATIVE TEXT REPLACEMENT (which we don't do),
+                // never for re-extracting source text.
                 AddonLifecycle.RegisterListener(AddonEvent.PreSetup, "TalkSubtitle", OnTalkSubtitleAddon);
                 AddonLifecycle.RegisterListener(AddonEvent.PreRefresh, "TalkSubtitle", OnTalkSubtitleAddon);
 
@@ -124,23 +124,6 @@ namespace DalamudMBBBridge
                     AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, addonName, OnCutSceneSelectStringAddon);
                     Log.Info($"✅ Registered choice handler: {addonName}");
                 }
-
-                // Test multiple potential cutscene addon names based on research
-                // CutSceneSelectString removed - has dedicated handler now
-                var potentialCutsceneAddons = new[] {
-                    "Cutscene", "_Cutscene", "CutScene", "_CutScene",
-                    "Movie", "_Movie", "MovieSubtitle", "_MovieSubtitle",
-                    "Subtitle", "_Subtitle", "SubtitleDialog", "_SubtitleDialog"
-                };
-
-                foreach (var addonName in potentialCutsceneAddons)
-                {
-                    AddonLifecycle.RegisterListener(AddonEvent.PreSetup, addonName, OnCutsceneAddonTest);
-                    AddonLifecycle.RegisterListener(AddonEvent.PostSetup, addonName, OnCutsceneAddonTest);
-                    AddonLifecycle.RegisterListener(AddonEvent.PreRefresh, addonName, OnCutsceneAddonTest);
-                    AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, addonName, OnCutsceneAddonTest);
-                }
-
 
                 // Start named pipe server
                 Task.Run(StartPipeServer);
@@ -420,244 +403,6 @@ namespace DalamudMBBBridge
             }
         }
 
-        // CUTSCENE DIAGNOSTIC: Universal listener to discover addon names
-        private unsafe void OnCutsceneDiagnostic(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                var addonName = args.AddonName;
-
-                // Filter for potential cutscene-related addons
-                if (addonName != null && (
-                    addonName.Contains("Cut", StringComparison.OrdinalIgnoreCase) ||
-                    addonName.Contains("Scene", StringComparison.OrdinalIgnoreCase) ||
-                    addonName.Contains("Movie", StringComparison.OrdinalIgnoreCase) ||
-                    addonName.Contains("Subtitle", StringComparison.OrdinalIgnoreCase) ||
-                    addonName.Contains("Dialog", StringComparison.OrdinalIgnoreCase) ||
-                    addonName.Contains("Text", StringComparison.OrdinalIgnoreCase)))
-                {
-                    Log.Info($"🔍 [CUTSCENE DISCOVERY] Potential addon found: '{addonName}' - Event: {type}");
-
-                    // Try to extract text from this addon
-                    var addon = GameGui.GetAddonByName(addonName, 1);
-                    if (addon.Address != IntPtr.Zero)
-                    {
-                        var atkAddon = (AtkUnitBase*)addon.Address;
-                        if (atkAddon != null && atkAddon->IsVisible)
-                        {
-                            Log.Info($"✅ [CUTSCENE DISCOVERY] '{addonName}' is ACTIVE and VISIBLE!");
-
-                            // Attempt text extraction from various nodes
-                            for (uint nodeId = 0; nodeId <= 10; nodeId++)
-                            {
-                                var node = atkAddon->GetNodeById(nodeId);
-                                if (node != null)
-                                {
-                                    var textNode = node->GetAsAtkTextNode();
-                                    if (textNode != null && textNode->NodeText.StringPtr.Value != null)
-                                    {
-                                        var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
-                                        if (!string.IsNullOrEmpty(text) && text.Length > 3)
-                                        {
-                                            Log.Info($"📝 [CUTSCENE TEXT FOUND] Addon: '{addonName}', Node {nodeId}: {text.Substring(0, Math.Min(100, text.Length))}...");
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // Silent fail for diagnostic
-            }
-        }
-
-
-        // Test handler for specific cutscene addon names
-        private unsafe void OnCutsceneAddonTest(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                Log.Info($"🎬 [CUTSCENE TEST] Addon '{args.AddonName}' triggered! Event: {type}");
-
-                var addon = GameGui.GetAddonByName(args.AddonName, 1);
-                if (addon.Address == IntPtr.Zero) return;
-
-                var cutsceneAddon = (AtkUnitBase*)addon.Address;
-                if (cutsceneAddon == null || !cutsceneAddon->IsVisible) return;
-
-                Log.Info($"🎬 [CUTSCENE ACTIVE] '{args.AddonName}' is visible and ready for text extraction!");
-
-                // Try different extraction methods
-                ExtractCutsceneTextMethod1(args, cutsceneAddon);
-                ExtractCutsceneTextMethod2(cutsceneAddon);
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in OnCutsceneAddonTest: {ex.Message}");
-            }
-        }
-
-        private unsafe void ExtractCutsceneTextMethod1(AddonArgs args, AtkUnitBase* addon)
-        {
-            // Method 1: Try AtkValues if available
-            if (args is AddonRefreshArgs refreshArgs && refreshArgs.AtkValues != null)
-            {
-                var updateAtkValues = (AtkValue*)refreshArgs.AtkValues;
-                if (updateAtkValues != null)
-                {
-                    for (int i = 0; i < 5; i++)
-                    {
-                        if (updateAtkValues[i].String.Value != null)
-                        {
-                            var text = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[i].String.Value);
-                            if (!string.IsNullOrEmpty(text) && text.Length > 3)
-                            {
-                                Log.Info($"📝 [METHOD1] AtkValue[{i}]: {text.Substring(0, Math.Min(100, text.Length))}...");
-
-                                // Queue the message if unique
-                                if (IsUniqueMessage("", text, "cutscene"))
-                                {
-                                    var textData = new TextHookData
-                                    {
-                                        Type = "cutscene",
-                                        Speaker = "",
-                                        Message = text,
-                                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                        ChatType = 0x0045
-                                    };
-                                    messageQueue.Enqueue(textData);
-                                    Log.Info($"✅ [CUTSCENE CAPTURED] {text.Substring(0, Math.Min(50, text.Length))}...");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private unsafe void ExtractCutsceneTextMethod2(AtkUnitBase* addon)
-        {
-            // Method 2: Comprehensive node scanning
-            for (uint nodeId = 0; nodeId <= 20; nodeId++)
-            {
-                var node = addon->GetNodeById(nodeId);
-                if (node != null)
-                {
-                    // 🔒 NULLREF FIX: Check node type BEFORE attempting cast
-                    if (node->Type != NodeType.Text) continue;
-
-                    var textNode = (AtkTextNode*)node;  // Explicit cast (safer than GetAsAtkTextNode)
-                    if (textNode->NodeText.StringPtr.Value != null)
-                    {
-                        var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode->NodeText.StringPtr.Value);
-                        if (!string.IsNullOrEmpty(text) && text.Length > 5)
-                        {
-                            Log.Info($"📝 [METHOD2] Node {nodeId}: {text.Substring(0, Math.Min(100, text.Length))}...");
-
-                            // Queue if unique and looks like dialogue
-                            if (IsUniqueMessage("", text, "cutscene") && !text.StartsWith("SE.") && !text.Contains("\\n"))
-                            {
-                                var textData = new TextHookData
-                                {
-                                    Type = "cutscene",
-                                    Speaker = "",
-                                    Message = text,
-                                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                    ChatType = 0x0045
-                                };
-                                messageQueue.Enqueue(textData);
-                                Log.Info($"✅ [CUTSCENE CAPTURED] {text.Substring(0, Math.Min(50, text.Length))}...");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // LEGACY: Keep old handler as fallback (will be removed after testing)
-        private unsafe void OnCutsceneAddon(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                Log.Debug($"[CUTSCENE-{type}] SubtitleDialog event received");
-
-                // Use verified addon name only
-                var addon = GameGui.GetAddonByName("SubtitleDialog", 1);
-                if (addon.Address == IntPtr.Zero) return;
-
-                var cutsceneAddon = (AtkUnitBase*)addon.Address;
-                if (cutsceneAddon == null || !cutsceneAddon->IsVisible) return;
-
-                Log.Debug($"[CUTSCENE] SubtitleDialog is active and visible");
-
-                // Focus on PreRefresh/PostRefresh events for text content
-                if (args is AddonRefreshArgs refreshArgs && refreshArgs.AtkValues != null)
-                {
-                    // Method 1: Try AtkValues extraction
-                    var updateAtkValues = (AtkValue*)refreshArgs.AtkValues;
-                    if (updateAtkValues != null)
-                    {
-                        string speakerName = updateAtkValues[1].String.Value != null ?
-                            MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[1].String.Value) : "";
-                        string message = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value);
-
-                        // Use global duplicate prevention system
-                        if (IsUniqueMessage(speakerName, message, "cutscene"))
-                        {
-                            var textData = new TextHookData
-                            {
-                                Type = "cutscene",
-                                Speaker = speakerName,
-                                Message = message,
-                                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                ChatType = 0x0045 // Custom cutscene type
-                            };
-
-                            messageQueue.Enqueue(textData);
-                            Log.Info($"[CUTSCENE] Captured: {speakerName}: {message.Substring(0, Math.Min(50, message.Length))}...");
-                            return;
-                        }
-                    }
-                }
-
-                // Method 2: Node-based extraction as fallback
-                for (uint nodeId = 2; nodeId <= 6; nodeId++)
-                {
-                    var textNode = cutsceneAddon->GetNodeById(nodeId);
-                    if (textNode != null)
-                    {
-                        var atkTextNode = textNode->GetAsAtkTextNode();
-                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr.Value != null)
-                        {
-                            var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
-                            if (!string.IsNullOrEmpty(text) && text.Length > 5 && IsUniqueMessage("", text, "cutscene"))
-                            {
-                                var textData = new TextHookData
-                                {
-                                    Type = "cutscene",
-                                    Speaker = "",
-                                    Message = text,
-                                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                    ChatType = 0x0045
-                                };
-
-                                messageQueue.Enqueue(textData);
-                                Log.Info($"[CUTSCENE] Node {nodeId}: {text.Substring(0, Math.Min(50, text.Length))}...");
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in OnCutsceneAddon: {ex.Message}");
-            }
-        }
-
         // 🎯 ECHOGLOSSIAN-BASED: TalkSubtitle Handler (Primary Cutscene)
         private unsafe void OnTalkSubtitleAddon(AddonEvent type, AddonArgs args)
         {
@@ -669,102 +414,129 @@ namespace DalamudMBBBridge
                 if (addon.Address == IntPtr.Zero) return;
 
                 var talkSubtitleAddon = (AtkUnitBase*)addon.Address;
-                if (talkSubtitleAddon == null || !talkSubtitleAddon->IsVisible) return;
+                if (talkSubtitleAddon == null) return;
 
-                Log.Debug($"[TALKSUBTITLE] Addon is active and visible");
+                // === FIRST-LINE FIX (v1.8.10) ============================
+                // Do NOT early-return on `!IsVisible`. PreSetup fires BEFORE
+                // the addon becomes visible — at that moment the FIRST
+                // cutscene line is already sitting in AtkValues (Method 1
+                // below) but the text nodes (Methods 2-4) are still empty.
+                // The old `!IsVisible → return` guard skipped the entire
+                // function for PreSetup, dropping the first line of every
+                // cutscene. Subsequent lines arrived via PreRefresh on the
+                // already-visible addon, which worked.
+                //
+                // Now: AtkValues path (Method 1) runs unconditionally when
+                // we have AddonSetupArgs. Node-reading paths (Methods 2-4)
+                // still require IsVisible — they read live UI text nodes
+                // that are only populated after the addon is rendered.
+                bool isVisible = talkSubtitleAddon->IsVisible;
+                bool hasSetupArgs = args is AddonSetupArgs;
+                if (!isVisible && !hasSetupArgs)
+                {
+                    // PreRefresh on a hidden addon — nothing useful here
+                    return;
+                }
 
-                // Method 1: AtkValues approach (Echoglossian method)
+                Log.Debug($"[TALKSUBTITLE] visible={isVisible} hasSetupArgs={hasSetupArgs} event={type}");
+
+                // === Method 1: AtkValues approach (ECHOGLOSSIAN-VERIFIED, v1.8.12) ===
+                // Handle BOTH AddonSetupArgs (PreSetup) AND AddonRefreshArgs (PreRefresh).
+                // Echoglossian's TalkSubtitleHandler.cs unwraps both — without this, the
+                // FIRST cinematic line is missed (it arrives via PreRefresh's AtkValues
+                // on some cutscenes, never PreSetup's).
+                //
+                // CRITICAL SAFETY (v1.8.12 fix after v1.8.11 crashed the game):
+                //   - Read ONLY index [0] (Echoglossian's pattern). Iterating ALL
+                //     atkValues without type checks reads garbage pointers and crashes
+                //     native code (try/catch DOESN'T catch native AV).
+                //   - Check `.Type == AtkValueType.String` BEFORE touching `.String.Value`
+                //     because AtkValue is a union — accessing `.String.Value` on a
+                //     non-String type returns a garbage pointer.
+                AtkValue* atkValuesPtr = null;
                 if (args is AddonSetupArgs setupArgs && setupArgs.AtkValues != null)
                 {
-                    var setupAtkValues = (AtkValue*)setupArgs.AtkValues;
-                    if (setupAtkValues != null && setupAtkValues[0].String.Value != null)
+                    atkValuesPtr = (AtkValue*)setupArgs.AtkValues;
+                }
+                else if (args is AddonRefreshArgs refreshArgs && refreshArgs.AtkValues != null)
+                {
+                    atkValuesPtr = (AtkValue*)refreshArgs.AtkValues;
+                }
+
+                if (atkValuesPtr != null)
+                {
+                    // Strict type check FIRST — accessing .String.Value on a non-String
+                    // AtkValue type reads a garbage pointer and crashes the game.
+                    if (atkValuesPtr[0].Type == AtkValueType.String
+                        && atkValuesPtr[0].String.Value != null)
                     {
-                        var textToTranslate = MemoryHelper.ReadSeStringAsString(out _, (nint)setupAtkValues[0].String.Value);
-
-                        if (!string.IsNullOrEmpty(textToTranslate) && textToTranslate.Length > 3)
+                        try
                         {
-                            Log.Info($"[TALKSUBTITLE] AtkValue text: {textToTranslate.Substring(0, Math.Min(100, textToTranslate.Length))}...");
+                            var text = MemoryHelper.ReadSeStringAsString(
+                                out _, (nint)atkValuesPtr[0].String.Value);
 
-                            if (IsUniqueMessage("", textToTranslate, "cutscene"))
+                            if (!string.IsNullOrEmpty(text) && text.Length > 3)
                             {
-                                var textData = new TextHookData
+                                Log.Info($"[TALKSUBTITLE] {type} AtkValue[0]: {text.Substring(0, Math.Min(100, text.Length))}...");
+
+                                if (IsUniqueMessage("", text, "cutscene"))
                                 {
-                                    Type = "cutscene",
-                                    Speaker = "", // Cutscenes often don't have separate speaker
-                                    Message = textToTranslate,
-                                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                    ChatType = 0x0047 // Unique type for TalkSubtitle
-                                };
-                                messageQueue.Enqueue(textData);
-                                Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via AtkValues: {textToTranslate.Substring(0, Math.Min(50, textToTranslate.Length))}...");
-                                return;
+                                    var textData = new TextHookData
+                                    {
+                                        Type = "cutscene",
+                                        Speaker = "",
+                                        Message = text,
+                                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                        ChatType = 0x0047
+                                    };
+                                    messageQueue.Enqueue(textData);
+                                    Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via AtkValue[0] in {type}: {text.Substring(0, Math.Min(50, text.Length))}...");
+                                    return;
+                                }
                             }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning($"[TALKSUBTITLE] AtkValue read failed: {ex.Message}");
                         }
                     }
                 }
 
-                // Method 2: Multi-node text extraction (Echoglossian approach - nodes 2,3,4)
-                var textNode2 = talkSubtitleAddon->GetTextNodeById(2);
-                var textNode3 = talkSubtitleAddon->GetTextNodeById(3);
-                var textNode4 = talkSubtitleAddon->GetTextNodeById(4);
+                // Method 2-4: text nodes 2, 3, 4 — only when addon is visible.
+                // Original Echoglossian pattern (TextNodeId=2, AltTextNodeId=3,
+                // AltTextNodeId2=4). DO NOT iterate 0-30 — empty nodes with garbage
+                // StringPtr can crash on read.
+                if (!isVisible) return;
 
-                // Try node 2 first (primary)
-                if (textNode2 != null && !textNode2->NodeText.IsEmpty)
+                foreach (uint nodeId in new uint[] { 2, 3, 4 })
                 {
-                    var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode2->NodeText.StringPtr.Value);
-                    if (!string.IsNullOrEmpty(text) && text.Length > 3 && IsUniqueMessage("", text, "cutscene"))
+                    var textNode = talkSubtitleAddon->GetTextNodeById(nodeId);
+                    if (textNode == null || textNode->NodeText.IsEmpty) continue;
+
+                    try
                     {
-                        var textData = new TextHookData
+                        var text = MemoryHelper.ReadSeStringAsString(
+                            out _, (nint)textNode->NodeText.StringPtr.Value);
+                        if (string.IsNullOrEmpty(text) || text.Length <= 3) continue;
+
+                        if (IsUniqueMessage("", text, "cutscene"))
                         {
-                            Type = "cutscene",
-                            Speaker = "",
-                            Message = text,
-                            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            ChatType = 0x0047
-                        };
-                        messageQueue.Enqueue(textData);
-                        Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via Node2: {text.Substring(0, Math.Min(50, text.Length))}...");
-                        return;
+                            var textData = new TextHookData
+                            {
+                                Type = "cutscene",
+                                Speaker = "",
+                                Message = text,
+                                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                ChatType = 0x0047
+                            };
+                            messageQueue.Enqueue(textData);
+                            Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via Node{nodeId} ({type}): {text.Substring(0, Math.Min(50, text.Length))}...");
+                            return;
+                        }
                     }
-                }
-
-                // Try node 3 as backup
-                if (textNode3 != null && !textNode3->NodeText.IsEmpty)
-                {
-                    var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode3->NodeText.StringPtr.Value);
-                    if (!string.IsNullOrEmpty(text) && text.Length > 3 && IsUniqueMessage("", text, "cutscene"))
+                    catch (Exception ex)
                     {
-                        var textData = new TextHookData
-                        {
-                            Type = "cutscene",
-                            Speaker = "",
-                            Message = text,
-                            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            ChatType = 0x0047
-                        };
-                        messageQueue.Enqueue(textData);
-                        Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via Node3: {text.Substring(0, Math.Min(50, text.Length))}...");
-                        return;
-                    }
-                }
-
-                // Try node 4 as final backup
-                if (textNode4 != null && !textNode4->NodeText.IsEmpty)
-                {
-                    var text = MemoryHelper.ReadSeStringAsString(out _, (nint)textNode4->NodeText.StringPtr.Value);
-                    if (!string.IsNullOrEmpty(text) && text.Length > 3 && IsUniqueMessage("", text, "cutscene"))
-                    {
-                        var textData = new TextHookData
-                        {
-                            Type = "cutscene",
-                            Speaker = "",
-                            Message = text,
-                            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            ChatType = 0x0047
-                        };
-                        messageQueue.Enqueue(textData);
-                        Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via Node4: {text.Substring(0, Math.Min(50, text.Length))}...");
-                        return;
+                        Log.Warning($"[TALKSUBTITLE] Node{nodeId} read failed: {ex.Message}");
                     }
                 }
             }
@@ -1119,265 +891,6 @@ namespace DalamudMBBBridge
             catch (Exception ex)
             {
                 Log.Error($"[CHOICE-ERROR] SelectIconString: {ex.Message}");
-            }
-        }
-
-        // 🎯 OLD: Choice Dialog Handler (backup)
-        private unsafe void OnChoiceAddon(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                string addonName = args.AddonName ?? "Choice";
-                Log.Info($"[CHOICE-{type}] Event received - {addonName}");
-
-                // ✅ PROVEN PATTERN: Same as Talk (100% success)
-                // Method 1: Try AtkValues extraction (primary method)
-                if (args is AddonRefreshArgs refreshArgs && refreshArgs.AtkValues != null)
-                {
-                    var updateAtkValues = (AtkValue*)refreshArgs.AtkValues;
-                    if (updateAtkValues != null)
-                    {
-                        // Try to extract choice text from AtkValues
-                        string choiceText = "";
-                        try
-                        {
-                            // Try multiple AtkValue indices (like Talk does)
-                            for (int i = 0; i < 10; i++)
-                            {
-                                if (updateAtkValues[i].Type == FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.String && updateAtkValues[i].String.Value != null)
-                                {
-                                    var text = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[i].String.Value);
-                                    if (!string.IsNullOrEmpty(text) && text.Length > 3)
-                                    {
-                                        choiceText = text;
-                                        Log.Info($"[CHOICE-ATKVALUES] Found at index {i}: {text.Substring(0, Math.Min(50, text.Length))}...");
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error($"[CHOICE-ATKVALUES] Error: {ex.Message}");
-                        }
-
-                        // Send choice text if found
-                        if (!string.IsNullOrEmpty(choiceText) && IsUniqueMessage("", choiceText, "choice"))
-                        {
-                            var textData = new TextHookData
-                            {
-                                Type = "choice",
-                                Speaker = "",
-                                Message = choiceText,
-                                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                ChatType = 0x0046
-                            };
-                            messageQueue.Enqueue(textData);
-                            Log.Info($"✅ [CHOICE-SUCCESS] {addonName}: {choiceText.Substring(0, Math.Min(50, choiceText.Length))}...");
-                            return; // Success, exit early
-                        }
-                    }
-                }
-
-                // Method 2: Fallback node-based extraction (like Talk fallback)
-                var addon = GameGui.GetAddonByName(addonName, 1);
-                if (addon.Address != IntPtr.Zero)
-                {
-                    var atkAddon = (AtkUnitBase*)addon.Address;
-                    if (atkAddon != null && atkAddon->IsVisible)
-                    {
-                        // Try known choice dialog nodes
-                        var nodeIds = new uint[] { 2, 3, 4, 5, 6, 7 };
-                        foreach (var nodeId in nodeIds)
-                        {
-                            var textNode = atkAddon->GetNodeById(nodeId);
-                            if (textNode != null)
-                            {
-                                var atkTextNode = textNode->GetAsAtkTextNode();
-                                if (atkTextNode != null && !atkTextNode->NodeText.IsEmpty)
-                                {
-                                    try
-                                    {
-                                        var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
-                                        if (!string.IsNullOrEmpty(text) && text.Length > 3 && IsUniqueMessage("", text, "choice"))
-                                        {
-                                            var textData = new TextHookData
-                                            {
-                                                Type = "choice",
-                                                Speaker = "",
-                                                Message = text,
-                                                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                                ChatType = 0x0046
-                                            };
-                                            messageQueue.Enqueue(textData);
-                                            Log.Info($"✅ [CHOICE-NODE{nodeId}] {addonName}: {text.Substring(0, Math.Min(50, text.Length))}...");
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Log.Error($"[CHOICE-NODE{nodeId}] Error: {ex.Message}");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in OnChoiceAddon: {ex.Message}");
-            }
-        }
-
-        // 🎯 OLD: Choice Dialog Handler (backup)
-        private unsafe void OnChoiceAddonOld(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                Log.Info($"[CHOICE-{type}] Event received");
-
-                var addon = GameGui.GetAddonByName("SelectString", 1);
-                if (addon.Address == IntPtr.Zero) return;
-
-                var selectAddon = (AtkUnitBase*)addon.Address;
-                if (selectAddon == null || !selectAddon->IsVisible) return;
-
-                // SelectString typically has:
-                // - Text prompt (what the NPC is asking)
-                // - Multiple choice options
-                // Research shows nodes 2-15 often contain choice text
-
-                // Method 1: Try AtkValues if available
-                if (args is AddonRefreshArgs refreshArgs && refreshArgs.AtkValues != null)
-                {
-                    var updateAtkValues = (AtkValue*)refreshArgs.AtkValues;
-                    if (updateAtkValues != null)
-                    {
-                        // Try to get prompt text (usually index 0)
-                        string promptText = updateAtkValues[0].String.Value != null ?
-                            MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value) : "";
-
-                        // Use global duplicate prevention system
-                        if (IsUniqueMessage("System", promptText, "choice"))
-                        {
-                            var textData = new TextHookData
-                            {
-                                Type = "choice",
-                                Speaker = "System", // Choice dialogs usually don't have speaker
-                                Message = promptText,
-                                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                ChatType = 0x0046 // Custom choice type
-                            };
-
-                            messageQueue.Enqueue(textData);
-                            Log.Info($"[CHOICE] Prompt captured: {promptText.Substring(0, Math.Min(50, promptText.Length))}...");
-                            return;
-                        }
-                    }
-                }
-
-                // Method 2: Extract choice options from nodes
-                var choiceTexts = new List<string>();
-                for (uint nodeId = 2; nodeId <= 15; nodeId++)
-                {
-                    var textNode = selectAddon->GetNodeById(nodeId);
-                    if (textNode != null)
-                    {
-                        var atkTextNode = textNode->GetAsAtkTextNode();
-                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr.Value != null)
-                        {
-                            var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
-                            if (!string.IsNullOrEmpty(text) && text.Length > 2)
-                            {
-                                choiceTexts.Add(text);
-                            }
-                        }
-                    }
-                }
-
-                // Send all choices as a combined message with duplicate prevention
-                if (choiceTexts.Count > 0)
-                {
-                    var combinedChoices = string.Join(" | ", choiceTexts);
-                    // Use global duplicate prevention system
-                    if (IsUniqueMessage("Choices", combinedChoices, "choice"))
-                    {
-                        var textData = new TextHookData
-                        {
-                            Type = "choice",
-                            Speaker = "Choices",
-                            Message = combinedChoices,
-                            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            ChatType = 0x0046
-                        };
-
-                        messageQueue.Enqueue(textData);
-                        Log.Info($"[CHOICE] {choiceTexts.Count} options: {combinedChoices.Substring(0, Math.Min(100, combinedChoices.Length))}...");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in OnChoiceAddon: {ex.Message}");
-            }
-        }
-
-        // 🎯 NEW: Icon Choice Dialog Handler (SelectIconString)
-        private unsafe void OnIconChoiceAddon(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                Log.Debug($"[ICONCHOICE-{type}] Event received");
-
-                var addon = GameGui.GetAddonByName("SelectIconString", 1);
-                if (addon.Address == IntPtr.Zero) return;
-
-                var selectAddon = (AtkUnitBase*)addon.Address;
-                if (selectAddon == null || !selectAddon->IsVisible) return;
-
-                // Similar to SelectString but with icons
-                // Extract text from nodes (usually higher node IDs for icon choices)
-                var choiceTexts = new List<string>();
-                for (uint nodeId = 3; nodeId <= 20; nodeId++) // Icon choices might use different range
-                {
-                    var textNode = selectAddon->GetNodeById(nodeId);
-                    if (textNode != null)
-                    {
-                        var atkTextNode = textNode->GetAsAtkTextNode();
-                        if (atkTextNode != null && atkTextNode->NodeText.StringPtr.Value != null)
-                        {
-                            var text = MemoryHelper.ReadSeStringAsString(out _, (nint)atkTextNode->NodeText.StringPtr.Value);
-                            if (!string.IsNullOrEmpty(text) && text.Length > 2)
-                            {
-                                choiceTexts.Add(text);
-                            }
-                        }
-                    }
-                }
-
-                if (choiceTexts.Count > 0)
-                {
-                    var combinedChoices = string.Join(" | ", choiceTexts);
-                    // Use global duplicate prevention system
-                    if (IsUniqueMessage("Icon Choices", combinedChoices, "choice"))
-                    {
-                        var textData = new TextHookData
-                        {
-                            Type = "choice",
-                            Speaker = "Icon Choices",
-                            Message = combinedChoices,
-                            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            ChatType = 0x0047 // Custom icon choice type
-                        };
-
-                        messageQueue.Enqueue(textData);
-                        Log.Info($"[ICONCHOICE] {choiceTexts.Count} options: {combinedChoices.Substring(0, Math.Min(100, combinedChoices.Length))}...");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in OnIconChoiceAddon: {ex.Message}");
             }
         }
 
@@ -1762,27 +1275,6 @@ namespace DalamudMBBBridge
                 AddonLifecycle.UnregisterListener(AddonEvent.PostRefresh, addonName, OnCutSceneSelectStringAddon);
             }
 
-            // Unregister diagnostic listeners
-            AddonLifecycle.UnregisterListener(AddonEvent.PreSetup, OnCutsceneDiagnostic);
-            AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, OnCutsceneDiagnostic);
-            AddonLifecycle.UnregisterListener(AddonEvent.PreRefresh, OnCutsceneDiagnostic);
-
-            // Unregister all potential cutscene addons
-            // CutSceneSelectString removed - has dedicated handler now
-            var potentialCutsceneAddons = new[] {
-                "Cutscene", "_Cutscene", "CutScene", "_CutScene",
-                "Movie", "_Movie", "MovieSubtitle", "_MovieSubtitle",
-                "Subtitle", "_Subtitle", "SubtitleDialog", "_SubtitleDialog"
-            };
-
-            foreach (var addonName in potentialCutsceneAddons)
-            {
-                AddonLifecycle.UnregisterListener(AddonEvent.PreSetup, addonName, OnCutsceneAddonTest);
-                AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, addonName, OnCutsceneAddonTest);
-                AddonLifecycle.UnregisterListener(AddonEvent.PreRefresh, addonName, OnCutsceneAddonTest);
-                AddonLifecycle.UnregisterListener(AddonEvent.PostRefresh, addonName, OnCutsceneAddonTest);
-            }
-
                 pipeServer?.Dispose();
 
                 Log.Info("[MBB Bridge] Plugin disposed successfully");
@@ -1790,45 +1282,6 @@ namespace DalamudMBBBridge
             catch (Exception ex)
             {
                 Log.Error($"[MBB Bridge] Dispose error: {ex.Message}");
-            }
-        }
-
-        // 🔍 DIAGNOSTIC: Universal addon event listener for cutscene discovery
-        private unsafe void OnUniversalAddonEvent(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                var addonName = args.AddonName;
-
-                // Only log potential cutscene/movie/dialogue related addons
-                if (addonName != null && (
-                    addonName.Contains("Cut") ||
-                    addonName.Contains("Scene") ||
-                    addonName.Contains("Movie") ||
-                    addonName.Contains("Dialog") ||
-                    addonName.Contains("Subtitle") ||
-                    addonName.Contains("Text") ||
-                    addonName.Contains("Narration") ||
-                    addonName.Equals("Cutscene", StringComparison.OrdinalIgnoreCase) ||
-                    addonName.Equals("Movie", StringComparison.OrdinalIgnoreCase)))
-                {
-                    Log.Info($"🔍 [DIAGNOSTIC] Cutscene-related addon detected: '{addonName}' - Event: {type}");
-
-                    // Try to get the addon to see if it's visible and has content
-                    var addon = GameGui.GetAddonByName(addonName, 1);
-                    if (addon.Address != IntPtr.Zero)
-                    {
-                        var atkAddon = (AtkUnitBase*)addon.Address;
-                        if (atkAddon != null && atkAddon->IsVisible)
-                        {
-                            Log.Info($"🎬 [DIAGNOSTIC] '{addonName}' is VISIBLE and ACTIVE - This could be our cutscene addon!");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // Silent fail for diagnostic - don't spam logs with errors
             }
         }
 
@@ -1841,32 +1294,5 @@ namespace DalamudMBBBridge
             public int ChatType { get; set; }
         }
 
-        // Universal addon detector to identify choice dialog addon names
-        private void OnUniversalAddonDetector(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                // Skip common/noisy addons to avoid spam
-                var skipAddons = new[] { "Talk", "TalkSubtitle", "_BattleTalk", "NamePlate", "ChatLog",
-                                       "_PartyList", "_ActionBar", "MainCommand", "SystemMenu" };
-
-                if (Array.Exists(skipAddons, addon => addon == args.AddonName))
-                    return;
-
-                // Log any new addon that appears, especially ones that might be choice dialogs
-                Log.Info($"[ADDON-DETECTOR] {args.AddonName} - {type} event");
-
-                // Special attention to potential choice addons
-                if (args.AddonName.Contains("Select") || args.AddonName.Contains("Choice") ||
-                    args.AddonName.Contains("String") || args.AddonName.Contains("List"))
-                {
-                    Log.Info($"[POTENTIAL-CHOICE] {args.AddonName} detected!");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in universal addon detector: {ex.Message}");
-            }
-        }
     }
 }

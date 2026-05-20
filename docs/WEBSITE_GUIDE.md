@@ -225,7 +225,7 @@ jDown.addEventListener('click', () => window.scrollTo({top: document.body.scroll
 | Main UI | `v1772802695/Main_ui_vxwl64.png` | UI Showcase block 1 |
 | Compare Main | `v1772801199/compare_main_ui_f4xqk2.png` | Compare toggle |
 | Compare Mini | `v1772801199/compare_mini_ui_rky4e9.png` | Compare toggle |
-| TUI | `v1772797987/TUI_urktwy.png` | UI Showcase block 2 |
+| TUI | `v1779252334/TUI_hvcklm.jpg` | UI Showcase block 2 |
 | LOG | `v1772797987/logs_history_fapgly.png` | UI Showcase block 3 |
 | NPC Manager | `v1772797988/NPC_manager_rvzmmh.png` | UI Showcase block 4 |
 | Settings+Font | `v1772797987/setting_and_fonts_offxss.png` | UI Showcase block 5 |

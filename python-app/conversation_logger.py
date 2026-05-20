@@ -15,10 +15,11 @@ Disk logging เปิด/ปิดแยกต่างหากผ่าน Se
 import os
 import json
 import time
+import atexit
 import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from resource_utils import get_user_data_dir
+from resource_utils import get_user_data_dir, get_app_dir
 
 
 
@@ -29,6 +30,16 @@ CONVERSATION_GAP_SECONDS = 45
 
 # Speaker limit ต่อ conversation (เพิ่มจาก 5→8 เพื่อรองรับ quest ที่มี NPC หลายตัว)
 CONVERSATION_MAX_SPEAKERS = 8
+
+# Thai first-person pronouns sorted by specificity (longest/rarest first so
+# 'ข้าพเจ้า' matches before 'ข้า', 'หม่อมฉัน' before 'ฉัน', etc.). Used to
+# lock each speaker's pronoun on first translation — prevents pronoun drift
+# across long scenes (e.g. Vauthry vs Crystal Exarch where 'ข้า' flipped to
+# 'ฉัน' mid-conversation in observed logs).
+_PRONOUN_PRIORITY = (
+    'หม่อมฉัน', 'ข้าพเจ้า', 'กระผม', 'ดิฉัน',
+    'ข้า', 'ผม', 'ฉัน', 'หนู', 'เรา',
+)
 
 # ChatType ที่ถือว่าเป็นคนละ "โหมด" → เปลี่ยน conversation
 # เช่น จาก Talk (61) → Cutscene (71) = บทสนทนาใหม่
@@ -52,10 +63,14 @@ class ConversationLogger:
 
     def __init__(self, base_path: Optional[str] = None, enabled: bool = True,
                  disk_logging: bool = False):
+        # Logs land NEXT TO the program (project folder in dev, exe dir in
+        # frozen build) — keeps them easy to find without digging through
+        # %LOCALAPPDATA%. Old logs at AppData are not migrated automatically
+        # — they stay where they are; new sessions write to the new path.
         if base_path is None:
-            base_path = get_user_data_dir()
+            base_path = get_app_dir()
 
-        self.log_dir = os.path.join(base_path, "logs", "conversations")
+        self.log_dir = os.path.join(base_path, "logs", "conversation_logs")
         self.enabled = enabled
         self.disk_logging = disk_logging  # True = save JSON to disk (debug mode)
         self.logger = logging.getLogger("ConversationLogger")
@@ -72,6 +87,19 @@ class ConversationLogger:
         self._last_chattype_group: str = ''
         self._message_count: int = 0
 
+        # --- Abrupt-close safety ---
+        # atexit hook runs on normal process exit + sys.exit + unhandled
+        # exceptions. Doesn't fire on SIGKILL / taskkill /F — that's covered
+        # by per-chunk auto-flush in _close_current_conversation.
+        self._atexit_registered = False
+
+        # --- Pronoun lock (session-scoped) ---
+        # Maps speaker name → first-person pronoun observed in their first
+        # translated line. Injected into context so Gemini keeps the same
+        # pronoun for that speaker across all subsequent messages in the
+        # session, even past conversation chunk boundaries.
+        self._pronoun_lock: Dict[str, str] = {}
+
         # สร้าง directory เฉพาะเมื่อ disk_logging เปิด
         if self.disk_logging:
             os.makedirs(self.log_dir, exist_ok=True)
@@ -86,6 +114,11 @@ class ConversationLogger:
         if enabled:
             os.makedirs(self.log_dir, exist_ok=True)
         self.logger.info(f"[ConvLog] Disk logging {'ENABLED' if enabled else 'DISABLED'}")
+
+    def get_log_dir(self) -> str:
+        """Absolute path to the disk-logging directory.
+        UI uses this to show the path + open the folder."""
+        return self.log_dir
 
     def start_session(self):
         """เริ่ม session ใหม่ — เรียกเมื่อกดปุ่ม Start Translation"""
@@ -107,9 +140,32 @@ class ConversationLogger:
         self._last_message_time = 0
         self._last_chattype_group = ''
         self._message_count = 0
+        self._pronoun_lock = {}
 
         mode = "disk+memory" if self.disk_logging else "memory-only"
         self.logger.info(f"[ConvLog] Session started: {self.session_id} ({mode})")
+
+        # Register atexit hook ONCE per logger lifetime — fires on normal
+        # process exit (sys.exit, return from main, unhandled exception)
+        # so users who close MBB without pressing Stop still get a save.
+        # Per-chunk auto-flush covers the SIGKILL case for older chunks.
+        if not self._atexit_registered:
+            atexit.register(self._atexit_handler)
+            self._atexit_registered = True
+
+    def _atexit_handler(self):
+        """Last-resort save on abrupt process exit. Guarded — safe to call
+        when session already ended (no-op)."""
+        try:
+            if self.session_id and self.disk_logging:
+                self.logger.info("[ConvLog] atexit triggered — flushing session")
+                self.end_session()
+        except Exception as e:
+            # Never raise from atexit
+            try:
+                self.logger.error(f"[ConvLog] atexit handler error: {e}")
+            except Exception:
+                pass
 
     def end_session(self):
         """จบ session — เรียกเมื่อกดปุ่ม Stop Translation"""
@@ -205,7 +261,7 @@ class ConversationLogger:
 
     def update_translation(self, original_message: str, translated_text: str):
         """
-        เติมคำแปลให้ข้อความที่บันทึกไว้แล้ว
+        เติมคำแปลให้ข้อความที่บันทึกไว้แล้ว + lock สรรพนามครั้งแรกของแต่ละ speaker
 
         เรียกหลังจาก translate() เสร็จ — match ด้วย original message text
         """
@@ -216,7 +272,49 @@ class ConversationLogger:
         for msg in reversed(self._current_conv['messages']):
             if msg['message'] == original_message and 'translated' not in msg:
                 msg['translated'] = translated_text
+
+                # Lock first-time pronoun for this speaker (session-scoped).
+                # Once locked, all later translations for this speaker get
+                # the pronoun memory injected → consistent voice.
+                speaker = (msg.get('speaker') or '').strip()
+                if (speaker and speaker != '???'
+                        and speaker not in self._pronoun_lock):
+                    pron = self._detect_first_person_pronoun(translated_text)
+                    if pron:
+                        self._pronoun_lock[speaker] = pron
+                        self.logger.info(
+                            f"[ConvLog] Pronoun lock: {speaker} -> {pron}"
+                        )
                 return
+
+    @staticmethod
+    def _detect_first_person_pronoun(text: str) -> Optional[str]:
+        """Scan translated text for the speaker's first-person pronoun.
+
+        Returns the first match from _PRONOUN_PRIORITY (longest/most specific
+        first), or None if none found. Heuristic — works because Thai dialogue
+        typically uses one self-referential pronoun per utterance, and the
+        priority order resolves overlaps (ข้าพเจ้า before ข้า, etc.)."""
+        if not text:
+            return None
+        # Strip the leading "Speaker: " prefix if present so we don't match
+        # the speaker's NAME accidentally.
+        if ':' in text:
+            text = text.split(':', 1)[1]
+        for p in _PRONOUN_PRIORITY:
+            if p in text:
+                return p
+        return None
+
+    def _format_pronoun_memory(self) -> str:
+        """Format locked pronouns as a context hint block for Gemini. Empty
+        string when no locks yet (early in session)."""
+        if not self._pronoun_lock:
+            return ""
+        lines = [f"- {speaker}: {pron}"
+                 for speaker, pron in self._pronoun_lock.items()]
+        return ("[Speakers' established pronouns — MUST keep consistent]\n"
+                + "\n".join(lines))
 
     def log_system_event(self, event_type: str, details: str = ''):
         """
@@ -299,7 +397,9 @@ class ConversationLogger:
         }
 
     def _close_current_conversation(self):
-        """ปิด conversation ปัจจุบันและเพิ่มเข้า list"""
+        """ปิด conversation ปัจจุบันและเพิ่มเข้า list.
+        Auto-flushes to disk if disk_logging is on — so abrupt MBB close
+        only loses the in-flight chunk, not earlier closed chunks."""
         if self._current_conv is None:
             return
         if self._current_conv['message_count'] == 0:
@@ -314,12 +414,24 @@ class ConversationLogger:
         self.conversations.append(self._current_conv)
         self._current_conv = None
 
+        # Auto-flush each closed chunk — protects against abrupt close (crash,
+        # taskkill /F, power loss). Cheap because chunks close every ~1-2 min
+        # at typical FFXIV dialogue pace.
+        if self.disk_logging:
+            try:
+                self._save_to_file()
+            except Exception as e:
+                self.logger.error(f"[ConvLog] Auto-flush error: {e}")
+
     # ========================================
     # File I/O
     # ========================================
 
     def _save_to_file(self):
-        """เขียน session ลงไฟล์ JSON"""
+        """เขียน session ลงไฟล์ JSON แบบ atomic (temp + replace).
+        Atomic write prevents partial/corrupt files if the process dies
+        mid-write — readers always see either the previous valid file
+        or the new complete one, never a half-written file."""
         if not self.session_file or not self.conversations:
             return
 
@@ -339,12 +451,22 @@ class ConversationLogger:
             'conversations': self.conversations,
         }
 
+        tmp_path = self.session_file + ".tmp"
         try:
-            with open(self.session_file, 'w', encoding='utf-8') as f:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(session_data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())  # force OS to flush to disk
+            os.replace(tmp_path, self.session_file)  # atomic on Windows + POSIX
             self.logger.info(f"[ConvLog] Saved to {self.session_file}")
         except Exception as e:
             self.logger.error(f"[ConvLog] Save error: {e}")
+            # Best-effort cleanup of orphaned temp file
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
 
     def save_incremental(self):
         """บันทึกทันทีระหว่างเล่น — เรียกได้ตอนไหนก็ได้ (เฉพาะเมื่อ disk_logging เปิด)"""
@@ -446,7 +568,13 @@ class ConversationLogger:
             else:
                 lines.append(text)
 
-        return "\n".join(lines)
+        # Append pronoun memory block (session-scoped, persists across
+        # conversation chunks unlike the recent-dialogue window).
+        recent_block = "\n".join(lines)
+        pronoun_block = self._format_pronoun_memory()
+        if pronoun_block:
+            return f"{recent_block}\n\n{pronoun_block}"
+        return recent_block
 
     def list_session_files(self) -> List[str]:
         """รายชื่อ session files ทั้งหมด"""

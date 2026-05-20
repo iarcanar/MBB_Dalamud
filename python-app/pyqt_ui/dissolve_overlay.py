@@ -84,7 +84,15 @@ MIN_H = 90
 
 FADE_PCT = 0.05                  # gradient fade zone (5% per side)
 BG_COLOR_RGB = (20, 22, 28)      # Carbon-adjacent dark slate
-BG_ALPHA = 230                   # 230/255 ≈ 90% opaque inside the plateau
+BG_ALPHA = 252                   # 252/255 ≈ 99% opaque (v1.8.10 — was 230 ≈ 90%,
+                                 # original game text was bleeding through during
+                                 # FFXIV cutscenes / battle banners)
+
+# Cutscene width is computed dynamically at show time as a fraction of the
+# primary screen width (per user request: cutscene text should span most of
+# the screen to handle long cinematic prose). Overrides any saved width
+# (`tui_geometries["cutscene"]["w"]`) and re-centers position x.
+CUTSCENE_WIDTH_FRACTION = 0.90
 
 COLOR_BATTLE = "#FF6B00"         # vibrant orange — matches TUI v4
 COLOR_CUTSCENE = "#40E0D0"       # turquoise — v1.8.8 (was gold #FFD700)
@@ -193,6 +201,11 @@ class DissolveOverlay(QWidget):
         self._drag_offset = QPoint()
         # Hover state (controls grip + close button visibility)
         self._cursor_inside = False
+        # Save-arming flag — saves are SUPPRESSED until the first show_for_mode
+        # call. Without this, Qt's HWND creation (forced via winId() at the end
+        # of __init__) fires a spurious moveEvent at the OS-default position
+        # which would queue a save and overwrite the user's saved position.
+        self._save_armed = False
 
         # Window flags — frameless, always-on-top, no taskbar entry
         self.setWindowFlags(
@@ -206,10 +219,10 @@ class DissolveOverlay(QWidget):
 
         # Set up font (prefer Anuphan, register if needed)
         self._font_family = self._load_font_family()
-        self._font_body = QFont(self._font_family, DEFAULT_FONT_PT)
-        self._font_body.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
-        self._font_speaker = QFont(self._font_family, SPEAKER_FONT_PT, QFont.Weight.Bold)
-        self._font_speaker.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        # Body font size tracks the TUI dialog's font (settings["font_size"]) so
+        # battle/cutscene text matches the dialog mode that user just tuned.
+        # Speaker label stays smaller, scaled relative to body.
+        self._apply_user_font_size()
 
         # Initial color (battle by default — set_mode will pick the right one)
         self._text_color = QColor(COLOR_BATTLE)
@@ -272,9 +285,38 @@ class DissolveOverlay(QWidget):
         self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._fade_anim.finished.connect(self._on_fade_finished)
 
+        # Force native window handle creation NOW (at end of __init__ so all
+        # timers/handlers exist before Qt fires the move/resize events that
+        # follow HWND creation). Without this, the very first show_for_mode
+        # races against HWND creation — setGeometry queues, show() creates
+        # HWND at default (0,0), and the user sees the overlay flash at
+        # top-left before the queued geometry catches up one frame later.
+        # winId() forces HWND creation without showing, so the first real
+        # show() applies setGeometry cleanly.
+        self.winId()
+
     # ──────────────────────────────────────────────────────────────
     # Font loading
     # ──────────────────────────────────────────────────────────────
+    def _apply_user_font_size(self) -> None:
+        """Read settings['font_size'] (set by TUI dialog FontPanel) and rebuild
+        the body + speaker QFont objects to match. Called from __init__ and
+        from show_for_mode so font changes pick up on next mode show.
+
+        Body size = user's TUI font size.
+        Speaker size = body - 8 (keeps the visual hierarchy from the demo).
+        """
+        try:
+            raw = self._settings.get("font_size", DEFAULT_FONT_PT)
+            body_pt = max(10, int(raw))
+        except Exception:
+            body_pt = DEFAULT_FONT_PT
+        speaker_pt = max(8, body_pt - 8)
+        self._font_body = QFont(self._font_family, body_pt)
+        self._font_body.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        self._font_speaker = QFont(self._font_family, speaker_pt, QFont.Weight.Bold)
+        self._font_speaker.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+
     def _load_font_family(self) -> str:
         """Register Anuphan if not already loaded; fall back to system default."""
         try:
@@ -347,6 +389,8 @@ class DissolveOverlay(QWidget):
             log.warning(f"show_for_mode unknown mode: {mode!r}")
             return
         self.set_mode(mode)
+        # Re-read TUI dialog font size — picks up FontPanel changes since last show
+        self._apply_user_font_size()
 
         # Load size
         try:
@@ -384,6 +428,21 @@ class DissolveOverlay(QWidget):
             else:
                 x, y = 100, 80
 
+        # ── Cutscene: FORCE width = 90% of primary screen + recenter x ──
+        # Overrides both saved geometry and DEFAULT_W_CUTSCENE. Saved height
+        # is preserved (user-tunable), but width must hit 90% so long
+        # cinematic prose isn't truncated. Position x is recomputed to keep
+        # the overlay centered with the new (wider) width.
+        if mode == "cutscene":
+            try:
+                _screen = QApplication.primaryScreen()
+                if _screen is not None:
+                    _geo = _screen.availableGeometry()
+                    w = int(_geo.width() * CUTSCENE_WIDTH_FRACTION)
+                    x = _geo.x() + (_geo.width() - w) // 2
+            except Exception as e:
+                log.debug(f"cutscene 90%-width recalc failed: {e}")
+
         # Clamp to primary screen so a stale saved position can't push the
         # window off-screen (e.g. user unplugged a monitor)
         x_clamped, y_clamped, w_clamped, h_clamped = self._clamp_to_screen(x, y, w, h)
@@ -398,8 +457,27 @@ class DissolveOverlay(QWidget):
         self.setGeometry(x_clamped, y_clamped, w_clamped, h_clamped)
         self._reposition_chrome()
         self.show()
+        # Defensive: re-apply position AFTER show() in case Qt deferred the
+        # pre-show setGeometry until the platform window existed. Without this,
+        # the first show in a session can land at (0,0) even though winId() in
+        # __init__ pre-creates the HWND. Cheap on subsequent shows (no-op move).
+        if (self.x(), self.y()) != (x_clamped, y_clamped):
+            self.move(x_clamped, y_clamped)
         self.raise_()
+        # Arm save NOW — from this point real user move/resize events should
+        # persist to settings. Cancel any pending save that may have been
+        # queued by Qt internals during show() (defensive — _save_armed should
+        # have been False the whole time, but no harm flushing).
+        self._save_armed = True
+        if self._save_timer.isActive():
+            self._save_timer.stop()
         # We deliberately don't activateWindow() — game window must keep focus
+        log.info(
+            f"[DISSOLVE-DBG] show_for_mode({mode}) AFTER show: "
+            f"actual_pos=({self.x()},{self.y()}) "
+            f"expected=({x_clamped},{y_clamped}) "
+            f"save_armed=True"
+        )
 
     def hide_overlay(self) -> None:
         """Hide the overlay and flush any pending geometry save."""
@@ -512,7 +590,14 @@ class DissolveOverlay(QWidget):
 
     def _schedule_save_geometry(self) -> None:
         """Restart debounce timer — disk save fires after the user stops
-        moving/resizing for SAVE_DEBOUNCE_MS."""
+        moving/resizing for SAVE_DEBOUNCE_MS.
+
+        Suppressed when `_save_armed = False` — that's the case during
+        __init__ (so winId()'s spurious move events don't overwrite the
+        user's saved position) and after `cleanup()`.
+        """
+        if not self._save_armed:
+            return
         self._save_timer.start()
 
     def _save_geometry_now(self) -> None:

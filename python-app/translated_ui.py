@@ -648,9 +648,22 @@ class Translated_UI(FontObserver):
         self.default_width = self.settings.get('width')
         self.default_height = self.settings.get('height')
 
-        self.root.geometry(
-            f"{self.default_width}x{self.default_height}"
-        )
+        # Initial position: prefer saved dialog position; otherwise use the
+        # new % default (v1.8.14+): x=center, y=70.7% of screen height.
+        # Setting position here avoids the OS-default flash on first launch.
+        try:
+            saved = self.settings.get('tui_positions', {}).get('dialog') or {}
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            init_x = saved.get('x') if isinstance(saved.get('x'), int) else (sw - self.default_width) // 2
+            init_y = saved.get('y') if isinstance(saved.get('y'), int) else round(sh * 0.707)
+            self.root.geometry(
+                f"{self.default_width}x{self.default_height}+{init_x}+{init_y}"
+            )
+        except Exception:
+            self.root.geometry(
+                f"{self.default_width}x{self.default_height}"
+            )
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.configure(bd=0, highlightthickness=0)  # กำหนดกรอบเป็น 0
@@ -984,13 +997,10 @@ class Translated_UI(FontObserver):
 
             elif chat_type == 70:  # Choice mode (0x0046)
                 # ========== CHOICE MODE ==========
-                # Same size as dialog but positioned ABOVE current dialog position
-                # so it doesn't block the in-game choice buttons
-
-                # Get current dialog position as reference
-                current_y = self.root.winfo_y()
-                current_x = self.root.winfo_x()
-                current_height = self.root.winfo_height()
+                # v1.8.14+: absolute %-of-screen position (60.1% from top),
+                # NOT relative to current dialog. Chosen 2026-05-20 from
+                # user's drag-prototype testing — sits above the FFXIV native
+                # choice prompt area on 16:9 screens.
 
                 # Calculate height for choice display (needs more lines)
                 font_size = self.settings.get("font_size", 24) + 2
@@ -998,19 +1008,23 @@ class Translated_UI(FontObserver):
                 # Header + up to 4 choices + padding
                 choice_height = int(line_height * 5 + 60)
 
-                # Position above the current dialog position
-                choice_y = current_y - choice_height - 10  # 10px gap above dialog
-                if choice_y < 0:
-                    choice_y = 10  # Don't go off screen
+                # Absolute default position: x=center, y=60.1% of screen height
+                choice_x = (screen_width - self.default_width) // 2
+                choice_y = round(screen_height * 0.601)
+
+                # Clamp to screen so multi-monitor edge cases don't push off-screen
+                choice_x, choice_y = self._clamp_to_screen(
+                    choice_x, choice_y, self.default_width, choice_height
+                )
 
                 self.root.resizable(True, True)
-                self.root.geometry(f"{self.default_width}x{choice_height}+{current_x}+{choice_y}")
+                self.root.geometry(f"{self.default_width}x{choice_height}+{choice_x}+{choice_y}")
                 self.root.resizable(False, False)
 
                 self.choice_mode_active = True
                 self.cutscene_mode_active = False
                 self.battle_mode_active = False
-                logging.info(f"🎯 Switched to CHOICE mode: {self.default_width}x{choice_height} at ({current_x}, {choice_y})")
+                logging.info(f"🎯 Switched to CHOICE mode: {self.default_width}x{choice_height} at ({choice_x}, {choice_y})")
 
             else:  # Dialogue mode (61) or default
                 # ========== RESTORE DEFAULT SETTINGS ==========
@@ -1033,10 +1047,11 @@ class Translated_UI(FontObserver):
                     restore_y = saved_pos["y"]
                     logging.info(f"💬 Using saved dialog position: ({restore_x}, {restore_y})")
                 else:
-                    # Default: bottom of screen, centered
+                    # Default (v1.8.14+): x=center, y=70.7% of screen height.
+                    # Chosen 2026-05-20 from user's drag-prototype testing — places
+                    # dialog above the FFXIV native dialog box on 16:9 screens.
                     restore_x = (screen_width - dialog_w) // 2
-                    bottom_margin = int(screen_height * 0.05)  # 5% margin from bottom
-                    restore_y = screen_height - dialog_h - bottom_margin
+                    restore_y = round(screen_height * 0.707)
                     logging.info(f"💬 Using default dialog position: ({restore_x}, {restore_y})")
 
                 # Clamp position so user-changed monitor layouts don't push window off-screen

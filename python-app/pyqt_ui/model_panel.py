@@ -18,11 +18,9 @@ WIDTH = 360
 HEIGHT = 440
 
 AVAILABLE_MODELS = [
-    "gemini-3.1-flash-lite-preview",
-    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-2.0-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
 ]
 
 PARAM_HINTS = {
@@ -221,7 +219,7 @@ class ModelPanel(QWidget):
         params = self.settings.get_api_parameters()
 
         # Model
-        model = params.get("model", "gemini-3.1-flash-lite-preview")
+        model = params.get("model", "gemini-3.1-flash-lite")
         idx = self._model_combo.findText(model)
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
@@ -278,7 +276,7 @@ class ModelPanel(QWidget):
             self._show_status(str(e), error=True)
 
     def _reset_defaults(self):
-        idx = self._model_combo.findText("gemini-3.1-flash-lite-preview")
+        idx = self._model_combo.findText("gemini-3.1-flash-lite")
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
         self._set_slider("max_tokens", 500)
