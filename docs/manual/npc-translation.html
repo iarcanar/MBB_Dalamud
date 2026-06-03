@@ -1,0 +1,730 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPC + Translation — MBB Manual</title>
+    <link rel="icon" type="image/png" href="../web_assets/mbb_icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/manual.css">
+</head>
+<body>
+
+<div class="bg-particles" aria-hidden="true"></div>
+
+<div class="manual-shell">
+
+    <header class="manual-header">
+        <a href="index.html" class="brand">
+            <span class="dot"></span>
+            <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
+            <span class="tag" style="margin-left:8px">v1.8.18</span>
+        </a>
+        <button class="hamburger" aria-label="Toggle nav">≡</button>
+        <nav>
+            <a href="../index.html">Landing</a>
+            <a href="index.html">Overview</a>
+            <a href="ui.html">UI Systems</a>
+            <a href="npc-translation.html" class="active">NPC + Translation</a>
+            <a href="styling.html">Theme + Settings</a>
+            <a href="reference.html">Reference</a>
+            <a href="prototype.html">[Proto]</a>
+            <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
+        </nav>
+    </header>
+
+    <div class="sync-banner">
+        <span class="sync-dot"></span>
+        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+    </div>
+
+    <aside class="manual-sidebar">
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Overview</div>
+            <ul><li><a href="index.html"><span class="lead">▸</span>Project Reference</a></li></ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>UI Systems</div>
+            <ul>
+                <li><a href="ui.html#main-window"><span class="lead">▸</span>Main Window</a></li>
+                <li><a href="ui.html#mini-ui"><span class="lead">▸</span>Mini UI</a></li>
+                <li><a href="ui.html#tui"><span class="lead">▸</span>TUI (Dialog/Choice)</a></li>
+                <li><a href="ui.html#dissolve"><span class="lead">▸</span>DissolveOverlay</a></li>
+                <li><a href="ui.html#logs"><span class="lead">▸</span>Translated Logs</a></li>
+                <li><a href="ui.html#glass"><span class="lead">▸</span>Glass Mode</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Data + Translation</div>
+            <ul>
+                <li><a href="npc-translation.html#npc-manager" class="active"><span class="lead">▸</span>NPC Manager</a></li>
+                <li><a href="npc-translation.html#cloud-sync"><span class="lead">▸</span>Cloud Sync</a></li>
+                <li><a href="npc-translation.html#translation-engine"><span class="lead">▸</span>Translation Engine</a></li>
+                <li><a href="npc-translation.html#wide-context"><span class="lead">▸</span>Wide-Context</a></li>
+                <li><a href="npc-translation.html#zws"><span class="lead">▸</span>Zero-Width Safety</a></li>
+                <li><a href="npc-translation.html#database"><span class="lead">▸</span>NPC Database</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Styling + Config</div>
+            <ul>
+                <li><a href="styling.html#theme"><span class="lead">▸</span>Theme System</a></li>
+                <li><a href="styling.html#font"><span class="lead">▸</span>Font System</a></li>
+                <li><a href="styling.html#settings"><span class="lead">▸</span>Settings</a></li>
+                <li><a href="styling.html#splash"><span class="lead">▸</span>Splash + Updater</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Reference</div>
+            <ul>
+                <li><a href="reference.html#gemini"><span class="lead">▸</span>Gemini Models</a></li>
+                <li><a href="reference.html#test-messages"><span class="lead">▸</span>Test Messages</a></li>
+                <li><a href="reference.html#gotchas"><span class="lead">▸</span>Hard-Won Rules</a></li>
+                <li><a href="reference.html#plugin"><span class="lead">▸</span>Plugin Manifest</a></li>
+                <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <main class="manual-content">
+
+        <div class="breadcrumb">
+            <a href="../index.html">MBB</a>
+            <span class="sep">/</span>
+            <a href="index.html">Manual</a>
+            <span class="sep">/</span>
+            <span class="here">NPC + Translation</span>
+        </div>
+
+        <div class="page-eyebrow">Data &amp; Translation</div>
+        <h1 class="page-title">NPC + Translation</h1>
+        <p class="page-subtitle">NPC Manager (3 tabs + Polaroid + Cloud Sync), Translation Engine (Gemini prompt v2, 3-layer name preservation), Wide-Context system, NPC Database state, zero-width safety.</p>
+
+        <!-- ──────────────── NPC Manager ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="npc-manager">NPC Manager</h2>
+            <p>PyQt6 panel ใน <code>pyqt_ui/npc_manager_panel.py</code>. แก้ไข <code>npc.json</code> ขณะแอปกำลังแปล — propagate อัตโนมัติผ่าน <code>on_save_callback</code>.</p>
+
+            <div class="diagram diagram-screenshot">
+                <div class="screenshot-badge">📸 Real UI</div>
+                <img src="../screenshots/NPC_manager.png" alt="NPC Manager — real screenshot" loading="lazy">
+                <div class="img-meta">
+                    <span class="pulse-dot"></span>
+                    <span>screenshots/NPC_manager.png · 3 tabs (MAIN/NPCS/LORE) + avatar + cloud sync</span>
+                </div>
+            </div>
+
+            <h3 class="subsection" id="tabs">3 Tabs: MAIN / NPCS / LORE</h3>
+            <ul>
+                <li><strong>Personality inline ใน MAIN</strong> — <code>character_roles[firstName]</code> editable เป็น <code>QTextEdit</code> ระหว่าง Name และ Gender</li>
+                <li><strong>WORD FIX tab hidden</strong> — <code>setVisible(False)</code>. word_fixes deprecated (ดู <a href="#database">Database</a>)</li>
+                <li><strong>ROLES tab merged into MAIN</strong> (v1.7.9)</li>
+            </ul>
+
+            <h3 class="subsection" id="polaroid">Polaroid Avatar View (v1.8.2)</h3>
+            <p>คลิก avatar → <code>_PolaroidCard</code> overlay (~400×510px) ใน details panel. แสดงรูปเต็ม (top-cropped) + firstName ในฟอนต์ Caveat handwriting.</p>
+
+            <p><strong>Hover-revealed:</strong> "📷 เปลี่ยนภาพ" pill (top-right) + "✕" delete (bottom-right).</p>
+
+            <h4 class="minor">UX Flows</h4>
+            <div class="card-grid">
+                <div class="card compact">
+                    <h3>🟢 Empty avatar</h3>
+                    <p style="font-size:13px; color:var(--text-dim)">Click ไปที่ file picker เลย — skip empty Polaroid</p>
+                </div>
+                <div class="card compact">
+                    <h3>📸 With image</h3>
+                    <p style="font-size:13px; color:var(--text-dim)">Click → Polaroid เปิด → "เปลี่ยนภาพ" → file picker → upload เสร็จ Polaroid auto-reopens</p>
+                </div>
+                <div class="card compact">
+                    <h3>✕ Dismiss</h3>
+                    <p style="font-size:13px; color:var(--text-dim)">Click outside · Resize window · ESC → ปิดทันที</p>
+                </div>
+            </div>
+
+            <h4 class="minor">Critical Polaroid Patterns (กว่าจะลงตัวต้องลองหลายรอบ)</h4>
+
+            <div class="callout warning">
+                <span class="lead">1. Shadow ghost outline</span>
+                <p style="margin-top:6px">(<a href="https://bugreports.qt.io/browse/QTBUG-56081" target="_blank">QTBUG-56081</a>) Action buttons ต้องเป็น <strong>siblings ของ <code>_PolaroidCard</code></strong> (children ของ overlay) <em>ไม่ใช่</em> children ของ card.</p>
+                <p style="margin-top:6px"><code>QGraphicsDropShadowEffect</code> rasterizes ALL descendants รวมกัน — children-of-shadow ติด bounding rect ใน shadow pass ก่อน QSS border-radius clip → leak square ghosts.</p>
+            </div>
+
+            <div class="callout warning">
+                <span class="lead">2. Custom font override</span>
+                <p style="margin-top:6px">Panel-level QSS subtree cascade override <code>setFont()</code>. Bulletproof workaround: pre-render ชื่อเป็น <code>QPixmap</code> ผ่าน <code>QPainter.drawText</code> (ใช้ <code>QFont</code> ตรง) แล้ว <code>label.setPixmap(pm)</code>. ดู <code>_render_name_pixmap</code>.</p>
+                <p style="margin-top:6px">Polaroid call <code>QFontDatabase.addApplicationFont()</code> ตัวเอง (idempotent) เพราะ <code>QtFontManager</code> lazy.</p>
+            </div>
+
+            <div class="callout warning">
+                <span class="lead">3. Hover flicker</span>
+                <p style="margin-top:6px">ใช้ timer-based geometry polling (60ms) <em>ไม่ใช่ Enter/Leave events</em>. Cursor ผ่าน sibling button → Leave on card → hide buttons → cursor on card → Enter → show buttons → loop. Geometry poll หลีกเลี่ยง loop นี้.</p>
+            </div>
+
+            <div class="callout warning">
+                <span class="lead">4. Resize / outside-click dismiss</span>
+                <p style="margin-top:6px">App-level <code>eventFilter</code> install เฉพาะตอน overlay visible. ฟัง top-level <code>Resize</code> + <code>MouseButtonPress</code> outside overlay rect.</p>
+            </div>
+
+            <h3 class="subsection" id="hover-menu">Avatar Hover Menu (v1.8.7)</h3>
+            <p>Hover-revealed action menu เมื่อมีตัวละครถูก select:</p>
+            <ul>
+                <li><strong>เลือกภาพจากไฟล์</strong> (icon <code>images.png</code>) — file picker</li>
+                <li><strong>ถ่ายภาพจอ (Screenshot)</strong> (icon <code>camera.png</code>) — fullscreen capture + crop</li>
+            </ul>
+
+            <div class="callout rule">
+                <span class="lead">POLLING-based visibility (NOT event-driven)</span>
+                QTimer ใน <code>_MainTab</code> เช็ค cursor position ทุก 80ms. Show เมื่อ cursor ใน avatar OR menu rects; close หลัง 180ms grace.
+                <p style="margin-top:6px">Avatar <code>set_force_hover(bool)</code> เก็บ accent border คงที่ตอน menu เปิด (Qt fires spurious leaveEvent เมื่อ popup grab mouse focus).</p>
+            </div>
+
+            <h3 class="subsection" id="screenshot-tool">Screenshot Tool</h3>
+            <p><code>pyqt_ui/screenshot_tool.py</code> — สำหรับ avatar capture เท่านั้น (ไม่ใช่ general screen-area detection — legacy นั้นถูก purge ไปแล้ว).</p>
+
+            <h4 class="minor">Flow</h4>
+            <ol style="line-height:1.85; color:var(--text-dim)">
+                <li>Hide NPC Manager → 120ms wait → <code>QScreen.grabWindow(0)</code> on screen panel currently on (<code>QGuiApplication.screenAt(panel center)</code>)</li>
+                <li><code>ScreenshotCropOverlay</code>: 60% black mask + punched-out crop rect (<code>QPainterPath</code> subtract) + 2px cyan <code>#00d4ff</code> border + 8 handles</li>
+                <li>Click-drag select, min 32×32, HiDPI-aware (<code>devicePixelRatio</code> scaling)</li>
+                <li>ENTER or double-click → emit <code>crop_confirmed(QPixmap)</code> → save temp PNG → <code>dm.set_main_character_image()</code> → 512 WebP → restore panel + reopen Polaroid</li>
+                <li>ESC → cancel → restore panel only</li>
+            </ol>
+
+            <div class="callout info">
+                <span class="lead">Defensive guards</span>
+                <code>WA_DeleteOnClose</code> ปล่อย ~10MB pixmap ทันที. try/except รอบ overlay construction (panel restore ตอน fail).
+            </div>
+
+            <h3 class="subsection" id="avatar-storage">Avatar Storage — 512 WebP</h3>
+            <p><code>npc_data_manager.set_main_character_image()</code> default <code>size=512</code>, format <code>WebP</code> quality=88, alpha preserved.</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Property</th><th>Old</th><th>New (v1.8.2+)</th></tr></thead>
+                    <tbody>
+                        <tr><td>Resolution</td><td>128 PNG</td><td><strong>512 WebP</strong></td></tr>
+                        <tr><td>File size (y_shtola)</td><td>503 KB</td><td>56 KB <span class="tag success">~89% smaller</span></td></tr>
+                        <tr><td>Visual quality</td><td>blurry at 360 logical px</td><td>indistinguishable</td></tr>
+                        <tr><td>Extension</td><td><code>.png</code></td><td><code>.webp</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <ul>
+                <li><strong>Re-upload</strong> ลบ legacy <code>.png</code> เพื่อไม่ให้มี orphan</li>
+                <li><strong>Polaroid no-upscale guard:</strong> <code>target_logical = min(IMAGE_AREA, source_min_dim)</code> — รูป 128px เก่าแสดง letterboxed, ไม่ blurry-upscale ไป 360</li>
+            </ul>
+
+            <h3 class="subsection" id="header">Header (live status)</h3>
+            <p>Live counts + file mtime: <code>main 218 · npcs 65 · lore 139 · อัปเดต X นาทีที่แล้ว</code>. Refreshed on init/autosave/reload + 60s QTimer.</p>
+
+            <p><code>_format_relative_time(ts)</code>:</p>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Condition</th><th>Output</th></tr></thead>
+                    <tbody>
+                        <tr><td>&lt;60s</td><td>"เมื่อสักครู่"</td></tr>
+                        <tr><td>&lt;60m</td><td>"X นาทีที่แล้ว"</td></tr>
+                        <tr><td>&lt;24h</td><td>"X ชม.ที่แล้ว"</td></tr>
+                        <tr><td>&lt;7d</td><td>"X วันที่แล้ว"</td></tr>
+                        <tr><td>else</td><td>absolute date</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>Manual <strong>↻ reload</strong> button — re-read npc.json + propagate via <code>on_save_callback</code> (translator + text_corrector + caches).</p>
+            <p><strong>Toast:</strong> <code>"✓ บันทึก · ใช้ในการแปลทันที"</code> เมื่อ MBB attached.</p>
+
+            <h3 class="subsection" id="pin">Pin Button</h3>
+            <p>Default <code>_is_pinned = True</code> (matches <code>WindowStaysOnTopHint</code> at init).</p>
+            <p>Hybrid Qt + Win32 <code>_apply_topmost</code>:</p>
+            <ul>
+                <li><code>setWindowFlag</code> keeps Qt's internal model in sync</li>
+                <li>Win32 <code>SetWindowPos(HWND_TOPMOST/NOTOPMOST)</code> enforces z-order without unmap+remap flicker</li>
+            </ul>
+        </section>
+
+        <!-- ──────────────── Cloud Sync ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="cloud-sync">Cloud Sync (v1.8.9, Phase A)</h2>
+            <p>Cherry-pick merge UX จาก cloud-hosted npc.json — แชร์ database update ระหว่างผู้ใช้</p>
+
+            <div class="diagram">
+                <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" aria-label="Cloud Sync flow">
+                    <defs>
+                        <linearGradient id="cs-pub" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(16,185,129,0.25)"/>
+                            <stop offset="100%" stop-color="rgba(16,185,129,0.05)"/>
+                        </linearGradient>
+                        <linearGradient id="cs-mbb" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(99,102,241,0.25)"/>
+                            <stop offset="100%" stop-color="rgba(99,102,241,0.05)"/>
+                        </linearGradient>
+                        <marker id="cs-arrow" markerWidth="8" markerHeight="8" refX="7" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#a5b4fc"/></marker>
+                    </defs>
+
+                    <!-- Local -->
+                    <rect x="20" y="60" width="140" height="100" rx="8" fill="url(#cs-mbb)" stroke="#6366f1" stroke-width="1.5"/>
+                    <text x="90" y="88" text-anchor="middle" fill="#e0e7ff" font-size="13" font-weight="600" font-family="Kanit">Local</text>
+                    <text x="90" y="108" text-anchor="middle" fill="#a5b4fc" font-size="11">python-app/</text>
+                    <text x="90" y="124" text-anchor="middle" fill="#a5b4fc" font-size="11">npc.json</text>
+                    <text x="90" y="146" text-anchor="middle" fill="#94a3b8" font-size="10">(maintainer)</text>
+
+                    <!-- Publish script -->
+                    <rect x="195" y="60" width="160" height="100" rx="8" fill="url(#cs-mbb)" stroke="#8b5cf6" stroke-width="1.5"/>
+                    <text x="275" y="85" text-anchor="middle" fill="#e0e7ff" font-size="13" font-weight="600" font-family="Kanit">Publish</text>
+                    <text x="275" y="103" text-anchor="middle" fill="#c4b5fd" font-size="11">scripts/</text>
+                    <text x="275" y="118" text-anchor="middle" fill="#c4b5fd" font-size="11">build_npc_release.py</text>
+                    <text x="275" y="138" text-anchor="middle" fill="#94a3b8" font-size="10">2-commit flow</text>
+                    <text x="275" y="152" text-anchor="middle" fill="#94a3b8" font-size="10">+ sha256 verify</text>
+
+                    <!-- GitHub -->
+                    <rect x="390" y="60" width="160" height="100" rx="8" fill="url(#cs-pub)" stroke="#10b981" stroke-width="1.5"/>
+                    <text x="470" y="85" text-anchor="middle" fill="#a7f3d0" font-size="13" font-weight="600" font-family="Kanit">GitHub</text>
+                    <text x="470" y="103" text-anchor="middle" fill="#86efac" font-size="11">iarcanar/</text>
+                    <text x="470" y="118" text-anchor="middle" fill="#86efac" font-size="11">MBB_NPCData</text>
+                    <text x="470" y="138" text-anchor="middle" fill="#94a3b8" font-size="10">manifest.json</text>
+                    <text x="470" y="152" text-anchor="middle" fill="#94a3b8" font-size="10">+ data/npc.json</text>
+
+                    <!-- MBB user -->
+                    <rect x="585" y="60" width="120" height="100" rx="8" fill="url(#cs-mbb)" stroke="#6366f1" stroke-width="1.5"/>
+                    <text x="645" y="85" text-anchor="middle" fill="#e0e7ff" font-size="13" font-weight="600" font-family="Kanit">User MBB</text>
+                    <text x="645" y="105" text-anchor="middle" fill="#a5b4fc" font-size="11">Cloud Sync</text>
+                    <text x="645" y="120" text-anchor="middle" fill="#a5b4fc" font-size="11">button</text>
+                    <text x="645" y="142" text-anchor="middle" fill="#94a3b8" font-size="10">cherry-pick</text>
+                    <text x="645" y="155" text-anchor="middle" fill="#94a3b8" font-size="10">merge UI</text>
+
+                    <path d="M160,110 L195,110" stroke="#a5b4fc" stroke-width="2" marker-end="url(#cs-arrow)"/>
+                    <path d="M355,110 L390,110" stroke="#a5b4fc" stroke-width="2" marker-end="url(#cs-arrow)"/>
+                    <path d="M550,110 L585,110" stroke="#a5b4fc" stroke-width="2" marker-end="url(#cs-arrow)"/>
+                    <text x="372" y="103" text-anchor="middle" fill="#a5b4fc" font-size="10">2 commits</text>
+                    <text x="567" y="103" text-anchor="middle" fill="#a5b4fc" font-size="10">HTTPS</text>
+                </svg>
+                <div class="caption">Local edit → publish script → GitHub public repo → user clicks Cloud Sync → cherry-pick merge</div>
+            </div>
+
+            <h3 class="subsection" id="cloud-repo">Cloud Repo Structure</h3>
+            <p>Public repo: <a href="https://github.com/iarcanar/MBB_NPCData" target="_blank">iarcanar/MBB_NPCData</a> (plaintext, no encryption — Phase A)</p>
+
+            <div class="file-tree">
+<span class="folder">MBB_NPCData/</span> <span class="note">(public)</span>
+├── <span class="accent">manifest.json</span>     <span class="note"># schema_version, data_version, data_url, sha256, stats, min_mbb_version, release_notes_th</span>
+├── <span class="folder">data/</span>
+│   ├── <span class="file">npc.json</span>      <span class="note"># latest</span>
+│   └── <span class="folder">archive/</span>
+│       └── <span class="file">npc-&lt;version&gt;.json</span>  <span class="note"># per-release snapshots</span>
+└── <span class="file">.gitattributes</span>   <span class="note"># forces data/*.json as binary (sha256 integrity)</span></div>
+
+            <h3 class="subsection" id="publish-workflow">Publish Workflow</h3>
+            <p><code>scripts/build_npc_release.py</code>:</p>
+            <ol style="line-height:1.85; color:var(--text-dim)">
+                <li>Reads local <code>python-app/npc.json</code> → stats + sha256</li>
+                <li>2-commit flow: push data → download จาก raw URL เพื่อได้ authoritative sha256 (CDN LF-normalization workaround) → generate manifest → push</li>
+                <li><code>--dry-run</code>, <code>--notes "..."</code> flags</li>
+            </ol>
+
+            <h3 class="subsection" id="mbb-side">MBB Side — <code>npc_cloud_sync.py</code></h3>
+            <pre><code>check_for_update(local_version) → UpdateCheckResult  # dataclass drives UI state
+download_and_verify(manifest)                        # sha256 mismatch raises
+# Accept-Encoding: identity (bypass auto-decompression that skews sha256)
+# Cache manifest to %LOCALAPPDATA%/MBB_Dalamud/cloud_cache/</code></pre>
+
+            <h3 class="subsection" id="ui-integration">UI Integration</h3>
+            <p>Unified action group — Import data + Cloud Sync buttons แชร์ 1 border-radius + 1px divider.</p>
+
+            <p><strong>Click flow:</strong> check → confirm dialog → download → existing <code>_MergeDialog</code> cherry-pick UI</p>
+
+            <p><strong>Settings persistence:</strong> <code>QSettings("MBB", "NPCManager")</code> — <code>cloud_sync.last_version</code> + <code>last_check_at</code></p>
+
+            <div class="callout danger">
+                <span class="lead">CRITICAL PyQt6 Pattern</span>
+                <p style="margin-top:6px">Cross-thread results marshaled via <code>pyqtSignal</code> (auto-queued connection).</p>
+                <p style="margin-top:6px"><code>QTimer.singleShot(0, ...)</code> from worker thread <strong>silently no-ops</strong> — timer fires on calling thread, ไม่ใช่ UI thread.</p>
+            </div>
+
+            <h3 class="subsection" id="cloud-roadmap">Roadmap</h3>
+            <ul>
+                <li><strong>Phase A.5</strong> — auto-check on startup (deferred — release cadence validates UX ก่อน)</li>
+                <li><strong>Phase B</strong> — encryption + private repo</li>
+                <li><strong>Phase C</strong> — paid tier gate</li>
+            </ul>
+
+            <h3 class="subsection" id="merge-modal">Merge Modal (v1.8.4)</h3>
+            <p><code>_MergeDiff</code> class — additive diff across 4 sections (<code>main_characters</code>, <code>npcs</code>, <code>lore</code>, <code>character_roles</code>). <strong>Never deletes</strong>.</p>
+
+            <ul>
+                <li><strong>Identity:</strong> <code>(firstName, lastName)</code> lower for main; <code>name</code> lower for npcs; key for dicts</li>
+                <li><strong>Skips:</strong> <code>word_fixes</code> + <code>_game_info</code></li>
+            </ul>
+
+            <p><code>_MergeDialog</code> — frameless 760×660, 2px accent border:</p>
+            <ul>
+                <li>Top: 2 file cards (BASE | TARGET) with mtime arrows <code>↑↓=</code></li>
+                <li>Body: scroll diff with checkbox + NEW/CHG badge</li>
+                <li>Footer: Cancel / "Merge ที่เลือก (N)"</li>
+            </ul>
+
+            <h4 class="minor">Audit Guards</h4>
+            <ul>
+                <li><code>MAX_NPC_BYTES = 50MB</code> cap before <code>json.load</code></li>
+                <li><code>dlg.deleteLater()</code> after <code>exec()</code></li>
+                <li><code>_apply_diff</code> isinstance hardening (reset to <code>{}</code>/<code>[]</code> ถ้า type mismatches)</li>
+            </ul>
+        </section>
+
+        <!-- ──────────────── Translation Engine ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="translation-engine">Translation Engine</h2>
+            <p><code>translator_gemini.py</code> — Gemini API + custom prompt system.</p>
+
+            <h3 class="subsection" id="prompt-versions">System Prompt Versions</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Flag</th><th>Method</th><th>Tokens</th><th>State</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>False</code> (default)</td><td><code>get_rpg_general_prompt()</code> v2/v3</td><td>~490 (+rule 10)</td><td><span class="tag success">ACTIVE</span></td></tr>
+                        <tr><td><code>True</code></td><td><code>get_rpg_general_prompt_v1()</code></td><td>~1000</td><td><span class="tag faint">Backup for revert</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>Revert: flip <code>self.use_verbose_prompt = True</code> ใน <code>__init__()</code> (~line 129), restart.</p>
+
+            <h3 class="subsection" id="modern-thai">Modern Thai Default (v1.8.1+)</h3>
+            <p>Target audience: Thai teens/young adults, anime-dub register, Frieren Netflix subs style.</p>
+            <p>Default pronouns: <strong>ฉัน / ผม / คุณ / นาย / เธอ</strong>. Archaic <strong>ข้า / เจ้า / ท่าน</strong> เฉพาะตอน <code>Character's style</code> ระบุ.</p>
+
+            <h4 class="minor">Per-character register (<code>npc.json:character_roles</code>)</h4>
+            <div class="card-grid">
+                <div class="card compact">
+                    <h3 style="color:#86efac">Modern register</h3>
+                    <p style="font-size:12.5px; color:var(--text-dim)">Y'shtola / Alphinaud / Alisaie / Wuk Lamat / G'raha Tia / Estinien / Thancred / Zoraal Ja</p>
+                </div>
+                <div class="card compact">
+                    <h3 style="color:#fcd34d">Semi-archaic / Archaic</h3>
+                    <p style="font-size:12.5px; color:var(--text-dim)">Urianger (deeply archaic — canon trait), Sphene, Emet-Selch (theatrical), Hythlodaeus (warm ancient)</p>
+                </div>
+            </div>
+
+            <h3 class="subsection" id="token-budget">Token Budget</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Component</th><th>v1</th><th>v2 (current)</th></tr></thead>
+                    <tbody>
+                        <tr><td>System prompt</td><td>~1000</td><td>~490</td></tr>
+                        <tr><td>Protected names (in system)</td><td>~400</td><td>0 <span class="tag success">removed</span></td></tr>
+                        <tr><td>Per-request names</td><td>~80</td><td>~80</td></tr>
+                        <tr><td>Lore context</td><td>~150</td><td>~80</td></tr>
+                        <tr><td>Context + style + dialogue</td><td>~500</td><td>~500</td></tr>
+                        <tr><td>Recent dialogue (wide-context)</td><td>0</td><td>~150-400</td></tr>
+                        <tr><td><strong>Total</strong></td><td><strong>~2100</strong></td><td><strong>~1020-1270</strong> <span class="tag" style="font-size:10px">target &lt;1200</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="subsection" id="name-preservation">Name Preservation — 3 Layers</h3>
+
+            <div class="diagram">
+                <svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" aria-label="Name preservation 3-layer pipeline">
+                    <defs>
+                        <marker id="np-arrow" markerWidth="8" markerHeight="8" refX="7" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#a5b4fc"/></marker>
+                    </defs>
+
+                    <!-- Original text -->
+                    <rect x="20" y="30" width="160" height="50" rx="6" fill="rgba(99,102,241,0.10)" stroke="#6366f1" stroke-width="1.2"/>
+                    <text x="100" y="50" text-anchor="middle" fill="#e0e7ff" font-size="11" font-weight="600">Original (EN)</text>
+                    <text x="100" y="70" text-anchor="middle" fill="#a5b4fc" font-size="10" font-family="monospace">"Well met, Bol Noq'."</text>
+
+                    <!-- Layer 1 -->
+                    <rect x="220" y="30" width="170" height="50" rx="6" fill="rgba(16,185,129,0.10)" stroke="#10b981" stroke-width="1.2"/>
+                    <text x="305" y="48" text-anchor="middle" fill="#a7f3d0" font-size="11" font-weight="600">Layer 1: Pre-process</text>
+                    <text x="305" y="64" text-anchor="middle" fill="#86efac" font-size="10">_mark_names_in_text()</text>
+                    <text x="305" y="75" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">"[Bol Noq']"</text>
+
+                    <!-- Gemini API -->
+                    <rect x="430" y="30" width="140" height="50" rx="6" fill="rgba(245,158,11,0.10)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="500" y="48" text-anchor="middle" fill="#fde68a" font-size="11" font-weight="600">Gemini API</text>
+                    <text x="500" y="64" text-anchor="middle" fill="#fcd34d" font-size="10">translate()</text>
+                    <text x="500" y="75" text-anchor="middle" fill="#94a3b8" font-size="9">Rule 3: brackets = no-translate</text>
+
+                    <!-- Layer 2 -->
+                    <rect x="20" y="120" width="170" height="50" rx="6" fill="rgba(16,185,129,0.10)" stroke="#10b981" stroke-width="1.2"/>
+                    <text x="105" y="138" text-anchor="middle" fill="#a7f3d0" font-size="11" font-weight="600">Layer 2: Post-process</text>
+                    <text x="105" y="154" text-anchor="middle" fill="#86efac" font-size="10">_restore_names_in_translation()</text>
+                    <text x="105" y="166" text-anchor="middle" fill="#94a3b8" font-size="9">strip ALL bracket combos</text>
+
+                    <!-- Layer 3 -->
+                    <rect x="220" y="120" width="170" height="50" rx="6" fill="rgba(16,185,129,0.10)" stroke="#10b981" stroke-width="1.2"/>
+                    <text x="305" y="138" text-anchor="middle" fill="#a7f3d0" font-size="11" font-weight="600">Layer 3: General cleanup</text>
+                    <text x="305" y="154" text-anchor="middle" fill="#86efac" font-size="10">re.sub(r'\[(.{1,30})\]', ...)</text>
+                    <text x="305" y="166" text-anchor="middle" fill="#94a3b8" font-size="9">unknown [brackets] from Gemini</text>
+
+                    <!-- Final TH -->
+                    <rect x="430" y="120" width="170" height="50" rx="6" fill="rgba(99,102,241,0.10)" stroke="#6366f1" stroke-width="1.2"/>
+                    <text x="515" y="140" text-anchor="middle" fill="#e0e7ff" font-size="11" font-weight="600">Final (TH)</text>
+                    <text x="515" y="160" text-anchor="middle" fill="#a5b4fc" font-size="10" font-family="monospace">"ยินดีที่ได้พบ Bol Noq'"</text>
+
+                    <!-- Arrows -->
+                    <path d="M180,55 L215,55" stroke="#a5b4fc" stroke-width="1.5" marker-end="url(#np-arrow)"/>
+                    <path d="M390,55 L425,55" stroke="#a5b4fc" stroke-width="1.5" marker-end="url(#np-arrow)"/>
+                    <path d="M500,80 Q500,98 305,98 L105,98 L105,118" stroke="#a5b4fc" stroke-width="1.5" marker-end="url(#np-arrow)" fill="none"/>
+                    <path d="M190,145 L215,145" stroke="#a5b4fc" stroke-width="1.5" marker-end="url(#np-arrow)"/>
+                    <path d="M390,145 L425,145" stroke="#a5b4fc" stroke-width="1.5" marker-end="url(#np-arrow)"/>
+                </svg>
+                <div class="caption">3-layer name preservation pipeline</div>
+            </div>
+
+            <h4 class="minor">Layer 1 — Pre-process</h4>
+            <pre><code>_mark_names_in_text(text, names)
+"Well met, Bol Noq'." → "Well met, [Bol Noq']."</code></pre>
+            <ul>
+                <li>Names sorted longest→shortest (ป้องกัน partial match)</li>
+                <li><code>???</code> ไม่ wrap</li>
+                <li>System prompt rule 3: "Names in [brackets] must NEVER be translated. Output without brackets."</li>
+            </ul>
+
+            <h4 class="minor">Layer 2 — Post-process</h4>
+            <pre><code>pattern = rf'[\[「『【«"\'(]*{re.escape(name)}[\]」』】»"\'）]*'</code></pre>
+
+            <p>Strips ALL bracket combos รอบ known names:</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Input</th><th>Output</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>[「Bol Noq'」]</code></td><td><code>Bol Noq'</code></td></tr>
+                        <tr><td><code>[Bol Noq']</code></td><td><code>Bol Noq'</code></td></tr>
+                        <tr><td><code>「Bol Noq'」</code></td><td><code>Bol Noq'</code></td></tr>
+                        <tr><td><code>**Bol Noq'**</code></td><td><code>**Bol Noq'**</code> (preserves bold)</td></tr>
+                        <tr><td><code>**[Bol Noq']**</code></td><td><code>**Bol Noq'**</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout warning">
+                <span class="lead">Regex ไม่แตะ <code>*</code></span>
+                Rich text markers (<code>**bold**</code>, <code>*italic*</code>) ต้อง survive สำหรับ <code>RichTextFormatter</code>.
+            </div>
+
+            <h4 class="minor">Layer 3 — General bracket cleanup</h4>
+            <pre><code># translator_gemini.py ~line 917, after layer 2
+re.sub(r'\[([^\[\]]{1,30})\]', r'\1', translated_dialogue)</code></pre>
+            <p>Strips <code>[brackets]</code> ที่ Gemini เพิ่มเอง (เช่น <code>[adventurer]</code>, <code>[WoL]</code>).</p>
+
+            <h3 class="subsection" id="rich-text">Rich Text Markers</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Marker</th><th>Style</th><th>Font</th><th>Handled by</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>*text*</code></td><td>Italic</td><td>FC Minimal Medium</td><td><code>parse_rich_text()</code></td></tr>
+                        <tr><td><code>**text**</code></td><td>Highlight</td><td>base + bold, <span class="color-dot" style="background:#FFB366"></span><code>#FFB366</code></td><td><code>parse_rich_text()</code></td></tr>
+                        <tr><td><code>&lt;NL&gt;</code></td><td>Newline</td><td>—</td><td>Text preprocessor</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="subsection" id="relevant-names">get_relevant_names()</h3>
+            <ul>
+                <li>Names ที่ปรากฏใน dialogue text + essential names</li>
+                <li>Cap ที่ 20 (token control)</li>
+            </ul>
+
+            <p><strong>Essential names (20):</strong> Y'shtola, Alphinaud, Alisaie, Wuk Lamat, Estinien, G'raha Tia, Thancred, Urianger, Krile, Emet-Selch, Hythlodaeus, Venat, Meteion, Zenos, Koana, Zoraal Ja, Gulool Ja, Sphene, Otis</p>
+        </section>
+
+        <!-- ──────────────── Wide-Context ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="wide-context">Wide-Context Translation</h2>
+            <p>Always-on (v1.7.8+). Inject recent Thai translations เข้า Gemini prompt เพื่อรักษา consistency ใน <strong>pronouns / honorifics / transliteration</strong>.</p>
+
+            <h3 class="subsection">Flow</h3>
+            <pre><code>ConversationLogger.log_message()         (always-on, in-memory)
+ConversationLogger.update_translation()
+        ↓
+ConversationLogger.get_recent_context()  cutscene=8, dialogue=6, battle=3
+        ↓
+dalamud_immediate_handler.py
+        ↓
+translator_gemini.translate(conversation_context="...")</code></pre>
+
+            <h3 class="subsection">get_recent_context()</h3>
+            <ul>
+                <li>Source: <code>_current_conv['messages']</code> (same conversation)</li>
+                <li>ใช้ <code>translated</code> field เท่านั้น (ไม่ส่ง EN — Gemini อาจ copy)</li>
+                <li>Skip ถ้าไม่มี <code>translated</code> หรือ <code>chattype_group == 'other'</code></li>
+                <li>Max <strong>80 chars</strong> per entry</li>
+                <li><code>exclude_last=True</code> (avoid dup กับ "Text to translate")</li>
+                <li>Strips dup speaker prefix</li>
+            </ul>
+
+            <h3 class="subsection">Rule 10 (System Prompt)</h3>
+            <div class="callout info">
+                <span class="lead">Context Consistency</span>
+                When [Recent dialogue] is provided, maintain the SAME pronouns (สรรพนาม), honorifics, and name formats used in previous lines.
+            </div>
+
+            <h3 class="subsection" id="conv-boundary">Conversation Boundaries</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Condition</th><th>Value</th><th>Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td>Time gap</td><td>&gt;45s</td><td>New conversation</td></tr>
+                        <tr><td>Speaker limit</td><td>&gt;8 (<code>CONVERSATION_MAX_SPEAKERS</code>, was 5)</td><td>New conversation</td></tr>
+                        <tr><td>System event (zone_change)</td><td>always</td><td>Reset in-memory context</td></tr>
+                        <tr><td>Cross-type (dialogue/cutscene/battle)</td><td>flows freely</td><td>(no longer triggers split)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="subsection">ConversationLogger Two-Mode</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mode</th><th><code>disk_logging</code></th><th>Behavior</th></tr></thead>
+                    <tbody>
+                        <tr><td>Memory-only (default)</td><td><code>False</code></td><td>Context in RAM only</td></tr>
+                        <tr><td>Full (debug)</td><td><code>True</code></td><td>+ JSON to <code>%LOCALAPPDATA%/MBB_Dalamud/logs/conversations/</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <ul>
+                <li><strong>Context always active</strong> — ไม่ขึ้นกับ Settings toggle</li>
+                <li>"Conversation Log" toggle ควบคุม <strong>disk only</strong></li>
+                <li><code>set_disk_logging(bool)</code> flip mid-session</li>
+                <li>Logged ChatTypes: <code>{61, 68, 71, 0x0045, 0x0046}</code> (player chat 27/3 filtered out)</li>
+            </ul>
+
+            <h4 class="minor">Lifecycle in MBB.py</h4>
+            <pre><code>self.conversation_logger = ConversationLogger(disk_logging=False)  # always init
+# On start:
+self.conversation_logger.set_disk_logging(conv_log_enabled)
+self.conversation_logger.start_session()
+# On stop:
+self.conversation_logger.end_session()  # save JSON only if disk_logging=True
+# Never set None — reuse next session</code></pre>
+
+            <h3 class="subsection" id="zone-change">Zone Change Detection</h3>
+
+            <h4 class="minor">C# side — <code>DalamudMBBBridge.cs</code></h4>
+            <ul>
+                <li><code>IClientState</code> service</li>
+                <li><code>OnTerritoryChanged</code> → <code>TextHookData{Type="system", Message="zone_change:{id}"}</code> → queue</li>
+                <li>Dispose: unsub event</li>
+            </ul>
+
+            <h4 class="minor">Python side — <code>dalamud_immediate_handler.py</code></h4>
+            <ul>
+                <li>Check <code>Type=="system"</code> before filtering → <code>conversation_logger.log_system_event()</code> → return</li>
+                <li>ไม่ forward ไป translation</li>
+            </ul>
+
+            <p><strong>Manual zone change</strong> — button ใน Game info row (<code>control_panel.py</code>). Click → <code>MBB.manual_zone_change()</code> → feedback "Zone changed — context reset" on <code>status_info</code> 2.5s.</p>
+        </section>
+
+        <!-- ──────────────── ZWS ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="zws">Zero-Width Character Safety</h2>
+            <p><code>text_corrector.py</code> strips ZWS chars จาก npc.json names ตอน load:</p>
+
+            <pre><code>_zws = "​‌‍﻿"
+clean = char["firstName"].strip().translate(str.maketrans("", "", _zws))</code></pre>
+
+            <p>Applies to:</p>
+            <ul>
+                <li><code>main_characters</code> — firstName + lastName</li>
+                <li><code>npcs</code> — name</li>
+            </ul>
+
+            <div class="callout warning">
+                <span class="lead">Real incident</span>
+                <code>"Tataru​"</code> (มี ZWS ติด) ใน npc.json shadow <code>"Tataru"</code> → speaker icon broke.
+            </div>
+
+            <p>นอกจากนี้ strip <code>**</code>, <code>*</code>, ZWS จาก <strong>speaker name</strong> ก่อน <code>name in self.names</code> check (3 sites ใน <code>translated_ui.py</code>).</p>
+        </section>
+
+        <!-- ──────────────── NPC Database ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="database">NPC Database — <code>npc.json</code></h2>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Section</th><th>Count</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>main_characters</code></td><td>218</td></tr>
+                        <tr><td><code>npcs</code></td><td>65</td></tr>
+                        <tr><td><code>word_fixes</code></td><td>0 <span class="tag faint">deprecated</span></td></tr>
+                        <tr><td><code>lore</code></td><td>135</td></tr>
+                        <tr><td><code>character_roles</code></td><td>197</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="subsection">word_fixes Deprecated</h3>
+            <p>Dalamud text hook เป็น byte-accurate (ไม่ใช่ OCR) → character-substitution corrections (<code>1→i</code>, <code>0→o</code>, ฯลฯ) ไม่จำเป็น. Name preservation จัดการ FFXIV proper nouns แล้ว.</p>
+            <ul>
+                <li>Backup: <code>python-app/backups/word_fixes_backup_20260426.json</code></li>
+                <li>Tab hidden ใน NPC Manager</li>
+                <li>Key เก็บใน JSON สำหรับ backwards-compat</li>
+            </ul>
+
+            <h3 class="subsection">Backup Before Bulk Ops</h3>
+            <p><code>python-app/backups/npc_backup_*.json</code></p>
+
+            <div class="callout danger">
+                <span class="lead">DANGER — never re-add short word_fixes (1-2 chars)</span>
+                <p style="margin-top:6px">Single-char fix เช่น <code>1→i</code> จะ replace ทุก occurrence ใน text — corrupt ข้อความ irreversibly.</p>
+            </div>
+        </section>
+
+        <nav class="page-nav">
+            <a href="ui.html"><span class="nav-dir">← Prev</span><span class="nav-title">UI Systems</span></a>
+            <a href="styling.html" class="next"><span class="nav-dir">Next →</span><span class="nav-title">Theme + Settings</span></a>
+        </nav>
+    </main>
+
+    <aside class="manual-toc">
+        <div class="toc-title">On this page</div>
+        <ul>
+            <li><a href="#npc-manager">NPC Manager</a></li>
+            <li class="toc-h3"><a href="#polaroid">Polaroid View</a></li>
+            <li class="toc-h3"><a href="#hover-menu">Hover Menu</a></li>
+            <li class="toc-h3"><a href="#screenshot-tool">Screenshot Tool</a></li>
+            <li class="toc-h3"><a href="#avatar-storage">Avatar Storage</a></li>
+            <li><a href="#cloud-sync">Cloud Sync</a></li>
+            <li class="toc-h3"><a href="#cloud-repo">Cloud Repo</a></li>
+            <li class="toc-h3"><a href="#publish-workflow">Publish Workflow</a></li>
+            <li class="toc-h3"><a href="#merge-modal">Merge Modal</a></li>
+            <li><a href="#translation-engine">Translation Engine</a></li>
+            <li class="toc-h3"><a href="#prompt-versions">Prompt Versions</a></li>
+            <li class="toc-h3"><a href="#modern-thai">Modern Thai</a></li>
+            <li class="toc-h3"><a href="#token-budget">Token Budget</a></li>
+            <li class="toc-h3"><a href="#name-preservation">Name Preservation</a></li>
+            <li class="toc-h3"><a href="#rich-text">Rich Text Markers</a></li>
+            <li><a href="#wide-context">Wide-Context</a></li>
+            <li class="toc-h3"><a href="#conv-boundary">Boundaries</a></li>
+            <li class="toc-h3"><a href="#zone-change">Zone Change</a></li>
+            <li><a href="#zws">Zero-Width Safety</a></li>
+            <li><a href="#database">NPC Database</a></li>
+        </ul>
+    </aside>
+
+    <footer class="manual-footer">
+        © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
+        · <a href="../index.html">← Landing page</a>
+    </footer>
+
+</div>
+
+<script src="assets/manual.js"></script>
+</body>
+</html>

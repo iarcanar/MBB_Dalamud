@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype — MBB Manual</title>
+    <link rel="icon" type="image/png" href="../web_assets/mbb_meteor.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/manual.css">
+    <style>
+        /* ════════════════════════════════════════════════════════════
+           PROTOTYPE PAGE — Screen Simulator + Design Sandbox
+           ════════════════════════════════════════════════════════════ */
+        .proto-section { margin-bottom: 64px; }
+        .proto-eyebrow {
+            display: inline-block;
+            font-size: 10.5px; font-weight: 700;
+            letter-spacing: 0.24em; text-transform: uppercase;
+            color: #fbbf24;
+            background: rgba(251, 191, 36, 0.10);
+            border: 1px solid rgba(251, 191, 36, 0.30);
+            padding: 4px 12px; border-radius: 99px;
+            margin-bottom: 12px;
+        }
+        .proto-goal {
+            background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(139,92,246,0.05));
+            border: 1px solid rgba(99,102,241,0.25);
+            border-left: 3px solid var(--accent-1);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin: 16px 0 22px;
+        }
+        .proto-goal strong { color: #c7d2fe; }
+
+        /* ── Control panel: pick screen resolution + design option ── */
+        .proto-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            background: rgba(10, 20, 36, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin: 20px 0;
+        }
+        .proto-controls label {
+            font-size: 11.5px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent-bright);
+            margin-right: 4px;
+        }
+        .ctrl-group { display: inline-flex; gap: 6px; align-items: center; }
+        .ctrl-btn {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+        .ctrl-btn:hover { color: #c7d2fe; border-color: rgba(99,102,241,0.4); }
+        .ctrl-btn.active {
+            background: linear-gradient(135deg, rgba(99,102,241,0.30), rgba(139,92,246,0.18));
+            border-color: var(--accent-1);
+            color: #e0e7ff;
+            box-shadow: 0 0 12px rgba(99,102,241,0.30);
+        }
+
+        /* ── SCREEN CANVAS — simulates the actual user screen ── */
+        .screen-canvas {
+            position: relative;
+            width: 100%;
+            max-width: 980px;
+            aspect-ratio: var(--screen-ratio, 16 / 9);
+            background-color: #0a0f1a;
+            background-image:
+                radial-gradient(circle at 0 0, rgba(255,255,255,0.04) 1.2px, transparent 1.2px),
+                linear-gradient(135deg, rgba(99,102,241,0.05) 0%, rgba(139,92,246,0.03) 100%);
+            background-size: 22px 22px, 100% 100%;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 0 auto;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.55), 0 8px 28px rgba(0,0,0,0.4);
+        }
+        /* Screen ruler badges — corner labels */
+        .screen-ruler {
+            position: absolute;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: rgba(255,255,255,0.32);
+            pointer-events: none;
+            letter-spacing: 0.05em;
+        }
+        .screen-ruler.top-left { top: 4px; left: 6px; }
+        .screen-ruler.top-right { top: 4px; right: 6px; }
+        .screen-ruler.bottom-right { bottom: 4px; right: 6px; }
+
+        /* ── SPLASH WINDOW inside the screen canvas (positioned to scale) ── */
+        .canvas-splash {
+            position: absolute;
+            background: #000;
+            border-radius: var(--splash-radius, 8px);
+            overflow: hidden;
+            box-shadow: 0 0 32px rgba(0,0,0,0.7),
+                        0 0 0 1px rgba(99,102,241,0.18);
+        }
+        .canvas-splash-bg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* Bottom-center group: icon + version text only (NO bar background).
+           Icon + text rely on their own glow/shadow for legibility against
+           the splash artwork.                                              */
+        .splash-bar-group {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--gap-px, 8px);
+            white-space: nowrap;
+            overflow: visible;
+        }
+        .splash-icon-img {
+            object-fit: contain;
+            /* No padding/bg — overflows bar vertically */
+            filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.55))
+                    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
+        }
+        .splash-version-text {
+            font-family: 'Kanit', 'Anuphan', sans-serif;
+            font-weight: 500;
+            color: #00e5ff;
+            letter-spacing: 0.05em;
+            line-height: 1;
+            /* Stronger shadows now that the dark bar is gone — keeps text
+               legible on bright/busy splash backgrounds. */
+            text-shadow:
+                0 0 4px rgba(0,229,255,0.95),
+                0 0 12px rgba(0,229,255,0.55),
+                0 0 28px rgba(0,180,255,0.35),
+                0 1px 2px rgba(0,0,0,0.95),
+                0 2px 6px rgba(0,0,0,0.85),
+                0 0 18px rgba(0,0,0,0.55);
+        }
+
+        /* ── Computed-spec readout ── */
+        .spec-readout {
+            margin-top: 18px;
+            background: rgba(10, 20, 36, 0.45);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 14px 18px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.85;
+            color: var(--text-dim);
+        }
+        .spec-readout .key { color: var(--accent-bright); }
+        .spec-readout .val { color: #c7d2fe; }
+        .spec-readout .unit { color: var(--text-faint); font-size: 11px; }
+        .spec-readout .formula {
+            display: block;
+            font-size: 10.5px;
+            color: var(--text-faint);
+            margin-left: 14px;
+            font-style: italic;
+        }
+
+        .design-decision {
+            margin-top: 26px;
+            padding: 14px 18px;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.28);
+            border-left: 3px solid var(--success);
+            border-radius: 10px;
+            font-size: 13.5px;
+        }
+        .design-decision strong { color: #6ee7b7; }
+
+        /* Legend at canvas bottom */
+        .canvas-legend {
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+            font-size: 11px;
+            color: var(--text-faint);
+            margin-top: 10px;
+            letter-spacing: 0.05em;
+            font-style: italic;
+        }
+        .canvas-legend .swatch {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 2px;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        /* ── SECTION 2 — TUI default positions ── */
+        /* Each TUI mode has a distinct color matching the actual app:
+           dialog=cyan, battle=orange, cutscene=turquoise, choice=gold. */
+        .tui-rect {
+            position: absolute;
+            border-radius: 6px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            text-align: center;
+            backdrop-filter: blur(2px);
+            cursor: move;
+            user-select: none;
+            /* No transition on left/top — would cause lag during drag */
+        }
+        .tui-rect.dragging {
+            opacity: 0.85;
+            transform: scale(1.005);
+            box-shadow: 0 0 28px currentColor;
+        }
+        .tui-rect-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            opacity: 0.95;
+            pointer-events: none;
+        }
+        .tui-rect-dim {
+            font-size: 10px;
+            opacity: 0.65;
+            margin-top: 4px;
+            letter-spacing: 0.06em;
+            pointer-events: none;
+        }
+        .tui-rect-pos {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            font-size: 9.5px;
+            font-family: 'JetBrains Mono', monospace;
+            opacity: 0.55;
+            letter-spacing: 0.04em;
+            pointer-events: none;
+        }
+        .tui-rect.dragging .tui-rect-pos { opacity: 1; }
+        .tui-rect-userpos {
+            position: absolute;
+            bottom: 4px;
+            left: 6px;
+            font-size: 9px;
+            font-family: 'JetBrains Mono', monospace;
+            opacity: 0;
+            letter-spacing: 0.04em;
+            color: #fcd34d;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+        .tui-rect.user-moved .tui-rect-userpos { opacity: 0.85; }
+        /* Per-mode colors */
+        .tui-rect[data-mode="dialog"] {
+            background: rgba(56, 189, 248, 0.16);
+            border: 1.5px solid rgba(56, 189, 248, 0.9);
+            color: #7dd3fc;
+            box-shadow: 0 0 20px rgba(56,189,248,0.25);
+        }
+        .tui-rect[data-mode="battle"] {
+            background: rgba(255, 107, 0, 0.16);
+            border: 1.5px solid rgba(255, 107, 0, 0.9);
+            color: #fdba74;
+            box-shadow: 0 0 20px rgba(255,107,0,0.25);
+        }
+        .tui-rect[data-mode="cutscene"] {
+            background: rgba(64, 224, 208, 0.16);
+            border: 1.5px solid rgba(64, 224, 208, 0.9);
+            color: #99f6e4;
+            box-shadow: 0 0 20px rgba(64,224,208,0.25);
+        }
+        .tui-rect[data-mode="choice"] {
+            background: rgba(251, 191, 36, 0.16);
+            border: 1.5px solid rgba(251, 191, 36, 0.9);
+            color: #fcd34d;
+            box-shadow: 0 0 20px rgba(251,191,36,0.25);
+        }
+
+        /* Mode-selector chips — color-matched to each mode */
+        .mode-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+        .mode-chip .mode-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .mode-chip[data-mode="dialog"]   .mode-dot { background: #38bdf8; }
+        .mode-chip[data-mode="battle"]   .mode-dot { background: #ff6b00; }
+        .mode-chip[data-mode="cutscene"] .mode-dot { background: #40e0d0; }
+        .mode-chip[data-mode="choice"]   .mode-dot { background: #fbbf24; }
+        .mode-chip:hover { color: #e0e7ff; border-color: rgba(255,255,255,0.3); }
+        .mode-chip.active[data-mode="dialog"] {
+            background: rgba(56,189,248,0.16); border-color: #38bdf8; color: #7dd3fc;
+            box-shadow: 0 0 12px rgba(56,189,248,0.4);
+        }
+        .mode-chip.active[data-mode="battle"] {
+            background: rgba(255,107,0,0.16); border-color: #ff6b00; color: #fdba74;
+            box-shadow: 0 0 12px rgba(255,107,0,0.4);
+        }
+        .mode-chip.active[data-mode="cutscene"] {
+            background: rgba(64,224,208,0.16); border-color: #40e0d0; color: #99f6e4;
+            box-shadow: 0 0 12px rgba(64,224,208,0.4);
+        }
+        .mode-chip.active[data-mode="choice"] {
+            background: rgba(251,191,36,0.16); border-color: #fbbf24; color: #fcd34d;
+            box-shadow: 0 0 12px rgba(251,191,36,0.4);
+        }
+
+        /* Show-all toggle */
+        .show-all-toggle {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11.5px;
+            color: var(--text-dim);
+            cursor: pointer;
+        }
+        .show-all-toggle input { accent-color: #a5b4fc; }
+    </style>
+</head>
+<body>
+
+<div class="bg-particles" aria-hidden="true"></div>
+
+<div class="manual-shell">
+
+    <header class="manual-header">
+        <a href="index.html" class="brand">
+            <span class="dot"></span>
+            <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
+            <span class="tag" style="margin-left:8px">v1.8.14</span>
+        </a>
+        <button class="hamburger" aria-label="Toggle nav">≡</button>
+        <nav>
+            <a href="../index.html">Landing</a>
+            <a href="index.html">Overview</a>
+            <a href="ui.html">UI Systems</a>
+            <a href="npc-translation.html">NPC + Translation</a>
+            <a href="styling.html">Theme + Settings</a>
+            <a href="reference.html">Reference</a>
+            <a href="prototype.html" class="active">🧪 Prototype</a>
+            <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
+        </nav>
+    </header>
+
+    <div class="sync-banner">
+        <span class="sync-dot"></span>
+        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-05-19</strong> · v1.8.13
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+    </div>
+
+    <aside class="manual-sidebar">
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Overview</div>
+            <ul><li><a href="index.html"><span class="lead">▸</span>Project Reference</a></li></ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>UI Systems</div>
+            <ul>
+                <li><a href="ui.html#main-window"><span class="lead">▸</span>Main Window</a></li>
+                <li><a href="ui.html#mini-ui"><span class="lead">▸</span>Mini UI</a></li>
+                <li><a href="ui.html#tui"><span class="lead">▸</span>TUI (Dialog/Choice)</a></li>
+                <li><a href="ui.html#dissolve"><span class="lead">▸</span>DissolveOverlay</a></li>
+                <li><a href="ui.html#logs"><span class="lead">▸</span>Translated Logs</a></li>
+                <li><a href="ui.html#glass"><span class="lead">▸</span>Glass Mode</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Data + Translation</div>
+            <ul>
+                <li><a href="npc-translation.html#npc-manager"><span class="lead">▸</span>NPC Manager</a></li>
+                <li><a href="npc-translation.html#cloud-sync"><span class="lead">▸</span>Cloud Sync</a></li>
+                <li><a href="npc-translation.html#translation-engine"><span class="lead">▸</span>Translation Engine</a></li>
+                <li><a href="npc-translation.html#wide-context"><span class="lead">▸</span>Wide-Context</a></li>
+                <li><a href="npc-translation.html#database"><span class="lead">▸</span>NPC Database</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Styling + Config</div>
+            <ul>
+                <li><a href="styling.html#theme"><span class="lead">▸</span>Theme System</a></li>
+                <li><a href="styling.html#font"><span class="lead">▸</span>Font System</a></li>
+                <li><a href="styling.html#settings"><span class="lead">▸</span>Settings</a></li>
+                <li><a href="styling.html#splash"><span class="lead">▸</span>Splash + Updater</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Reference</div>
+            <ul>
+                <li><a href="reference.html#gemini"><span class="lead">▸</span>Gemini Models</a></li>
+                <li><a href="reference.html#test-messages"><span class="lead">▸</span>Test Messages</a></li>
+                <li><a href="reference.html#gotchas"><span class="lead">▸</span>Hard-Won Rules</a></li>
+                <li><a href="reference.html#plugin"><span class="lead">▸</span>Plugin Manifest</a></li>
+                <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>🧪 Prototype</div>
+            <ul>
+                <li><a href="prototype.html#splash-icon" class="active"><span class="lead">▸</span>Splash Icon + Version</a></li>
+                <li><a href="prototype.html#tui-positions"><span class="lead">▸</span>TUI Default Positions</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <main class="manual-content">
+
+        <div class="breadcrumb">
+            <a href="../index.html">MBB</a>
+            <span class="sep">/</span>
+            <a href="index.html">Manual</a>
+            <span class="sep">/</span>
+            <span class="here">🧪 Prototype</span>
+        </div>
+
+        <div class="page-eyebrow">Design Sandbox · Screen Simulator</div>
+        <h1 class="page-title">🧪 Prototype</h1>
+        <p class="page-subtitle">หน้านี้เป็น <strong>screen simulator</strong> — canvas พื้น dot-grid จำลอง<em>หน้าจอจริง</em> + render UI elements ตาม<strong>logic เดียวกับ source code</strong>. ปรับ resolution / option → ตำแหน่ง+ขนาดคำนวณใหม่ real-time ตามสูตรใน <code>MBB.py</code>. ใช้สำหรับ preview ดีไซน์ก่อนเขียน code จริง</p>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             SECTION 1 — Splash Icon + Version
+             ══════════════════════════════════════════════════════════════ -->
+        <section class="proto-section">
+            <h2 class="section-head" id="splash-icon">Splash Icon + Version</h2>
+            <span class="proto-eyebrow">🧪 Proto · #1</span>
+
+            <div class="proto-goal">
+                <strong>Goal:</strong> เพิ่ม icon โปรแกรมไว้ทาง<strong>ซ้ายของเลขเวอร์ชั่น</strong> ที่ bottom-center ของ splash. Canvas ด้านล่างจำลองหน้าจอจริง + ตำแหน่ง splash + ตำแหน่งกลุ่ม icon+version <strong>คำนวณจาก formula ใน <code>MBB.py:show_splash()</code></strong> โดยตรง (ปรับ resolution + option ดูผลจริงเลย)
+            </div>
+
+            <!-- ── Controls ── -->
+            <div class="proto-controls">
+                <div class="ctrl-group">
+                    <label>Screen:</label>
+                    <button class="ctrl-btn" data-res="1920x1080">1920×1080</button>
+                    <button class="ctrl-btn active" data-res="2560x1440">2560×1440</button>
+                    <button class="ctrl-btn" data-res="3840x2160">3840×2160</button>
+                </div>
+                <div class="ctrl-group">
+                    <label>Icon height (overflows bar):</label>
+                    <button class="ctrl-btn" data-icon="56">A · 56px (~2.3× font)</button>
+                    <button class="ctrl-btn" data-icon="72">B · 72px (~3× font)</button>
+                    <button class="ctrl-btn active" data-icon="88">C · 88px (~3.7× font) ⭐ chosen</button>
+                </div>
+            </div>
+
+            <!-- ── THE SCREEN CANVAS ── -->
+            <div id="screenCanvas" class="screen-canvas">
+                <span class="screen-ruler top-left" id="rulerTopLeft">(0, 0)</span>
+                <span class="screen-ruler top-right" id="rulerTopRight">2560 × 1440</span>
+                <span class="screen-ruler bottom-right" id="rulerBottomRight">screen</span>
+
+                <!-- Splash window — JS positions this -->
+                <div id="canvasSplash" class="canvas-splash">
+                    <img src="../web_assets/MBBvisual.jpg" class="canvas-splash-bg" alt="Splash background">
+
+                    <!-- Bottom-center: dark bar wraps BOTH icon and text -->
+                    <div id="splashBarGroup" class="splash-bar-group">
+                        <img id="splashIcon" src="../web_assets/mbb_meteor.png" class="splash-icon-img" alt="MBB meteor logo">
+                        <span id="splashVersion" class="splash-version-text">v1.8.14</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="canvas-legend">
+                <span><span class="swatch" style="background: #0a0f1a; border:1px solid rgba(255,255,255,0.2)"></span>screen (dot-grid)</span>
+                <span><span class="swatch" style="background: rgba(99,102,241,0.4); border:1px solid rgba(99,102,241,0.7)"></span>splash window</span>
+                <span><span class="swatch" style="background: #00e5ff"></span>version text</span>
+                <span><span class="swatch" style="background: rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.4)"></span>icon</span>
+            </div>
+
+            <!-- ── Computed spec readout ── -->
+            <div class="spec-readout" id="specReadout">
+                Loading…
+            </div>
+
+            <h3 class="subsection">Implementation plan (after approval)</h3>
+
+            <div class="callout info">
+                <span class="lead">Code changes in <code>MBB.py</code> <code>show_splash()</code></span>
+                <p style="margin-top: 8px">หลัง load + resize splash, ก่อน draw version text:</p>
+            </div>
+
+            <pre><code># Load + resize meteor logo (height-based; width preserves aspect ratio)
+# IMPORTANT: use mbb_meteor.png (the MBB brand logo) — NOT mbb_icon.png
+# (that's the Dalamud plugin icon, a generic square placeholder).
+from PIL import Image
+icon_path = resource_path("assets/mbb_meteor.png")
+icon = Image.open(icon_path).convert("RGBA")
+
+# Pick HEIGHT first; let width follow source aspect (meteor logo is ~3:2)
+icon_h = max(30, int(font_size * 1.2))   # 36px at font 30 (Option B)
+icon_w = int(icon_h * (icon.width / icon.height))
+icon = icon.resize((icon_w, icon_h), Image.Resampling.LANCZOS)
+
+# Layout: [icon] [gap] [version] — centered as a group
+gap = 14
+group_w = icon_w + gap + text_w
+group_left = (new_width - group_w) // 2
+
+# Icon vertically centered with text (use icon_h, not icon_size)
+icon_x = group_left
+icon_y = visible_top + (text_h - icon_h) // 2
+
+# Adjust text position (no longer just centered — group is centered instead)
+text_x_new = group_left + icon_w + gap - bbox[0]
+
+# Paste icon onto rounded splash (alpha-aware)
+rounded.alpha_composite(icon, (icon_x, icon_y))
+
+# Then draw version text at text_x_new (replace existing text_x)
+# Glow + sharp text logic unchanged</code></pre>
+
+            <div class="design-decision">
+                <strong>📋 ขั้นตอนต่อไป:</strong> ลองคลิก Screen + Icon-size combos ดู positioning ใน canvas → ตัดสินใจ option → บอกผมว่า "ใช้ Option B" (หรือ A/C) → ผมจะแก้ <code>MBB.py:show_splash()</code> ตาม spec + bump version + rebuild + test
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             SECTION 2 — TUI default positions (Dialog/Battle/Cutscene/Choice)
+             ══════════════════════════════════════════════════════════════ -->
+        <section class="proto-section">
+            <h2 class="section-head" id="tui-positions">TUI · ตำแหน่งการแสดงผลเริ่มต้น</h2>
+            <span class="proto-eyebrow">🧪 Proto · #2</span>
+
+            <div class="proto-goal">
+                <strong>Goal:</strong> แสดงตำแหน่ง+ขนาดเริ่มต้น (default) ของ TUI ทั้ง 4 โหมด เมื่อยังไม่มี <code>tui_positions</code> / <code>tui_geometries</code> บันทึกไว้ — สูตรดึงจาก <code>translated_ui.py</code> (Dialog/Choice, Tkinter) และ <code>pyqt_ui/dissolve_overlay.py</code> (Battle/Cutscene, PyQt6) โดยตรง. คลิก<strong>โหมด</strong>เพื่อสลับดู — หรือ "Show all" ดูพร้อมกันทั้ง 4
+            </div>
+
+            <!-- ── Controls ── -->
+            <div class="proto-controls">
+                <div class="ctrl-group">
+                    <label>Mode:</label>
+                    <button class="mode-chip active" data-mode="dialog"><span class="mode-dot"></span>Dialog</button>
+                    <button class="mode-chip" data-mode="battle"><span class="mode-dot"></span>Battle</button>
+                    <button class="mode-chip" data-mode="cutscene"><span class="mode-dot"></span>Cutscene</button>
+                    <button class="mode-chip" data-mode="choice"><span class="mode-dot"></span>Choice</button>
+                </div>
+                <div class="ctrl-group">
+                    <label>Screen:</label>
+                    <button class="ctrl-btn" data-tui-res="1920x1080">1920×1080</button>
+                    <button class="ctrl-btn active" data-tui-res="2560x1440">2560×1440</button>
+                    <button class="ctrl-btn" data-tui-res="3840x2160">3840×2160</button>
+                </div>
+                <label class="show-all-toggle">
+                    <input type="checkbox" id="tuiShowAll"> Show all 4 modes
+                </label>
+                <div class="ctrl-group" style="margin-left:10px">
+                    <button id="tuiCenterHBtn" class="ctrl-btn" title="จัดกึ่งกลางแนวนอน (x = (screen_w − w) / 2)">↔ Center H</button>
+                    <button id="tuiCenterVBtn" class="ctrl-btn" title="จัดกึ่งกลางแนวตั้ง (y = (screen_h − h) / 2)">↕ Center V</button>
+                    <button id="tuiResetBtn"  class="ctrl-btn" title="คืนค่า default formula">↺ Reset</button>
+                </div>
+            </div>
+
+            <div class="callout info" style="margin-top:12px; padding:10px 14px; font-size:12.5px">
+                <span class="lead" style="font-size:11px">💡 ลากกรอบ TUI ในแคนวาสได้</span>
+                — พิกัด <code>(x, y)</code> มุมขวาบนของแต่ละกรอบเป็นพิกัดจริงตามขนาดจอที่เลือก. ลากเสร็จแล้วบอกตำแหน่งที่ต้องการได้เลย → ผมจะเอาไปใช้เป็น default ใน <code>show_for_mode()</code> / dialog initial geometry
+            </div>
+
+            <!-- ── THE SCREEN CANVAS ── -->
+            <div id="tuiCanvas" class="screen-canvas">
+                <span class="screen-ruler top-left" id="tuiRulerTL">(0, 0)</span>
+                <span class="screen-ruler top-right" id="tuiRulerTR">2560 × 1440</span>
+                <span class="screen-ruler bottom-right">screen</span>
+
+                <!-- TUI rectangles — draggable. JS positions + shows/hides per mode.
+                     .tui-rect-pos shows live (x,y) in real screen px.
+                     .tui-rect-userpos shows yellow "USER:" when user has dragged. -->
+                <div id="tuiDialog" class="tui-rect" data-mode="dialog">
+                    <span class="tui-rect-pos" id="tuiDialogPos">(0, 0)</span>
+                    <span class="tui-rect-label">💬 Dialog</span>
+                    <span class="tui-rect-dim" id="tuiDialogDim">960 × 240</span>
+                    <span class="tui-rect-userpos" id="tuiDialogUserpos"></span>
+                </div>
+                <div id="tuiBattle" class="tui-rect" data-mode="battle" style="display:none">
+                    <span class="tui-rect-pos" id="tuiBattlePos">(0, 0)</span>
+                    <span class="tui-rect-label">⚔️ Battle</span>
+                    <span class="tui-rect-dim" id="tuiBattleDim">1000 × 140</span>
+                    <span class="tui-rect-userpos" id="tuiBattleUserpos"></span>
+                </div>
+                <div id="tuiCutscene" class="tui-rect" data-mode="cutscene" style="display:none">
+                    <span class="tui-rect-pos" id="tuiCutscenePos">(0, 0)</span>
+                    <span class="tui-rect-label">🎬 Cutscene</span>
+                    <span class="tui-rect-dim" id="tuiCutsceneDim">2304 × 160</span>
+                    <span class="tui-rect-userpos" id="tuiCutsceneUserpos"></span>
+                </div>
+                <div id="tuiChoice" class="tui-rect" data-mode="choice" style="display:none">
+                    <span class="tui-rect-pos" id="tuiChoicePos">(0, 0)</span>
+                    <span class="tui-rect-label">🎯 Choice</span>
+                    <span class="tui-rect-dim" id="tuiChoiceDim">960 × 270</span>
+                    <span class="tui-rect-userpos" id="tuiChoiceUserpos"></span>
+                </div>
+            </div>
+
+            <div class="canvas-legend">
+                <span><span class="swatch" style="background: rgba(56,189,248,0.4); border:1px solid #38bdf8"></span>Dialog (Tkinter)</span>
+                <span><span class="swatch" style="background: rgba(255,107,0,0.4); border:1px solid #ff6b00"></span>Battle (PyQt6 DissolveOverlay)</span>
+                <span><span class="swatch" style="background: rgba(64,224,208,0.4); border:1px solid #40e0d0"></span>Cutscene (PyQt6 DissolveOverlay)</span>
+                <span><span class="swatch" style="background: rgba(251,191,36,0.4); border:1px solid #fbbf24"></span>Choice (Tkinter)</span>
+            </div>
+
+            <!-- ── Computed spec readout ── -->
+            <div class="spec-readout" id="tuiSpecReadout">
+                Loading…
+            </div>
+
+            <h3 class="subsection">Source of truth</h3>
+            <div class="table-wrap" style="margin-top:12px">
+                <table>
+                    <thead>
+                        <tr><th>Mode</th><th>ChatType</th><th>Renderer</th><th>Default size</th><th>Default position</th><th>Code</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span style="color:#38bdf8">💬 Dialog</span></td>
+                            <td>61</td>
+                            <td>Tkinter <code>translated_ui.py</code></td>
+                            <td><code>settings["width"]</code> × <code>["height"]</code> = 960×240</td>
+                            <td>x = center, y = screen_h × <strong>0.707</strong> (70.7%)</td>
+                            <td><code>translated_ui.py:~1037</code></td>
+                        </tr>
+                        <tr>
+                            <td><span style="color:#ff6b00">⚔️ Battle</span></td>
+                            <td>68</td>
+                            <td>PyQt6 <code>dissolve_overlay.py</code></td>
+                            <td><code>DEFAULT_W_BATTLE × DEFAULT_H_BATTLE</code> = 1000×140</td>
+                            <td>x = center, y = screen_top + 80</td>
+                            <td><code>dissolve_overlay.py:425</code></td>
+                        </tr>
+                        <tr>
+                            <td><span style="color:#40e0d0">🎬 Cutscene</span></td>
+                            <td>71</td>
+                            <td>PyQt6 <code>dissolve_overlay.py</code></td>
+                            <td>w = <code>screen_w × 0.90</code> (forced), h = 160</td>
+                            <td>x = center, y = screen_h − h − max(80, screen_h/20)</td>
+                            <td><code>dissolve_overlay.py:436-444</code></td>
+                        </tr>
+                        <tr>
+                            <td><span style="color:#fbbf24">🎯 Choice</span></td>
+                            <td>0x0045/0x0046</td>
+                            <td>Tkinter <code>translated_ui.py</code></td>
+                            <td>960 × dynamic (≈ (font+2)×1.4 × 5 + 60)</td>
+                            <td>x = center, y = screen_h × <strong>0.601</strong> (60.1%) — absolute, independent of dialog</td>
+                            <td><code>translated_ui.py:~1001</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout warning" style="margin-top:18px">
+                <span class="lead">Why two renderers?</span>
+                Dialog/Choice ใช้ <strong>Tkinter</strong> เพื่อ multi-line + scrollbar + outline shadow. Battle/Cutscene ใช้ <strong>PyQt6 DissolveOverlay</strong> เพื่อ gradient alpha ที่ขอบซ้าย-ขวา (Tkinter <code>transparentcolor</code> เป็น 1-bit ไม่รองรับ gradient). ChatType dispatcher อยู่ใน <code>translated_ui.update_text</code> decorator
+            </div>
+        </section>
+
+        <!-- Future prototypes placeholder -->
+        <section class="proto-section" style="opacity: 0.5">
+            <h2 class="section-head" style="border-bottom-style: dashed">Future prototypes</h2>
+            <p style="color: var(--text-faint); font-style: italic">เพิ่ม proto section อื่นๆที่นี่ — ทุก section จะมี: Screen canvas + controls + spec readout + implementation plan. ตัวอย่างที่อาจเพิ่ม: Settings panel restructure, DissolveOverlay typography study, NPC Manager redesign</p>
+        </section>
+
+        <nav class="page-nav">
+            <a href="reference.html"><span class="nav-dir">← Prev</span><span class="nav-title">Reference</span></a>
+            <a class="disabled next"><span class="nav-dir">—</span><span class="nav-title">End</span></a>
+        </nav>
+    </main>
+
+    <aside class="manual-toc">
+        <div class="toc-title">On this page</div>
+        <ul>
+            <li><a href="#splash-icon">Splash Icon + Version</a></li>
+            <li><a href="#tui-positions">TUI Default Positions</a></li>
+        </ul>
+    </aside>
+
+    <footer class="manual-footer">
+        © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
+        · <a href="../index.html">← Landing page</a>
+    </footer>
+
+</div>
+
+<script src="assets/manual.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   SCREEN SIMULATOR for Splash Icon + Version
+   ════════════════════════════════════════════════════════════════════
+   Mirrors the EXACT formulas in MBB.py:show_splash() so the on-screen
+   preview accurately reflects what the running program will render.
+   Re-runs on every control change.
+   ════════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+
+    // ───── Constants from MBB.py:show_splash() ─────
+    const SPLASH_MAX_W = 1280;
+    const SPLASH_MAX_H = 720;
+    const SPLASH_IMG_ORIGINAL_W = 1944;   // actual MBBvisual.jpg aspect ≈ 1944×1296 (3:2)
+    const SPLASH_IMG_ORIGINAL_H = 1296;
+    // Fallback if image fails — gives 1080×720 splash like real log shows
+    // (1944/1296 = 1.5 → narrower than 1280/720=1.78 → height-limited → w=720*1.5=1080)
+
+    // ───── Picker state ─────
+    let state = {
+        screenW: 2560,
+        screenH: 1440,
+        iconSize: 36,
+    };
+
+    // ───── DOM ─────
+    const canvas = document.getElementById('screenCanvas');
+    const splash = document.getElementById('canvasSplash');
+    const splashBar = document.getElementById('splashBarGroup');
+    const splashIcon = document.getElementById('splashIcon');
+    const splashVer = document.getElementById('splashVersion');
+    const readout = document.getElementById('specReadout');
+    const rulerTR = document.getElementById('rulerTopRight');
+
+    // ───── Math (mirrors MBB.py) ─────
+    function computeSplashSize(screenW, screenH, imgW, imgH) {
+        // MBB.py: fit image into 1280×720 maintaining aspect, but never upscaling
+        const originalRatio = imgW / imgH;
+        const targetRatio = SPLASH_MAX_W / SPLASH_MAX_H;
+        let w, h;
+        if (targetRatio > originalRatio) {
+            // box is wider than image → height-limited
+            h = SPLASH_MAX_H;
+            w = Math.round(SPLASH_MAX_H * originalRatio);
+        } else {
+            w = SPLASH_MAX_W;
+            h = Math.round(SPLASH_MAX_W / originalRatio);
+        }
+        return { w, h };
+    }
+    function computeFontSize(splashW) {
+        // From MBB.py: font_size = max(22, new_width // 44) ≈ 24 at 1080
+        return Math.max(22, Math.floor(splashW / 44));
+    }
+    function computeBottomMargin(splashH) {
+        return Math.max(36, Math.floor(splashH * 0.07));
+    }
+
+    // ───── Render ─────
+    function render() {
+        const sw = state.screenW, sh = state.screenH;
+        const splashSize = computeSplashSize(sw, sh, SPLASH_IMG_ORIGINAL_W, SPLASH_IMG_ORIGINAL_H);
+        const splashX = Math.round((sw - splashSize.w) / 2);
+        const splashY = Math.round((sh - splashSize.h) / 2);
+        const fontSize = computeFontSize(splashSize.w);
+        const bottomMargin = computeBottomMargin(splashSize.h);
+
+        // Aspect-ratio for the canvas div
+        canvas.style.setProperty('--screen-ratio', `${sw} / ${sh}`);
+
+        // CanvasW (CSS pixels) / screen ratio = scale factor
+        const canvasRect = canvas.getBoundingClientRect();
+        const scale = canvasRect.width / sw;
+
+        // Position+size the splash inside the canvas
+        splash.style.left = (splashX * scale) + 'px';
+        splash.style.top = (splashY * scale) + 'px';
+        splash.style.width = (splashSize.w * scale) + 'px';
+        splash.style.height = (splashSize.h * scale) + 'px';
+        // Corner radius — REDUCED by half from v1.8.13 design (was max(28, w//24) ≈ 45px,
+        // user wants subtler corners). New formula: max(14, w//48) ≈ 22px at 1080 wide.
+        const cornerR = Math.max(14, Math.floor(splashSize.w / 48));
+        splash.style.borderRadius = (cornerR * scale) + 'px';
+        splash.style.setProperty('--splash-radius', (cornerR * scale) + 'px');
+
+        // Version text — font size scaled
+        const realFontPx = fontSize;
+        const scaledFontPx = realFontPx * scale;
+        splashVer.style.fontSize = scaledFontPx + 'px';
+
+        // Icon — user-picked HEIGHT scaled; width auto-scales to preserve aspect
+        // (mbb_meteor.png is ~3:2 horizontal, not square)
+        const iconRealH = state.iconSize;
+        const iconScaledH = iconRealH * scale;
+        splashIcon.style.height = iconScaledH + 'px';
+        splashIcon.style.width = 'auto';
+
+        // Gap between icon and text — TIGHT so meteor trail leads naturally into text
+        const gapReal = 4;
+        const gapScaled = gapReal * scale;
+        splashBar.style.setProperty('--gap-px', gapScaled + 'px');
+
+        // No bar background anymore — text relies on its own glow + shadow.
+
+        // Position bar vertically: bottom_margin from splash bottom
+        // bar's bottom edge = splashSize.h - bottom_margin (so center vertical aligns)
+        // CSS: bottom = bottom_margin (in scaled px)
+        splashBar.style.bottom = (bottomMargin * scale) + 'px';
+
+        // Update ruler
+        rulerTR.textContent = `${sw} × ${sh}`;
+
+        // ───── Compute readout ─────
+        const groupRealW = iconRealH + gapReal + measureTextWidth();
+        const groupLeft = Math.round((splashSize.w - groupRealW) / 2);
+        const iconCenterY = splashSize.h - bottomMargin - (realFontPx / 2);
+
+        readout.innerHTML = `
+            <span class="key">📐 Screen:</span> <span class="val">${sw} × ${sh}</span> <span class="unit">px (real)</span>
+            <br><span class="key">🟡 Corner radius:</span> <span class="val">${cornerR} px</span> <span class="unit">(halved from old 45px — softer)</span>
+            <span class="formula">→ max(14, splash_w // 48)</span>
+            <br><span class="key">🖼  Splash size:</span> <span class="val">${splashSize.w} × ${splashSize.h}</span> <span class="unit">px (from ${SPLASH_IMG_ORIGINAL_W}×${SPLASH_IMG_ORIGINAL_H} source, fit into ${SPLASH_MAX_W}×${SPLASH_MAX_H})</span>
+            <span class="formula">→ height-limited because source aspect ${(SPLASH_IMG_ORIGINAL_W/SPLASH_IMG_ORIGINAL_H).toFixed(2)} &lt; box ratio ${(SPLASH_MAX_W/SPLASH_MAX_H).toFixed(2)}</span>
+            <br><span class="key">📍 Splash position:</span> <span class="val">(${splashX}, ${splashY})</span> <span class="unit">centered on screen</span>
+            <span class="formula">→ x = (screen_w − splash_w) / 2 = (${sw} − ${splashSize.w}) / 2</span>
+            <br><span class="key">🔠 Font size:</span> <span class="val">${realFontPx} px</span> <span class="unit">Anuphan, cyan #00e5ff</span>
+            <span class="formula">→ max(22, splash_w // 44) = max(22, ${splashSize.w} // 44)</span>
+            <br><span class="key">🎯 Icon height:</span> <span class="val">${iconRealH} px</span> <span class="unit">(${(iconRealH/realFontPx).toFixed(2)}× font, width auto to preserve meteor aspect)</span>
+            <br><span class="key">⬇  Bottom margin:</span> <span class="val">${bottomMargin} px</span>
+            <span class="formula">→ max(36, splash_h × 0.07) = max(36, ${splashSize.h} × 0.07)</span>
+            <br><span class="key">↔  Group width:</span> <span class="val">${groupRealW} px</span> <span class="unit">(icon + gap${gapReal} + text) — no bar bg, text glow + shadow only</span>
+            <br><span class="key">📏 Canvas scale:</span> <span class="val">${scale.toFixed(4)}</span> <span class="unit">(1 real px = ${scale.toFixed(2)} display px)</span>
+        `;
+    }
+
+    // Rough text-width measurement for the readout
+    function measureTextWidth() {
+        // Approximate — Kanit ~ 0.55em per character
+        const charCount = 'v1.8.13'.length;
+        return Math.round(charCount * (state.iconSize > 30 ? 16 : 14)); // ballpark
+    }
+
+    // ───── Wire up controls ─────
+    document.querySelectorAll('.ctrl-btn[data-res]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.ctrl-btn[data-res]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const [w, h] = btn.dataset.res.split('x').map(Number);
+            state.screenW = w;
+            state.screenH = h;
+            // Need to wait one frame for aspect-ratio CSS to apply before measuring
+            requestAnimationFrame(render);
+        });
+    });
+    document.querySelectorAll('.ctrl-btn[data-icon]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.ctrl-btn[data-icon]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.iconSize = parseInt(btn.dataset.icon, 10);
+            render();
+        });
+    });
+
+    // Re-render on window resize (canvas width changes → scale changes)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(render, 80);
+    });
+
+    // Initial render — wait for image to size canvas
+    if (document.readyState === 'complete') {
+        render();
+    } else {
+        window.addEventListener('load', () => requestAnimationFrame(render));
+    }
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   SECTION 2 — TUI default positions (drag-enabled)
+   ══════════════════════════════════════════════════════════════════════ */
+(function() {
+    'use strict';
+
+    const tuiState = {
+        screenW: 2560,
+        screenH: 1440,
+        mode: 'dialog',
+        showAll: false,
+        // userPositions: { dialog: {x,y} | null, ... } — null = use default
+        userPositions: { dialog: null, battle: null, cutscene: null, choice: null },
+    };
+
+    const canvas = document.getElementById('tuiCanvas');
+    const rulerTR = document.getElementById('tuiRulerTR');
+    const readout = document.getElementById('tuiSpecReadout');
+    const rects = {
+        dialog:   { el: document.getElementById('tuiDialog'),   dim: document.getElementById('tuiDialogDim'),   pos: document.getElementById('tuiDialogPos'),   userpos: document.getElementById('tuiDialogUserpos')   },
+        battle:   { el: document.getElementById('tuiBattle'),   dim: document.getElementById('tuiBattleDim'),   pos: document.getElementById('tuiBattlePos'),   userpos: document.getElementById('tuiBattleUserpos')   },
+        cutscene: { el: document.getElementById('tuiCutscene'), dim: document.getElementById('tuiCutsceneDim'), pos: document.getElementById('tuiCutscenePos'), userpos: document.getElementById('tuiCutsceneUserpos') },
+        choice:   { el: document.getElementById('tuiChoice'),   dim: document.getElementById('tuiChoiceDim'),   pos: document.getElementById('tuiChoicePos'),   userpos: document.getElementById('tuiChoiceUserpos')   },
+    };
+
+    // ── Compute DEFAULT (x,y,w,h) per mode (no user override) ──
+    // Formulas mirror translated_ui.py + dissolve_overlay.py exactly.
+    // % constants — chosen 2026-05-20 from user's drag positions at 2560×1440.
+    // Dialog at (800, 1018), Choice at (800, 866). Both horizontally centered.
+    const DIALOG_Y_PCT = 0.707;   // 1018 / 1440 ≈ 0.7069
+    const CHOICE_Y_PCT = 0.601;   // 866  / 1440 ≈ 0.6014
+
+    function computeDefault(mode, sw, sh) {
+        switch (mode) {
+            case 'dialog': {
+                // settings["width"] × ["height"] = 960×240
+                // x = center horizontally, y = DIALOG_Y_PCT × screen_h
+                const w = 960, h = 240;
+                const x = Math.round((sw - w) / 2);
+                const y = Math.round(sh * DIALOG_Y_PCT);
+                return { w, h, x, y, posNote: `x=center · y=screen_h × ${DIALOG_Y_PCT} (${(DIALOG_Y_PCT*100).toFixed(1)}%)` };
+            }
+            case 'battle': {
+                const w = 1000, h = 140;
+                const x = Math.round((sw - w) / 2);
+                const y = 80;
+                return { w, h, x, y, posNote: 'x=center · y=80px from top' };
+            }
+            case 'cutscene': {
+                const w = Math.round(sw * 0.90);
+                const h = 160;
+                const x = Math.round((sw - w) / 2);
+                const bottomMargin = Math.max(80, Math.floor(sh / 20));
+                const y = sh - h - bottomMargin;
+                return { w, h, x, y, posNote: `x=center · y=screen_h − h − max(80, screen_h/20) = ${y}` };
+            }
+            case 'choice': {
+                // Independent absolute %-of-screen position (NOT relative to dialog).
+                // Choice height = line_height × 5 + 60, line_h = (font+2)×1.4.
+                // Default font 24 → choice_h ≈ 242
+                const fontSize = 24;
+                const lineH = (fontSize + 2) * 1.4;
+                const w = 960;
+                const h = Math.round(lineH * 5 + 60);
+                const x = Math.round((sw - w) / 2);
+                const y = Math.round(sh * CHOICE_Y_PCT);
+                return { w, h, x, y, posNote: `x=center · y=screen_h × ${CHOICE_Y_PCT} (${(CHOICE_Y_PCT*100).toFixed(1)}%) — independent of dialog` };
+            }
+        }
+    }
+
+    // ── Resolve final spec (user override wins over default for x,y) ──
+    function getSpec(mode, sw, sh) {
+        const def = computeDefault(mode, sw, sh);
+        const user = tuiState.userPositions[mode];
+        if (user) {
+            return { ...def, x: user.x, y: user.y, userMoved: true };
+        }
+        return { ...def, userMoved: false };
+    }
+
+    function getScale() {
+        return canvas.getBoundingClientRect().width / tuiState.screenW;
+    }
+
+    function tuiRender() {
+        canvas.style.setProperty('--screen-ratio', `${tuiState.screenW} / ${tuiState.screenH}`);
+        const scale = getScale();
+
+        rulerTR.textContent = `${tuiState.screenW} × ${tuiState.screenH}`;
+
+        const modesToShow = tuiState.showAll
+            ? ['dialog', 'battle', 'cutscene', 'choice']
+            : [tuiState.mode];
+
+        const computed = {};
+        for (const m of ['dialog', 'battle', 'cutscene', 'choice']) {
+            const spec = getSpec(m, tuiState.screenW, tuiState.screenH);
+            computed[m] = spec;
+            const r = rects[m];
+            if (modesToShow.includes(m)) {
+                r.el.style.display = 'flex';
+                r.el.style.left   = (spec.x * scale) + 'px';
+                r.el.style.top    = (spec.y * scale) + 'px';
+                r.el.style.width  = (spec.w * scale) + 'px';
+                r.el.style.height = (spec.h * scale) + 'px';
+                r.dim.textContent = `${spec.w} × ${spec.h}`;
+                r.pos.textContent = `(${spec.x}, ${spec.y})`;
+                if (spec.userMoved) {
+                    r.el.classList.add('user-moved');
+                    r.userpos.textContent = `USER · (${spec.x}, ${spec.y})`;
+                } else {
+                    r.el.classList.remove('user-moved');
+                    r.userpos.textContent = '';
+                }
+            } else {
+                r.el.style.display = 'none';
+            }
+        }
+
+        // ── Spec readout ──
+        const m = tuiState.mode;
+        const s = computed[m];
+        const modeNames = {
+            dialog:   '💬 Dialog (Tkinter)',
+            battle:   '⚔️ Battle (PyQt6 DissolveOverlay)',
+            cutscene: '🎬 Cutscene (PyQt6 DissolveOverlay)',
+            choice:   '🎯 Choice (Tkinter)',
+        };
+
+        let html = '';
+        if (tuiState.showAll) {
+            html += `<span class="key">🔍 Showing all 4 modes</span> <span class="unit">click mode chip + drag to position · ↺ Reset to restore default</span><br><br>`;
+            for (const k of ['dialog', 'battle', 'cutscene', 'choice']) {
+                const c = computed[k];
+                const tag = c.userMoved ? '<span style="color:#fcd34d"> · USER-MOVED</span>' : '';
+                html += `<span class="key">${modeNames[k]}</span> <span class="val">${c.w}×${c.h}</span> <span class="unit">at (${c.x}, ${c.y})${tag}</span><br>`;
+            }
+        } else {
+            html += `<span class="key">📐 Screen:</span> <span class="val">${tuiState.screenW} × ${tuiState.screenH}</span><br>`;
+            html += `<span class="key">🎭 Mode:</span> <span class="val">${modeNames[m]}</span><br>`;
+            html += `<span class="key">📏 Size:</span> <span class="val">${s.w} × ${s.h} px</span><br>`;
+            if (s.userMoved) {
+                const def = computeDefault(m, tuiState.screenW, tuiState.screenH);
+                html += `<span class="key">📍 Position (USER):</span> <span class="val" style="color:#fcd34d">(${s.x}, ${s.y})</span> <span class="unit">— ลากด้วยเมาส์</span><br>`;
+                html += `<span class="key">└─ Default was:</span> <span class="val" style="opacity:0.7">(${def.x}, ${def.y})</span> <span class="unit">${def.posNote}</span><br>`;
+            } else {
+                html += `<span class="key">📍 Position:</span> <span class="val">(${s.x}, ${s.y})</span> <span class="unit">${s.posNote}</span><br>`;
+            }
+            html += `<span class="key">📊 Canvas scale:</span> <span class="val">${scale.toFixed(4)}</span> <span class="unit">(1 real px = ${scale.toFixed(2)} display px)</span>`;
+        }
+        readout.innerHTML = html;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ── DRAG HANDLING ──
+    // Convert mouse pixel movement to real-screen-px via 1/scale.
+    // Clamp position so rect stays within screen bounds (0..sw-w, 0..sh-h).
+    // ══════════════════════════════════════════════════════════════════
+    let drag = null;  // { mode, startX, startY, origX, origY }
+
+    function startDrag(mode, ev) {
+        ev.preventDefault();
+        const spec = getSpec(mode, tuiState.screenW, tuiState.screenH);
+        drag = {
+            mode,
+            startClientX: ev.clientX,
+            startClientY: ev.clientY,
+            origX: spec.x,
+            origY: spec.y,
+            w: spec.w,
+            h: spec.h,
+        };
+        rects[mode].el.classList.add('dragging');
+    }
+
+    function onMouseMove(ev) {
+        if (!drag) return;
+        const scale = getScale();
+        const dxScreen = (ev.clientX - drag.startClientX) / scale;
+        const dyScreen = (ev.clientY - drag.startClientY) / scale;
+        let newX = Math.round(drag.origX + dxScreen);
+        let newY = Math.round(drag.origY + dyScreen);
+        // Clamp to screen bounds
+        newX = Math.max(0, Math.min(tuiState.screenW - drag.w, newX));
+        newY = Math.max(0, Math.min(tuiState.screenH - drag.h, newY));
+        tuiState.userPositions[drag.mode] = { x: newX, y: newY };
+        tuiRender();
+    }
+
+    function endDrag() {
+        if (!drag) return;
+        rects[drag.mode].el.classList.remove('dragging');
+        drag = null;
+    }
+
+    // Attach drag handlers to each rect (mousedown on rect, move/up on window)
+    Object.entries(rects).forEach(([mode, r]) => {
+        r.el.addEventListener('mousedown', (ev) => startDrag(mode, ev));
+    });
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('mouseleave', endDrag);
+
+    // ══════════════════════════════════════════════════════════════════
+    // ── Wire up other controls ──
+    // ══════════════════════════════════════════════════════════════════
+    document.querySelectorAll('.mode-chip[data-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.mode-chip').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            tuiState.mode = btn.dataset.mode;
+            const tog = document.getElementById('tuiShowAll');
+            if (tog.checked) { tog.checked = false; tuiState.showAll = false; }
+            tuiRender();
+        });
+    });
+    document.querySelectorAll('.ctrl-btn[data-tui-res]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.ctrl-btn[data-tui-res]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const [w, h] = btn.dataset.tuiRes.split('x').map(Number);
+            tuiState.screenW = w;
+            tuiState.screenH = h;
+            requestAnimationFrame(tuiRender);
+        });
+    });
+    document.getElementById('tuiShowAll').addEventListener('change', (e) => {
+        tuiState.showAll = e.target.checked;
+        tuiRender();
+    });
+    document.getElementById('tuiResetBtn').addEventListener('click', () => {
+        if (tuiState.showAll) {
+            tuiState.userPositions = { dialog: null, battle: null, cutscene: null, choice: null };
+        } else {
+            tuiState.userPositions[tuiState.mode] = null;
+        }
+        tuiRender();
+    });
+
+    // ── Center horizontally: x = (screen_w − w) / 2, keep current y ──
+    document.getElementById('tuiCenterHBtn').addEventListener('click', () => {
+        const targets = tuiState.showAll
+            ? ['dialog', 'battle', 'cutscene', 'choice']
+            : [tuiState.mode];
+        for (const m of targets) {
+            const spec = getSpec(m, tuiState.screenW, tuiState.screenH);
+            const newX = Math.round((tuiState.screenW - spec.w) / 2);
+            tuiState.userPositions[m] = { x: newX, y: spec.y };
+        }
+        tuiRender();
+    });
+
+    // ── Center vertically: y = (screen_h − h) / 2, keep current x ──
+    document.getElementById('tuiCenterVBtn').addEventListener('click', () => {
+        const targets = tuiState.showAll
+            ? ['dialog', 'battle', 'cutscene', 'choice']
+            : [tuiState.mode];
+        for (const m of targets) {
+            const spec = getSpec(m, tuiState.screenW, tuiState.screenH);
+            const newY = Math.round((tuiState.screenH - spec.h) / 2);
+            tuiState.userPositions[m] = { x: spec.x, y: newY };
+        }
+        tuiRender();
+    });
+
+    let tuiResizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(tuiResizeTimer);
+        tuiResizeTimer = setTimeout(tuiRender, 80);
+    });
+
+    if (document.readyState === 'complete') {
+        tuiRender();
+    } else {
+        window.addEventListener('load', () => requestAnimationFrame(tuiRender));
+    }
+})();
+</script>
+</body>
+</html>

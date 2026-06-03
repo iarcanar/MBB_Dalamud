@@ -1,0 +1,440 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reference — MBB Manual</title>
+    <link rel="icon" type="image/png" href="../web_assets/mbb_icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/manual.css">
+</head>
+<body>
+
+<div class="bg-particles" aria-hidden="true"></div>
+
+<div class="manual-shell">
+
+    <header class="manual-header">
+        <a href="index.html" class="brand">
+            <span class="dot"></span>
+            <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
+            <span class="tag" style="margin-left:8px">v1.8.18</span>
+        </a>
+        <button class="hamburger" aria-label="Toggle nav">≡</button>
+        <nav>
+            <a href="../index.html">Landing</a>
+            <a href="index.html">Overview</a>
+            <a href="ui.html">UI Systems</a>
+            <a href="npc-translation.html">NPC + Translation</a>
+            <a href="styling.html">Theme + Settings</a>
+            <a href="reference.html" class="active">Reference</a>
+            <a href="prototype.html">[Proto]</a>
+            <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
+        </nav>
+    </header>
+
+    <div class="sync-banner">
+        <span class="sync-dot"></span>
+        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+    </div>
+
+    <aside class="manual-sidebar">
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Overview</div>
+            <ul><li><a href="index.html"><span class="lead">▸</span>Project Reference</a></li></ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>UI Systems</div>
+            <ul>
+                <li><a href="ui.html#main-window"><span class="lead">▸</span>Main Window</a></li>
+                <li><a href="ui.html#mini-ui"><span class="lead">▸</span>Mini UI</a></li>
+                <li><a href="ui.html#tui"><span class="lead">▸</span>TUI (Dialog/Choice)</a></li>
+                <li><a href="ui.html#dissolve"><span class="lead">▸</span>DissolveOverlay</a></li>
+                <li><a href="ui.html#logs"><span class="lead">▸</span>Translated Logs</a></li>
+                <li><a href="ui.html#glass"><span class="lead">▸</span>Glass Mode</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Data + Translation</div>
+            <ul>
+                <li><a href="npc-translation.html#npc-manager"><span class="lead">▸</span>NPC Manager</a></li>
+                <li><a href="npc-translation.html#cloud-sync"><span class="lead">▸</span>Cloud Sync</a></li>
+                <li><a href="npc-translation.html#translation-engine"><span class="lead">▸</span>Translation Engine</a></li>
+                <li><a href="npc-translation.html#wide-context"><span class="lead">▸</span>Wide-Context</a></li>
+                <li><a href="npc-translation.html#database"><span class="lead">▸</span>NPC Database</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Styling + Config</div>
+            <ul>
+                <li><a href="styling.html#theme"><span class="lead">▸</span>Theme System</a></li>
+                <li><a href="styling.html#font"><span class="lead">▸</span>Font System</a></li>
+                <li><a href="styling.html#settings"><span class="lead">▸</span>Settings</a></li>
+                <li><a href="styling.html#splash"><span class="lead">▸</span>Splash + Updater</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Reference</div>
+            <ul>
+                <li><a href="reference.html#gemini" class="active"><span class="lead">▸</span>Gemini Models</a></li>
+                <li><a href="reference.html#test-messages"><span class="lead">▸</span>Test Messages</a></li>
+                <li><a href="reference.html#gotchas"><span class="lead">▸</span>Hard-Won Rules</a></li>
+                <li><a href="reference.html#plugin"><span class="lead">▸</span>Plugin Manifest</a></li>
+                <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <main class="manual-content">
+
+        <div class="breadcrumb">
+            <a href="../index.html">MBB</a>
+            <span class="sep">/</span>
+            <a href="index.html">Manual</a>
+            <span class="sep">/</span>
+            <span class="here">Reference</span>
+        </div>
+
+        <div class="page-eyebrow">Reference</div>
+        <h1 class="page-title">Reference</h1>
+        <p class="page-subtitle">Gemini model matrix, test message pools, hard-won rules (must-read สำหรับ AI ที่จะ dev ต่อ), plugin manifest, roadmap.</p>
+
+        <!-- ──────────────── Gemini Models ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="gemini">Gemini Models</h2>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Model</th><th>Notes</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>gemini-3.1-flash-lite-preview</code></td>
+                            <td><span class="tag success">Default</span> since v1.8.7. <code>-preview</code> suffix <strong>REQUIRED</strong>. Has Fast/Standard/Deep thinking modes</td>
+                        </tr>
+                        <tr><td><code>gemini-2.5-flash</code></td><td>Supported</td></tr>
+                        <tr><td><code>gemini-2.5-flash-lite</code></td><td>Supported</td></tr>
+                        <tr><td><code>gemini-2.5-pro</code></td><td>Supported</td></tr>
+                        <tr><td><code>gemini-2.0-flash</code></td><td>Supported (legacy)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout warning">
+                <span class="lead">4 ไฟล์ที่ต้อง update เมื่อแก้ model list</span>
+                <ul style="margin-top:8px; padding-left:20px">
+                    <li><code>settings.py</code> — <code>VALID_MODELS</code></li>
+                    <li><code>pyqt_ui/model_panel.py</code> — <code>AVAILABLE_MODELS</code></li>
+                    <li><code>translator_gemini.py</code> — <code>valid_models</code></li>
+                    <li><code>model.py</code> (legacy — pending cleanup)</li>
+                </ul>
+            </div>
+
+            <p>Guide: <code>docs/GEMINI_MODELS_GUIDE.md</code></p>
+            <p><strong>Future opportunity:</strong> 3.1 Flash-Lite thinking modes → auto-switch by ChatType (Fast for dialog, Deep for cutscene).</p>
+        </section>
+
+        <!-- ──────────────── Test Messages ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="test-messages">Test Messages</h2>
+            <p>3 ปุ่มใน Settings → real Gemini pipeline → renders บน TUI. Curated FFXIV-flavored lines (v1.8.9 — replaced generic placeholders).</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Pool</th><th>ChatType</th><th>Count</th><th>Speakers</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>_TEST_DIALOG</code></td><td>61</td><td>10</td>
+                            <td style="font-size:12px">Tataru, Alphinaud, Alisaie, Thancred, Y'shtola, G'raha Tia, Estinien, Urianger, Krile, Wuk Lamat</td>
+                        </tr>
+                        <tr>
+                            <td><code>_TEST_BATTLE</code></td><td>68</td><td>6</td>
+                            <td style="font-size:12px">Zenos, Nidhogg, Estinien (dragoon voice), Emet-Selch, Sephiroth, ???</td>
+                        </tr>
+                        <tr>
+                            <td><code>_TEST_CUTSCENE</code></td><td>71</td><td>4-6</td>
+                            <td style="font-size:12px">narration only (<code>speaker=""</code>) — 4 cinematic moods</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout info">
+                <span class="lead">Cutscene = narration เสมอ</span>
+                ตาม FFXIV convention. Characters speaking ใช้ ChatType 61.
+            </div>
+
+            <pre><code>def _inject_test_dialog(self):
+    speaker, message = random.choice(self._TEST_DIALOG)
+    self._inject_test_message("dialogue", speaker, message, 61)</code></pre>
+        </section>
+
+        <!-- ──────────────── Hard-Won Rules ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="gotchas">Hard-Won Rules</h2>
+            <p style="color:var(--accent-soft); font-weight:500; font-size:15.5px">⚡ Must-read สำหรับ AI agent ที่จะ dev ต่อ — กฎที่ถูกพิสูจน์มาแล้วจากบัคจริง.</p>
+
+            <h3 class="subsection" id="dalamud-native">Dalamud C# Bridge — Native Safety (v1.8.18)</h3>
+            <div class="callout danger">
+                <span class="lead">AtkValue type-gate ไม่ใช่กฎเหมารวม — Talk addon คือข้อยกเว้น</span>
+                <p style="margin-top:6px"><code>AtkValue</code> เป็น union → เช็ค <code>.Type == AtkValueType.String</code> ก่อนอ่าน <code>.String.Value</code> <strong>เฉพาะ addon ที่ report เป็น String จริง</strong>. ⚠️ <strong>Talk addon (dialogue, ChatType 61)</strong> ส่ง pointer ที่อ่านได้ที่ <code>AtkValues[0]/[1]</code> แต่ <code>.Type</code> <strong>ไม่ใช่</strong> String → ใส่ gate เข้มจะ early-return ทิ้ง dialogue <strong>ทุกบรรทัด</strong> (regression v1.8.17 → revert v1.8.18). <code>OnTalkAddonPreReceive</code> ต้อง <strong>null-check pointer อย่างเดียว ไม่มี type gate</strong>. TalkSubtitle (cutscene 71) ตรงข้าม — <code>[0].Type</code> เป็น String จริง → คง gate ไว้. อย่า "harden" native path ที่ทำงานดีอยู่แล้วโดยไม่เทสต์ในเกม.</p>
+            </div>
+            <div class="callout danger">
+                <span class="lead">จับเฉพาะ type ที่ใช้ + Dispose ต้อง symmetric</span>
+                <ul style="margin-top:8px; padding-left:20px">
+                    <li><strong>Capture เฉพาะ</strong> dialogue (61) · battle (68) · cutscene (71) · choice (70); filter อย่างอื่นทั้งหมด — hook เกมออนไลน์ยิงข้อความท่วม, จับหมด = หายนะ. ห้ามเพิ่ม hook กว้างหรือ per-frame (PostUpdate/PreDraw) โดยไม่ขออนุมัติ.</li>
+                    <li><strong>ทุก addon listener ที่ register ต้องมี <code>Dispose()</code> unregister คู่กัน</strong> — TalkSubtitle เคย leak (v1.8.18 fix) → reload ปลั๊กอินแล้ว cutscene ถัดไปยิง handler บน instance ที่ตายแล้ว → crash.</li>
+                </ul>
+            </div>
+
+            <h3 class="subsection" id="frozen-mode">Frozen-Mode (exe) Robustness (v1.8.18)</h3>
+            <div class="callout">
+                <span class="lead">บัคที่เห็นเฉพาะตอนรันเป็น exe (มองไม่เห็นใน dev เพราะ CWD = python-app/ พอดี)</span>
+                <ul style="margin-top:8px; padding-left:20px">
+                    <li><strong>Atomic npc.json write</strong> — <code>npc_data_manager.save()</code> เขียน <code>.tmp</code> → <code>fsync</code> → <code>os.replace()</code> (atomic). กัน crash กลางเขียนทำไฟล์เสีย (อาการ "npc.json ไม่อ่าน" / NPC Manager แครช).</li>
+                    <li><strong>Loader <code>.get()</code> hardening</strong> — npc.json ไม่ครบ → degrade เป็น empty แทน KeyError.</li>
+                    <li><strong>CWD normalization</strong> — <code>os.chdir(get_app_dir())</code> ต้น <code>__main__</code> → settings/fonts/logs เซฟถูกที่ทุก launch path (แก้อาการ "setting ไม่เซฟผ่าน exe").</li>
+                    <li><strong>Stub schema fix</strong> — <code>ensure_npc_file_exists()</code> สร้าง stub ตรง schema จริง (กัน KeyError ตอน install ไม่ครบ).</li>
+                </ul>
+            </div>
+
+            <h3 class="subsection" id="tkinter-thread">Tkinter Threading</h3>
+            <div class="callout danger">
+                <span class="lead">Main thread ONLY</span>
+                <ul style="margin-top:8px; padding-left:20px">
+                    <li><code>winfo_exists()</code>, <code>attributes()</code>, <code>update()</code>, <code>destroy()</code> — <strong>main thread ONLY</strong></li>
+                    <li>Thread-based animation → ใช้ <code>root.after()</code> recursive chain แทน</li>
+                    <li>Tkinter + PyQt6 hybrid shutdown บางครั้ง crash ด้วย <code>PyEval_RestoreThread</code> GIL error — รู้แล้วว่าไม่อันตราย</li>
+                </ul>
+            </div>
+
+            <h3 class="subsection" id="pyqt-gotchas">PyQt6 Gotchas</h3>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-eyebrow">Gotcha #1</div>
+                    <h3>QSS overrides setFont</h3>
+                    <p style="font-size:13.5px; color:var(--text-dim)">Panel-level QSS subtree cascade override <code>setFont()</code> silently.</p>
+                    <p style="font-size:13px; color:var(--text-faint); margin-top:8px"><strong>Fix:</strong> apply <code>font-family</code>/<code>font-size</code> ผ่าน QSS, หรือ pre-render เป็น QPixmap ผ่าน QPainter (bypass QSS pipeline)</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-eyebrow">Gotcha #2</div>
+                    <h3>QGraphicsDropShadowEffect rasterizes children</h3>
+                    <p style="font-size:13.5px; color:var(--text-dim)">All descendants rasterize together — children-of-shadow ติด bounding rect → ghost outlines</p>
+                    <p style="font-size:13px; color:var(--text-faint); margin-top:8px"><strong>Fix:</strong> sibling overlap pattern (Polaroid). Action buttons เป็น siblings ของ shadowed card, ไม่ใช่ children.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-eyebrow">Gotcha #3</div>
+                    <h3>Hover Enter/Leave flickers</h3>
+                    <p style="font-size:13.5px; color:var(--text-dim)">Overlapping siblings ทำให้ Enter/Leave loop ไม่จบ — cursor crossing onto sibling = Leave on parent → hide → cursor on parent → Enter → ...</p>
+                    <p style="font-size:13px; color:var(--text-faint); margin-top:8px"><strong>Fix:</strong> timer-based geometry polling (60-80ms) แทน Enter/Leave events</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-eyebrow">Gotcha #4</div>
+                    <h3>QTimer.singleShot(0) from worker</h3>
+                    <p style="font-size:13.5px; color:var(--text-dim)">Cross-thread <code>QTimer.singleShot(0, ...)</code> <strong>silently no-ops</strong> — fires on calling thread, ไม่ใช่ UI thread.</p>
+                    <p style="font-size:13px; color:var(--text-faint); margin-top:8px"><strong>Fix:</strong> ใช้ <code>pyqtSignal</code> (auto-queued connection) สำหรับ cross-thread results</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-eyebrow">Gotcha #5</div>
+                    <h3>QtFontManager is lazy</h3>
+                    <p style="font-size:13.5px; color:var(--text-dim)">Runs ตอน Settings/Font panel เปิดเท่านั้น. Components ที่ใช้ custom font ก่อน panel เปิด → font ไม่ load</p>
+                    <p style="font-size:13px; color:var(--text-faint); margin-top:8px"><strong>Fix:</strong> Components call <code>QFontDatabase.addApplicationFont()</code> เอง (idempotent — Polaroid pattern)</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-eyebrow">Gotcha #6</div>
+                    <h3>App-level eventFilter from BG threads</h3>
+                    <p style="font-size:13.5px; color:var(--text-dim)">App-level <code>eventFilter</code> รับ events จาก background threads (เช่น global keyboard hook). Exception propagate ไป Qt's C++ side → app terminate ทันที</p>
+                    <p style="font-size:13px; color:var(--text-faint); margin-top:8px"><strong>Fix:</strong> wrap callback bodies ใน try/except + log</p>
+                </div>
+            </div>
+
+            <h3 class="subsection" id="win32-dont">Win32 + Tkinter Don'ts</h3>
+
+            <div class="callout danger">
+                <span class="lead">Don't 1 — <code>WM_NCLBUTTONDOWN</code> modal resize from Tk callback</span>
+                <p style="margin-top:6px"><code>PyEval_RestoreThread</code> GIL fatal. <code>SendMessageW</code> blocks main thread inside modal loop; Tk window proc fires WM_PAINT/WM_SIZE back to NULL Python thread state → process terminates.</p>
+            </div>
+
+            <div class="callout danger">
+                <span class="lead">Don't 2 — <code>SetWindowRgn</code> during drag</span>
+                <p style="margin-top:6px"><code>CreateRoundRectRgn</code> + redraw + <code>update_idletasks()</code> = jank. Re-apply only at <code>stop_resize()</code>.</p>
+            </div>
+
+            <div class="callout danger">
+                <span class="lead">Don't 3 — <code>transparentcolor</code> for alpha gradient</span>
+                <p style="margin-top:6px">1-bit color-key — partial-alpha pixels render as opaque squares. ใช้ PyQt6 frameless + translucent แทนสำหรับ alpha gradient.</p>
+            </div>
+
+            <h3 class="subsection" id="attr-names">MBB.py Attribute Names</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Use</th><th>NEVER use</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>self.translated_logs_instance</code></td><td><span style="text-decoration:line-through; color:var(--danger)"><code>self.translated_logs</code></span></td></tr>
+                        <tr><td><code>self.settings_ui</code></td><td><span style="text-decoration:line-through; color:var(--danger)"><code>self.settings_panel</code></span></td></tr>
+                        <tr><td><code>self.info_label</code> → <code>control_panel.lbl_status_info</code></td><td>—</td></tr>
+                        <tr><td><code>self.conversation_logger</code> (always-on, never None)</td><td>—</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>FontPanel ref คือ <code>_font_panel</code> (private).</p>
+
+            <h3 class="subsection" id="frozen-rule">Frozen-Mode <code>npc.json</code> Rule</h3>
+            <div class="callout rule">
+                <span class="lead">Any code touching <code>npc.json</code> MUST use <code>get_npc_file_path()</code></span>
+                <p style="margin-top:6px"><code>resource_path()</code> resolves to immutable bundled snapshot — wrong for npc.json (user writes). Reserve <code>resource_path()</code> สำหรับ static assets (fonts, icons).</p>
+                <p style="margin-top:6px"><strong>Verify:</strong> <code>grep -rn 'resource_path.*npc' python-app/</code> ต้อง return zero matches</p>
+            </div>
+
+            <h3 class="subsection" id="pyqt-pin-rule">PyQt6 Version Pin</h3>
+            <div class="callout danger">
+                <span class="lead">PINNED at 6.9.0 — DO NOT UPGRADE</span>
+                Qt 6.10+ frameless+translucent rendering regression — ทำให้ DissolveOverlay + Polaroid + main window กลายเป็นพื้นทึบสีดำ.
+            </div>
+        </section>
+
+        <!-- ──────────────── Plugin Manifest ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="plugin">Plugin Manifest</h2>
+
+            <h3 class="subsection">Folder Structure</h3>
+            <ul>
+                <li><code>DalamudMBBBridge/</code> (flat — เคย <code>dalamud-plugin/DalamudMBBBridge/</code>)</li>
+                <li>DLL: <code>DalamudMBBBridge/bin/Release/DalamudMBBBridge.dll</code></li>
+                <li><code>&lt;AppendRuntimeIdentifierToOutputPath&gt;false&lt;/...&gt;</code></li>
+            </ul>
+
+            <h3 class="subsection">Manifest</h3>
+            <ul>
+                <li><strong>Name:</strong> Magicite Babel Bridge</li>
+                <li><strong>Repo URL:</strong> <code>iarcanar/MBB_Dalamud</code></li>
+                <li><code>OpenMainUi</code> registered</li>
+            </ul>
+
+            <h3 class="subsection">Commands</h3>
+            <div class="two-col">
+                <div class="card compact">
+                    <p style="margin:0"><code>/mbb</code> — open main UI</p>
+                </div>
+                <div class="card compact">
+                    <p style="margin:0"><code>/mbb launch</code> — start translation</p>
+                </div>
+                <div class="card compact">
+                    <p style="margin:0"><code>/mbb status</code> — show status</p>
+                </div>
+                <div class="card compact">
+                    <p style="margin:0"><code>/mbb help</code> — show help</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ──────────────── Roadmap ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="roadmap">Roadmap (Deferred)</h2>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Item</th><th>Trigger</th><th>Memory</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Phase A.5</strong> — auto cloud-sync check on startup</td>
+                            <td>หลัง Phase A release cadence validate UX</td>
+                            <td><code>project_cloud_npc_sync_plan.md</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Phase B</strong> — encryption + private repo</td>
+                            <td>หลัง paid tier strategy</td>
+                            <td>same</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Phase C</strong> — paid tier gate</td>
+                            <td>หลัง Phase B</td>
+                            <td>same</td>
+                        </tr>
+                        <tr>
+                            <td><strong>v1.9.0 TUI module split</strong> — <code>TUI_dialog</code> / <code>TUI_battle</code> / <code>TUI_cutscene</code> / <code>TUI_choice</code> เป็น separate modules</td>
+                            <td>ถ้ามี shared-state bugs ใน <code>translated_ui.py</code> เพิ่ม</td>
+                            <td><code>project_tui_split_plan_v190.md</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Phase 2 file split</strong> — <code>tui_fade_system</code> / <code>tui_resize_system</code> / <code>tui_auto_hide</code> (~1100 lines extractable)</td>
+                            <td>เมื่อพร้อม mixin/delegation pattern</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Custom repository setup</strong> (<code>pluginmaster.json</code>)</td>
+                            <td>Phase 2 of distribution</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PyInstaller one-click install</strong></td>
+                            <td>Phase 3 of distribution</td>
+                            <td>—</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="subsection" id="resources">External Resources</h3>
+            <ul>
+                <li><strong>Landing page:</strong> <code>docs/index.html</code> (Tailwind + glass-morphism, cinematic banner)</li>
+                <li><strong>Landing maintenance:</strong> <code>docs/WEBSITE_GUIDE.md</code></li>
+                <li><strong>Build protocol:</strong> <code>BUILD_PROTOCOL.md</code></li>
+                <li><strong>Gemini models guide:</strong> <code>docs/GEMINI_MODELS_GUIDE.md</code></li>
+                <li><strong>NPC release pipeline:</strong> <code>scripts/build_npc_release.py</code></li>
+                <li><strong>Cloud npc data repo:</strong> <a href="https://github.com/iarcanar/MBB_NPCData" target="_blank">iarcanar/MBB_NPCData</a></li>
+                <li><strong>AI agent memory:</strong> <code>C:\Users\Welcome\.claude\projects\c--MBB-Dalamud\memory\</code></li>
+            </ul>
+
+            <h3 class="subsection" id="git-history">Older Changelogs</h3>
+            <p>Per-version detail (v1.8.0 → v1.8.9) อยู่ใน git history:</p>
+            <pre><code>git log --oneline CLAUDE.md      # CLAUDE.md edit history
+git log --oneline -- python-app/ # general project history
+git show &lt;commit&gt;:CLAUDE.md      # any old version of this doc</code></pre>
+        </section>
+
+        <nav class="page-nav">
+            <a href="styling.html"><span class="nav-dir">← Prev</span><span class="nav-title">Theme + Settings</span></a>
+            <a class="disabled next"><span class="nav-dir">End</span><span class="nav-title">—</span></a>
+        </nav>
+    </main>
+
+    <aside class="manual-toc">
+        <div class="toc-title">On this page</div>
+        <ul>
+            <li><a href="#gemini">Gemini Models</a></li>
+            <li><a href="#test-messages">Test Messages</a></li>
+            <li><a href="#gotchas">Hard-Won Rules</a></li>
+            <li class="toc-h3"><a href="#tkinter-thread">Tkinter Threading</a></li>
+            <li class="toc-h3"><a href="#pyqt-gotchas">PyQt6 Gotchas</a></li>
+            <li class="toc-h3"><a href="#win32-dont">Win32 Don'ts</a></li>
+            <li class="toc-h3"><a href="#attr-names">Attribute Names</a></li>
+            <li class="toc-h3"><a href="#frozen-rule">Frozen Mode Rule</a></li>
+            <li class="toc-h3"><a href="#pyqt-pin-rule">PyQt6 Pin</a></li>
+            <li><a href="#plugin">Plugin Manifest</a></li>
+            <li><a href="#roadmap">Roadmap</a></li>
+            <li class="toc-h3"><a href="#resources">External Resources</a></li>
+            <li class="toc-h3"><a href="#git-history">Older Changelogs</a></li>
+        </ul>
+    </aside>
+
+    <footer class="manual-footer">
+        © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
+        · <a href="../index.html">← Landing page</a>
+    </footer>
+
+</div>
+
+<script src="assets/manual.js"></script>
+</body>
+</html>

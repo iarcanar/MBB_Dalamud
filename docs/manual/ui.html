@@ -1,0 +1,664 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Systems — MBB Manual</title>
+    <link rel="icon" type="image/png" href="../web_assets/mbb_icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/manual.css">
+</head>
+<body>
+
+<div class="bg-particles" aria-hidden="true"></div>
+
+<div class="manual-shell">
+
+    <header class="manual-header">
+        <a href="index.html" class="brand">
+            <span class="dot"></span>
+            <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
+            <span class="tag" style="margin-left:8px">v1.8.18</span>
+        </a>
+        <button class="hamburger" aria-label="Toggle nav">≡</button>
+        <nav>
+            <a href="../index.html">Landing</a>
+            <a href="index.html">Overview</a>
+            <a href="ui.html" class="active">UI Systems</a>
+            <a href="npc-translation.html">NPC + Translation</a>
+            <a href="styling.html">Theme + Settings</a>
+            <a href="reference.html">Reference</a>
+            <a href="prototype.html">[Proto]</a>
+            <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
+        </nav>
+    </header>
+
+    <div class="sync-banner">
+        <span class="sync-dot"></span>
+        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+    </div>
+
+    <aside class="manual-sidebar">
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Overview</div>
+            <ul>
+                <li><a href="index.html"><span class="lead">▸</span>Project Reference</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>UI Systems</div>
+            <ul>
+                <li><a href="ui.html#main-window" class="active"><span class="lead">▸</span>Main Window</a></li>
+                <li><a href="ui.html#mini-ui"><span class="lead">▸</span>Mini UI</a></li>
+                <li><a href="ui.html#tui"><span class="lead">▸</span>TUI (Dialog/Choice)</a></li>
+                <li><a href="ui.html#dissolve"><span class="lead">▸</span>DissolveOverlay</a></li>
+                <li><a href="ui.html#logs"><span class="lead">▸</span>Translated Logs</a></li>
+                <li><a href="ui.html#glass"><span class="lead">▸</span>Glass Mode</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Data + Translation</div>
+            <ul>
+                <li><a href="npc-translation.html#npc-manager"><span class="lead">▸</span>NPC Manager</a></li>
+                <li><a href="npc-translation.html#cloud-sync"><span class="lead">▸</span>Cloud Sync</a></li>
+                <li><a href="npc-translation.html#translation-engine"><span class="lead">▸</span>Translation Engine</a></li>
+                <li><a href="npc-translation.html#wide-context"><span class="lead">▸</span>Wide-Context</a></li>
+                <li><a href="npc-translation.html#database"><span class="lead">▸</span>NPC Database</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Styling + Config</div>
+            <ul>
+                <li><a href="styling.html#theme"><span class="lead">▸</span>Theme System</a></li>
+                <li><a href="styling.html#font"><span class="lead">▸</span>Font System</a></li>
+                <li><a href="styling.html#settings"><span class="lead">▸</span>Settings</a></li>
+                <li><a href="styling.html#splash"><span class="lead">▸</span>Splash + Updater</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Reference</div>
+            <ul>
+                <li><a href="reference.html#gemini"><span class="lead">▸</span>Gemini Models</a></li>
+                <li><a href="reference.html#test-messages"><span class="lead">▸</span>Test Messages</a></li>
+                <li><a href="reference.html#gotchas"><span class="lead">▸</span>Hard-Won Rules</a></li>
+                <li><a href="reference.html#plugin"><span class="lead">▸</span>Plugin Manifest</a></li>
+                <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <main class="manual-content">
+
+        <div class="breadcrumb">
+            <a href="../index.html">MBB</a>
+            <span class="sep">/</span>
+            <a href="index.html">Manual</a>
+            <span class="sep">/</span>
+            <span class="here">UI Systems</span>
+        </div>
+
+        <div class="page-eyebrow">User Interface</div>
+        <h1 class="page-title">UI Systems</h1>
+        <p class="page-subtitle">Main Window layout math, TUI modes, DissolveOverlay dispatcher rules, Logs panel, Glass Mode — รวมทั้ง Tkinter (legacy dialog/choice) และ PyQt6 (main panels + overlays)</p>
+
+        <!-- ──────────────── Main Window ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="main-window">Main Window (PyQt6)</h2>
+            <p>หน้าหลักของแอป — <code>pyqt_ui/main_window.py</code>. ขนาดหน้าต่างคำนวณ <strong>dynamic</strong> จาก logo overflow ไม่ใช่ค่าคงที่.</p>
+
+            <h3 class="subsection" id="layout-math">Layout Math</h3>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Constant</th><th>Value</th><th>ความหมาย</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>BG_W</code></td><td>296 px</td><td>Main display area width</td></tr>
+                        <tr><td><code>BG_H</code></td><td>265 px</td><td>Main display area height</td></tr>
+                        <tr><td><code>MARGIN_BASE</code></td><td>12 px</td><td>Right/bottom margin (shadow allowance)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <pre><code>logo_w = int(BG_W * 0.6)              # 177 px
+logo_overflow_left = max(0, logo_w - BG_W // 2)
+logo_overflow_top  = logo_h // 2
+
+margin_left   = logo_overflow_left + 4
+margin_top    = logo_overflow_top  + 4
+margin_right  = MARGIN_BASE
+margin_bottom = MARGIN_BASE
+
+win_w = margin_left + BG_W + margin_right
+win_h = margin_top  + BG_H + margin_bottom</code></pre>
+
+            <p><strong>Logo placement intent:</strong> ขอบขวาของ logo = กลาง bg panel. Logo overflows top by half its height.</p>
+
+            <pre><code>logo_x = bg_center_x - logo_w
+logo_y = margin_top - logo_h // 2     # ต้องเป็นบวกเสมอ</code></pre>
+
+            <p>Logo เป็น <code>QLabel</code> overlay (ไม่อยู่ใน layout) + <code>WA_TransparentForMouseEvents</code> + <code>raise_()</code>.</p>
+
+            <div class="diagram diagram-toggleable">
+                <div class="diagram-toggle">
+                    <button class="diagram-tab active" data-view="svg">📐 Diagram</button>
+                    <button class="diagram-tab" data-view="image">📸 Real UI</button>
+                </div>
+                <div class="diagram-view active" data-view="svg">
+                <svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" aria-label="Main Window layout">
+                    <!-- bg panel -->
+                    <rect x="120" y="60" width="296" height="265" rx="6" fill="rgba(99,102,241,0.08)" stroke="#6366f1" stroke-width="1.5"/>
+                    <text x="268" y="85" text-anchor="middle" fill="#a5b4fc" font-size="11" font-family="Kanit">BG panel (296 × 265)</text>
+
+                    <!-- logo overlay -->
+                    <rect x="55" y="20" width="177" height="129" rx="4" fill="rgba(245,158,11,0.18)" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3,3"/>
+                    <text x="143" y="50" text-anchor="middle" fill="#fcd34d" font-size="11" font-family="Kanit">Logo overlay</text>
+                    <text x="143" y="66" text-anchor="middle" fill="#fcd34d" font-size="10">177 × ~129 px</text>
+                    <text x="143" y="82" text-anchor="middle" fill="#fcd34d" font-size="10">(QLabel raise_)</text>
+
+                    <!-- logo extends above bg top -->
+                    <line x1="232" y1="84" x2="232" y2="60" stroke="#f59e0b" stroke-dasharray="2,2" stroke-width="1"/>
+                    <text x="240" y="76" fill="#fcd34d" font-size="9" font-family="monospace">logo_y = -h/2</text>
+
+                    <!-- right edge alignment -->
+                    <line x1="232" y1="100" x2="268" y2="100" stroke="#a5b4fc" stroke-dasharray="2,2" stroke-width="1"/>
+                    <text x="280" y="105" fill="#a5b4fc" font-size="9" font-family="monospace">center of BG</text>
+
+                    <!-- header section -->
+                    <rect x="200" y="60" width="200" height="44" fill="rgba(99,102,241,0.12)" stroke="#6366f1" stroke-width="0.5"/>
+                    <text x="300" y="86" text-anchor="middle" fill="#c7d2fe" font-size="10">Header (44px) · margin_left=134</text>
+
+                    <!-- ControlPanel area -->
+                    <rect x="120" y="105" width="296" height="90" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+                    <text x="268" y="135" text-anchor="middle" fill="#c7d2fe" font-size="10">ControlPanel content (~88px)</text>
+                    <text x="268" y="150" text-anchor="middle" fill="#94a3b8" font-size="9">● Ready  · Game FFXIV · MODEL [READY]</text>
+
+                    <!-- stretch gap -->
+                    <rect x="120" y="195" width="296" height="31" fill="rgba(139,92,246,0.05)"/>
+                    <text x="268" y="215" text-anchor="middle" fill="#a5b4fc" font-size="9" font-style="italic">addStretch(1) ≈ 31 px gap</text>
+
+                    <!-- BottomBar -->
+                    <rect x="120" y="225" width="296" height="100" fill="rgba(6,182,212,0.08)" stroke="#06b6d4" stroke-width="0.5"/>
+                    <text x="268" y="260" text-anchor="middle" fill="#67e8f9" font-size="10">BottomBar (100px)</text>
+                    <text x="268" y="278" text-anchor="middle" fill="#94a3b8" font-size="9">TUI · LOG · MINI</text>
+                    <text x="268" y="294" text-anchor="middle" fill="#94a3b8" font-size="9">NPC Manager · 🎨 · ⚙</text>
+
+                    <!-- sum on right -->
+                    <line x1="425" y1="60" x2="425" y2="325" stroke="#a5b4fc" stroke-width="0.5"/>
+                    <text x="436" y="195" fill="#a5b4fc" font-size="10" font-family="monospace">BG_H</text>
+                    <text x="436" y="208" fill="#a5b4fc" font-size="10" font-family="monospace">= 265</text>
+                </svg>
+                </div>
+                <div class="diagram-view" data-view="image">
+                    <img src="../screenshots/Main_ui.png" alt="Main Window — real UI screenshot" loading="lazy">
+                    <div class="img-meta">
+                        <span class="pulse-dot"></span>
+                        <span>screenshots/Main_ui.png · v1.8.x</span>
+                    </div>
+                </div>
+                <div class="caption">Main Window layout — logo overflow + ControlPanel + stretch + BottomBar = BG_H (265)</div>
+            </div>
+
+            <h3 class="subsection" id="header-bar">Header Bar</h3>
+            <p>Logo คลุมครึ่งซ้ายของ header → push content ไปทางขวา:</p>
+            <pre><code>header_margin_left = BG_W // 2 - 14   # 134 px</code></pre>
+            <p>Version label: <code>7pt</code> (<code>FONT_PRIMARY</code>), QSS <code>padding-top: 4px</code>.</p>
+
+            <h3 class="subsection" id="control-panel">ControlPanel + BottomBar</h3>
+
+            <div class="diagram">
+                <pre style="background:transparent; border:none; padding:0; box-shadow:none; color:var(--text-dim); font-family:'JetBrains Mono', monospace; font-size:12px; line-height:1.5; text-align:left; max-width:380px; margin:0 auto">┌─────────────────────────┐
+│ HeaderBar (44px)        │
+├─────────────────────────┤
+│ ● Ready        [Stop]   │  ← status dot + btn_start_stop
+│ Game          FFXIV     │  ← game info row (11pt)
+│ MODEL: GEMINI [READY]   │  ← lbl_status_info (8pt mono)
+│                         │  ← addStretch(1) ≈ 31px
+├─────────────────────────┤
+│ TUI  LOG  MINI          │
+│ NPC Manager  🎨 ⚙       │
+└─────────────────────────┘  ← BottomBar 100px</pre>
+                <div class="caption">ControlPanel + BottomBar sum: 44 + 1 + 88 + 31 + 1 + 100 = 265 = BG_H</div>
+            </div>
+
+            <p><strong>Status info widget:</strong> <code>QLabel#status_info</code> in <code>control_panel.py</code> (เคยอยู่ใน BottomBar — ย้ายขึ้นมาใกล้ Game info).</p>
+            <p><code>MBB.py</code> alias: <code>self.info_label = self.control_panel.lbl_status_info</code>. Signal path: <code>signals.info_update → _on_info_signal() → set_status_info()</code></p>
+
+            <div class="callout warning">
+                <span class="lead">ปรับ BG_H ถ้าเพิ่ม/ลด component</span>
+                ถ้า ControlPanel หรือ BottomBar height เปลี่ยน — ต้องปรับ <code>BG_H</code> ให้ stretch gap ตรงกลางยังอยู่ที่ ~25-35px
+            </div>
+
+            <h3 class="subsection" id="initial-pos">Initial Window Position</h3>
+            <pre><code>pos_x = int(sg.width() * 0.10)                  # 10% from left
+pos_y = sg.top() + (sg.height() - win_h) // 2   # vertically centered</code></pre>
+        </section>
+
+        <!-- ──────────────── Mini UI ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="mini-ui">Mini UI</h2>
+            <p>Tkinter Toplevel, 50×176, frameless (<code>overrideredirect</code>), always-on-top. Snap ที่ขอบซ้ายจอ, จัด Y ตรงกับ main window.</p>
+
+            <div class="diagram diagram-screenshot">
+                <div class="screenshot-badge">📸 Real UI</div>
+                <img src="../screenshots/mini_02.png" alt="Mini UI — real screenshot" loading="lazy">
+                <div class="img-meta">
+                    <span class="pulse-dot"></span>
+                    <span>screenshots/mini_02.png · Mini UI in collapsed state</span>
+                </div>
+            </div>
+
+            <h3 class="subsection">Asymmetric Rounded Corners (Win32)</h3>
+            <p><code>CreateRoundRectRgn</code> + <code>ellipse=10</code> (~5px) — <strong>ขวามน, ซ้ายเหลี่ยม</strong> (ชิดขอบจอ).</p>
+
+            <div class="callout warning">
+                <span class="lead">ห้ามเพิ่ม corner radius เกิน 10</span>
+                Region clipping ตัดขอบ highlight border ที่มุมขวาบน/ล่างหายไป — border เป็นสี่เหลี่ยม Tkinter ไม่โค้งตาม region.
+            </div>
+
+            <h3 class="subsection">Highlight Border</h3>
+            <p>Flash ขอบขาว 1.2 วินาทีตอน show:</p>
+            <ul>
+                <li>Flash: <code>highlightthickness=2 #e0e0e0</code></li>
+                <li>ปกติ: <code>highlightthickness=1 #2a2a2a</code></li>
+            </ul>
+
+            <h3 class="subsection">Light Theme Icon Inversion</h3>
+            <p>White-line icons (play/pause/expand) auto-invert via PIL <code>_invert_rgb_keep_alpha()</code> + luminance check.</p>
+
+            <div class="callout info">
+                <span class="lead">Theme change</span>
+                Tkinter color baking → ต้อง destroy + rebuild. Snapshot/restore position รอบ rebuild.
+            </div>
+        </section>
+
+        <!-- ──────────────── TUI ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="tui">TUI — Dialog &amp; Choice Mode</h2>
+            <p>Tkinter renderer ใน <code>translated_ui.py</code>. ใช้สำหรับ ChatType 61 (dialogue) + 0x0045/0x0046 (choice).</p>
+
+            <div class="diagram diagram-toggleable">
+                <div class="diagram-toggle">
+                    <button class="diagram-tab active" data-view="dialog">💬 Dialog</button>
+                    <button class="diagram-tab" data-view="color">🎨 Color Picker</button>
+                </div>
+                <div class="diagram-view active" data-view="dialog">
+                    <img src="../screenshots/TUI.png" alt="TUI in dialog mode" loading="lazy">
+                    <div class="img-meta">
+                        <span class="pulse-dot"></span>
+                        <span>screenshots/TUI.png · Dialog mode (ChatType 61)</span>
+                    </div>
+                </div>
+                <div class="diagram-view" data-view="color">
+                    <img src="../screenshots/TUI_color.png" alt="TUI color/alpha picker" loading="lazy">
+                    <div class="img-meta">
+                        <span class="pulse-dot"></span>
+                        <span>screenshots/TUI_color.png · Color &amp; alpha picker (6-step transparency)</span>
+                    </div>
+                </div>
+                <div class="caption">TUI in dialog mode + the modernized color/alpha picker (v1.8.5)</div>
+            </div>
+
+            <h3 class="subsection" id="text-style-v4">Text Style System v4</h3>
+
+            <p><strong>Speaker name</strong> — normal weight (no bold) ทุก mode เพื่อ name-detection compat. Strip <code>**</code>, <code>*</code>, ZWS chars ก่อน <code>name in self.names</code> check (3 sites: <code>_handle_normal_text_fast</code>, <code>_handle_normal_text</code>, <code>display_speaker_name</code>).</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mode</th><th>Speaker color</th><th>Body color</th></tr></thead>
+                    <tbody>
+                        <tr><td>Dialogue — known</td><td><span class="color-dot" style="background:#38bdf8"></span><code>#38bdf8</code> cyan</td><td>white</td></tr>
+                        <tr><td>Dialogue — unknown (<code>???</code>)</td><td><span class="color-dot" style="background:#a855f7"></span><code>#a855f7</code> purple</td><td>white</td></tr>
+                        <tr><td>Battle</td><td><span class="color-dot" style="background:#FF6B00"></span>orange (= body)</td><td><span class="color-dot" style="background:#FF6B00"></span><code>#FF6B00</code></td></tr>
+                        <tr><td>Cutscene</td><td><span class="color-dot" style="background:#FFD700"></span>yellow (= body)</td><td><span class="color-dot" style="background:#FFD700"></span><code>#FFD700</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="minor">Segments ใน dialogue</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Segment</th><th>Style</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>**highlight**</code></td><td><span class="color-dot" style="background:#FFB366"></span><code>#FFB366</code> light orange, <strong>bold</strong></td></tr>
+                        <tr><td><code>*italic*</code></td><td>FC Minimal Medium, italic</td></tr>
+                        <tr><td>Character name (detected at render)</td><td>cyan thin / mode-color <strong>bold</strong></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="minor">Name Detection Pipeline (v4)</h4>
+            <pre><code>text + names list
+   ↓
+RichTextFormatter.parse_rich_text_with_names()
+   ↓
+segments: [{text, font_style: 'normal'|'bold'|'italic'|'name'}]
+   ↓
+create_rich_text_with_outlines()</code></pre>
+
+            <p><code>highlight_special_names()</code> เป็น <strong>no-op</strong> (legacy <code>『』</code> brackets removed). <code>_needs_rich_text()</code> เช็ค <code>*</code> markers OR names.</p>
+
+            <p><strong>Call sites ของ <code>_needs_rich_text</code> (4):</strong> fast-no-speaker (~3258), post-typewriter (~4323), show-full-text (~4477), font-change-reapply (~4998).</p>
+
+            <h3 class="subsection" id="lock-shadow">Lock Mode Shadow System</h3>
+            <p>2 engines ผ่าน <code>self._use_pil_shadow</code> flag:</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Flag</th><th>Engine</th><th>Status</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>False</code> (default)</td><td>Canvas Multi-Ring</td><td><span class="tag success">ACTIVE</span> เสถียร</td></tr>
+                        <tr><td><code>True</code></td><td>PIL Gaussian Blur</td><td><span class="tag faint">Dormant</span> ใช้กับ <code>transparentcolor</code> ไม่ได้</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="minor">Multi-Ring ใน lock mode 1 (transparent bg) — 3 layers, 36 items</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Layer</th><th>Offset</th><th>Positions</th><th>Color</th></tr></thead>
+                    <tbody>
+                        <tr><td>Outer</td><td>~3px</td><td>16 (circle)</td><td><code>#111111</code></td></tr>
+                        <tr><td>Middle</td><td>~2px</td><td>12 (circle)</td><td><code>#080808</code></td></tr>
+                        <tr><td>Inner</td><td>~1px</td><td>8 (square)</td><td><code>#000000</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>Normal mode (มี bg): 1 layer, 8 items, outline <code>#000000</code> ~1px.</p>
+
+            <div class="callout rule">
+                <span class="lead"><code>text=""</code> rule</span>
+                Shadow ต้อง sync กับ typewriter. Shadow creation sites ส่ง empty string ถ้า typewriter active. เฉพาะ speaker-name shadows เท่านั้นที่ส่ง actual text.
+            </div>
+
+            <div class="callout warning">
+                <span class="lead"><code>itemconfig</code> safety</span>
+                <code>outline_container</code> อาจมีทั้ง text + image items. ต้อง guard:
+                <pre style="margin-top:8px"><code>if canvas.type(outline) == "text":
+    canvas.itemconfig(outline, text=...)</code></pre>
+            </div>
+
+            <h3 class="subsection" id="auto-show">Auto-Show Opacity</h3>
+            <div class="callout rule">
+                <span class="lead"><code>show_tui_on_new_translation()</code> MUST restore opacity unconditionally</span>
+                ไม่ gate ด้วย <code>is_window_hidden</code> — มิฉะนั้น mid-fade arrivals ทำให้ window ค้างที่ alpha ต่ำ
+            </div>
+
+            <pre><code>def show_tui_on_new_translation(self):
+    if self.state.is_window_hidden:
+        self.root.deiconify()
+        self.state.is_window_hidden = False
+    self.restore_user_transparency()   # always, every call</code></pre>
+
+            <p><strong>Setting gate</strong> อยู่ที่ <code>MBB.py:_trigger_tui_auto_show()</code> เท่านั้น — อย่าเพิ่ม setting check ใน <code>show_tui_on_new_translation()</code> ไม่งั้น auto-show พัง.</p>
+
+            <h3 class="subsection" id="fade-race">Fade-Race Defense (3 layers)</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Layer</th><th>Where</th><th>What</th></tr></thead>
+                    <tbody>
+                        <tr><td>1. Entry</td><td><code>update_text</code></td><td>Cancel <code>fade_timer_id</code> + <code>window_hide_timer_id</code>, reset <code>is_fading</code>, bump <code>last_activity_time</code></td></tr>
+                        <tr><td>2. Defer</td><td><code>fade_out_text</code> at α=0</td><td>80ms <code>after()</code> before destructive cleanup</td></tr>
+                        <tr><td>3. Recheck</td><td><code>_do_fade_destructive_cleanup</code></td><td>Re-check <code>is_fading</code> + activity time ก่อน wipe; abort ถ้าถูก interrupt</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>User prefs (เช่น <code>auto_hide_after_fade</code>) untouched — รีเซ็ตเฉพาะ runtime flags.</p>
+
+            <h3 class="subsection" id="resize">Resize System</h3>
+            <p>Methods: <code>start_resize()</code> → <code>on_resize()</code> → <code>stop_resize()</code>. Bindings อยู่ใน <code>setup_bindings()</code> เท่านั้น.</p>
+
+            <h4 class="minor">Hard rules</h4>
+            <div class="card-grid">
+                <div class="card compact">
+                    <h3>📐 Position lock</h3>
+                    <p style="font-size:13px; color:var(--text-dim)"><code>geometry()</code> MUST include position (<code>f"{w}x{h}+{x}+{y}"</code>) — <code>resize_anchor_x/y</code> เก็บที่ <code>start_resize()</code></p>
+                </div>
+                <div class="card compact">
+                    <h3>🚫 No SetWindowRgn</h3>
+                    <p style="font-size:13px; color:var(--text-dim)">ห้ามเรียก <code>apply_rounded_corners_to_ui()</code> ระหว่าง drag — Win32 region create + redraw = jank. Re-apply ที่ <code>stop_resize()</code> หลัง 150ms <code>after()</code></p>
+                </div>
+                <div class="card compact">
+                    <h3>🔁 Single binding</h3>
+                    <p style="font-size:13px; color:var(--text-dim)">No duplicate bindings — <code>_create_resize_handle()</code> ไม่ re-bind</p>
+                </div>
+                <div class="card compact">
+                    <h3>⏱ 16ms throttle</h3>
+                    <p style="font-size:13px; color:var(--text-dim)">~60 FPS throttle on <code>self.root.geometry()</code> calls</p>
+                </div>
+            </div>
+
+            <div class="callout danger">
+                <span class="lead">Win32 <code>WM_NCLBUTTONDOWN</code> hand-off — DO NOT USE</span>
+                <p style="margin-top:6px">Causes <code>PyEval_RestoreThread</code> GIL fatal เมื่อเรียกใน Tk callback. <code>SendMessageW</code> blocks main thread inside modal resize loop; Tk window proc fires WM_PAINT/WM_SIZE back to NULL Python thread state → process terminates.</p>
+                <p style="margin-top:6px">Use manual resize + global <code>bind_all &lt;ButtonRelease-1&gt;</code> for capture (so release fires even ถ้า handle ถูก clip โดย region).</p>
+            </div>
+
+            <h4 class="minor">Layout restore after resize</h4>
+            <ul>
+                <li><code>_restore_layout_light</code> (ระหว่าง drag, throttle 150ms) + <code>_restore_layout_after_resize_universal</code> (on release)</li>
+                <li><code>pack_configure</code> (ไม่ใช่ <code>pack_forget</code>)</li>
+                <li><code>tk.call("raise", widget._w)</code> (ไม่ใช่ <code>widget.lift()</code> — Canvas overrides <code>lift</code> เป็น <code>tag_raise</code>)</li>
+                <li>Re-bind auto-hide hover bindings</li>
+                <li>Re-apply rounded corners</li>
+            </ul>
+
+            <p><strong><code>default_width/_height</code> sync</strong> ใน <code>stop_resize</code> หลัง save — chat-type switch กลับ dialog ไม่งั้น snap กลับ size เก่าใน cache.</p>
+
+            <h3 class="subsection" id="per-mode-geometry">Per-Mode Geometry</h3>
+            <p><code>tui_positions[mode]</code> + <code>tui_geometries[mode]</code> — save per dialog/battle/cutscene.</p>
+            <ul>
+                <li>Mode switch saves OUTGOING + loads INCOMING</li>
+                <li>Choice mode เป็น transient (ไม่ save)</li>
+                <li><code>_clamp_to_screen</code> guards multi-monitor edge cases</li>
+            </ul>
+
+            <h3 class="subsection" id="mode-ui">Mode-Specific UI</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mode</th><th>Hover-revealed buttons</th></tr></thead>
+                    <tbody>
+                        <tr><td>Dialog / Choice</td><td>close + lock + color + fadeout + resize handle</td></tr>
+                        <tr><td>Battle / Cutscene</td><td>close + resize handle <em>เท่านั้น</em> (lock/color/fadeout <code>pack_forget</code>)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>WASD auto-hide bypass ใช้กับ <strong>ทั้ง battle + cutscene</strong> (text ต้อง stream ต่อเนื่อง).</p>
+
+            <h3 class="subsection" id="transparency">Step-Lock Transparency (TUI, 6 levels)</h3>
+            <p><code>80 / 84 / 88 / 92 / 95 / 100</code> — <code>ImprovedColorAlphaPickerWindow.TRANSPARENCY_STEPS</code> ใน <code>tui_color_picker.py</code>.</p>
+            <ul>
+                <li>Custom Canvas slider (ไม่ใช่ <code>tk.Scale</code>) with magnetic snap</li>
+                <li>Step pips (1-6) แสดงเฉพาะตอน drag</li>
+                <li>Win32 corner radius <strong>12</strong> (เคย 20 — handle ถูก clip)</li>
+                <li>Legacy top-level <code>transparency</code> key purged; TUI alpha คุมโดย in-TUI picker เท่านั้น</li>
+            </ul>
+
+            <h3 class="subsection" id="file-split">File Split (Phase 1)</h3>
+            <p><code>translated_ui.py</code> extracted to:</p>
+            <ul>
+                <li><code>tui_shadow.py</code> — <code>ShadowConfig</code> + <code>BlurShadowEngine</code></li>
+                <li><code>tui_color_picker.py</code> — <code>ImprovedColorAlphaPickerWindow</code></li>
+                <li><code>tui_rich_text.py</code> — <code>RichTextFormatter</code></li>
+            </ul>
+            <p>Re-imported ที่ top ของ <code>translated_ui.py</code> — external API unchanged.</p>
+        </section>
+
+        <!-- ──────────────── DissolveOverlay ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="dissolve">DissolveOverlay (Battle/Cutscene)</h2>
+            <p>641-line <code>QWidget</code>, frameless + translucent (<code>WA_TranslucentBackground</code>). Self-contained PyQt6 เพราะ Tkinter <code>transparentcolor</code> เป็น 1-bit (ไม่มี alpha gradient).</p>
+
+            <div class="diagram diagram-screenshot">
+                <div class="screenshot-badge">📸 Real UI</div>
+                <img src="../screenshots/cutscene_01.png" alt="DissolveOverlay in cutscene mode" loading="lazy">
+                <div class="img-meta">
+                    <span class="pulse-dot"></span>
+                    <span>screenshots/cutscene_01.png · Cutscene mode (ChatType 71, turquoise #40E0D0)</span>
+                </div>
+            </div>
+
+            <h3 class="subsection">Visual</h3>
+            <ul>
+                <li><code>paintEvent</code> วาด horizontal <code>QLinearGradient</code>: 0% → 5% opaque → 95% opaque → 0% (dissolve ขอบซ้าย-ขวา)</li>
+                <li>BG <code>#14161c</code> 90% alpha; text painted AFTER gradient → fully opaque</li>
+                <li>Vertical centering: <code>block_top = max(pad_y, (h - block_h) // 2)</code></li>
+                <li>Per-mode font color: battle <span class="color-dot" style="background:#FF6B00"></span><code>#FF6B00</code>, cutscene <span class="color-dot" style="background:#40E0D0"></span><code>#40E0D0</code> (turquoise — เปลี่ยนจาก gold v1.8.9)</li>
+                <li>Battle speaker name <span class="color-dot" style="background:#FFFFFF"></span><code>#FFFFFF</code> white (contrast กับ orange body)</li>
+                <li>Cutscene speaker = body color (single-tone cinematic)</li>
+            </ul>
+
+            <h3 class="subsection">Auto-Hide</h3>
+            <p><code>set_text()</code> restart 10s <code>QTimer</code> (<code>AUTO_HIDE_MS</code>). On timeout: fade-out via <code>QPropertyAnimation(windowOpacity)</code> 500ms → <code>hide()</code>.</p>
+            <ul>
+                <li>New translation ระหว่าง fade → snap opacity กลับ 1.0 ทันที</li>
+                <li>Cursor inside overlay → timer restart (ไม่ hide ขณะ user drag/resize)</li>
+            </ul>
+
+            <h3 class="subsection" id="dispatcher-rules">Dispatcher Rules — CRITICAL</h3>
+            <p><code>translated_ui.update_text</code> decorator routes by chat_type. <strong>3 must-not-violate rules:</strong></p>
+
+            <div class="callout danger">
+                <span class="lead">Rule 1 — Don't update Tk mode flags during dispatch</span>
+                <p style="margin-top:6px"><code>_route_to_dissolve_overlay</code> MUST NOT update <code>current_chat_type</code> / <code>battle_mode_active</code> / <code>cutscene_mode_active</code>. Flags drive <code>_get_current_mode_name()</code> สำหรับ Tk save logic; ถ้า flip ขณะ Tk มี pending move/resize timers → <code>tui_positions[battle/cutscene]</code> ถูก clobber ด้วย coords ของ dialogue</p>
+            </div>
+
+            <div class="callout danger">
+                <span class="lead">Rule 2 — Mode change within overlay MUST call <code>show_for_mode(mode)</code></span>
+                <p style="margin-top:6px"><code>set_mode</code> alone เปลี่ยนแค่สี ไม่ใช่ geometry. <code>show_for_mode</code> idempotent (no-op ถ้า visible แล้ว)</p>
+            </div>
+
+            <div class="callout danger">
+                <span class="lead">Rule 3 — <code>_do_tui_auto_show</code> ต้อง early-return เมื่อ <code>_dissolve_active = True</code></span>
+                <p style="margin-top:6px">ไม่งั้น auto-show fires ทุก status update และ re-deiconify root ที่เพิ่ง withdraw</p>
+            </div>
+
+            <p><strong>Defensive:</strong> <code>_route_to_dissolve_overlay</code> cancels <code>move_end_timer</code> + <code>resize_end_timer</code> + <code>_deferred_render_id</code> เพื่อ kill stale saves.</p>
+
+            <h3 class="subsection">Diagnostic Logs</h3>
+            <p>เก็บ <code>[DISSOLVE-DBG]</code> trace logs ทุก dispatch + save site ไว้ — ราคาถูก, valuable มากตอน debug mode-switch:</p>
+            <pre><code>route_to_overlay: mode=X chat_type=Y tk_state=Z dissolve_active=B tk_was_visible=B
+show_for_mode(M): loaded pos=(X,Y) size=(W,H) → clamped=...
+OVERLAY saved M / TK saved M</code></pre>
+
+            <h3 class="subsection">Settings JSON Cleanup</h3>
+            <div class="callout info">
+                <span class="lead">ถ้า <code>tui_positions[battle/cutscene]</code> corrupts</span>
+                ลบ <code>tui_positions[battle/cutscene]</code> + <code>tui_geometries[battle/cutscene]</code> จาก <code>settings.json</code> → DissolveOverlay fall back ไป defaults (battle=top-center, cutscene=bottom-center)
+            </div>
+        </section>
+
+        <!-- ──────────────── Translated Logs ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="logs">Translated Logs UI</h2>
+            <p>PyQt6 panel ใน <code>pyqt_ui/translated_logs.py</code> (~1100 LOC). แทนที่ Tkinter version. Compat shims (<code>root</code>, <code>winfo_exists</code>, <code>state</code>, <code>withdraw</code>) ทำให้ <code>MBB.py</code> ไม่ต้องแก้มาก.</p>
+
+            <div class="diagram diagram-screenshot">
+                <div class="screenshot-badge">📸 Real UI</div>
+                <img src="../screenshots/logs_history.png" alt="Translated Logs panel" loading="lazy">
+                <div class="img-meta">
+                    <span class="pulse-dot"></span>
+                    <span>screenshots/logs_history.png · LINE-style chat bubbles</span>
+                </div>
+            </div>
+
+            <h3 class="subsection">Bubbles</h3>
+            <p><code>ChatBubble(QFrame)</code> วาด 1 rounded rect. Speaker label color-coded:</p>
+            <ul>
+                <li><span class="color-dot" style="background:#a855f7"></span><code>???</code> purple</li>
+                <li><span class="color-dot" style="background:#FFD700"></span>dialogue choice gold</li>
+                <li><span class="color-dot" style="background:#94a3b8"></span>Lore dim</li>
+                <li><span class="color-dot" style="background:#38bdf8"></span>normal cyan</li>
+            </ul>
+
+            <h3 class="subsection">Thai-Aware Wrap</h3>
+            <p>Qt <code>QLabel.wordWrap</code> break แค่ whitespace; ภาษาไทยไม่มี whitespace.</p>
+            <p><code>_insert_thai_breakpoints()</code> inject ZWSP (U+200B) ที่ Thai leading-vowel boundaries (เ แ โ ใ ไ).</p>
+
+            <h3 class="subsection">Bubble Width</h3>
+            <pre><code>setHeightForWidth(True)
++ MinimumExpanding policy
++ heightForWidth(w) override</code></pre>
+            <p>Qt ใช้ <code>heightForWidth</code> แทน naive <code>sizeHint</code> → <code>wordWrap</code> ทำงานจริง. บวก <code>eventFilter</code> on viewport + inner <code>QLabel maxWidth</code> cap → ป้องกัน overflow จาก <code>setWidgetResizable(True)</code>.</p>
+
+            <h3 class="subsection">QSS Font</h3>
+            <p>Qt stylesheets override <code>setFont()</code> สำหรับ QLabel ใน styled widget. ใช้ <code>font-family</code> + <code>font-size</code> ผ่าน QSS เพื่อให้ FontPanel changes propagate.</p>
+
+            <h3 class="subsection">Background-Only Opacity</h3>
+            <p><code>setWindowOpacity()</code> fade ทุกอย่าง. แทนด้วย rgba ใน QSS สำหรับ <code>QFrame#logs_bg</code> ขับด้วย slider 10-100 — bubbles paint solid colors stay 100% opaque.</p>
+            <p>Surgical <code>self.bg.setStyleSheet(...)</code> ต่อ slider tick (ไม่ใช่ full <code>_apply_theme()</code>) — เลี่ยง 60Hz polish thrash. 350ms QTimer debounce on disk write.</p>
+
+            <h3 class="subsection">App-Wide Hover Detection</h3>
+            <p>Default Qt widgets emit <code>mouseMoveEvent</code> เฉพาะตอน button pressed. Solution:</p>
+            <pre><code>setMouseTracking(True) + WA_Hover recursive on children
++ app.installEventFilter(self)
+  for MouseMove / HoverMove / HoverEnter / Enter</code></pre>
+            <p>Throttle <code>_save_geometry</code> ที่ 500ms QTimer เพื่อ disk I/O ไม่ starve hover poll.</p>
+
+            <h3 class="subsection">Step-Lock Transparency (LOG, 4 levels)</h3>
+            <p><code>10 / 40 / 80 / 100</code> — <code>TranslatedLogsPanel.TRANSPARENCY_STEPS</code>. Snap-on-drag + no-op detection.</p>
+            <p>Migration: existing <code>settings.json</code> value snaps to nearest step on load.</p>
+
+            <h3 class="subsection">Lock Mode</h3>
+            <p>Session-only (เริ่มต้นเป็น unlocked). Drag ไม่มี <code>print()</code> between events. <code>stop_move</code> log ครั้งเดียวด้วย <code>logging.info</code>.</p>
+            <p><strong>Exception handlers:</strong> <code>except (AttributeError, tk.TclError):</code> — never bare except.</p>
+        </section>
+
+        <!-- ──────────────── Glass Mode ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="glass">Glass Mode</h2>
+            <p><code>pyqt_ui/styles.py:get_glass_overrides()</code>. Toggle ผ่าน <strong>●</strong> button ใน header → <code>main_window._on_toggle_glass()</code> rebuild QSS:</p>
+
+            <ul>
+                <li>ปุ่มทั้งหมด: transparent bg, no border, faint text (~20% opacity)</li>
+                <li>Hover: brighter (~50%)</li>
+                <li>Toggled: ~35%</li>
+                <li>Labels: very faint (~14-20%)</li>
+                <li><strong>Logo always visible</strong> (QPixmap overlay, ไม่อยู่ใน QSS)</li>
+            </ul>
+
+            <p>Shadow: blur 24→16, alpha 160→60 (เมื่อ glass on).</p>
+        </section>
+
+        <!-- prev/next -->
+        <nav class="page-nav">
+            <a href="index.html"><span class="nav-dir">← Prev</span><span class="nav-title">Overview</span></a>
+            <a href="npc-translation.html" class="next"><span class="nav-dir">Next →</span><span class="nav-title">NPC + Translation</span></a>
+        </nav>
+    </main>
+
+    <aside class="manual-toc">
+        <div class="toc-title">On this page</div>
+        <ul>
+            <li><a href="#main-window">Main Window</a></li>
+            <li class="toc-h3"><a href="#layout-math">Layout Math</a></li>
+            <li class="toc-h3"><a href="#header-bar">Header Bar</a></li>
+            <li class="toc-h3"><a href="#control-panel">ControlPanel</a></li>
+            <li><a href="#mini-ui">Mini UI</a></li>
+            <li><a href="#tui">TUI (Dialog/Choice)</a></li>
+            <li class="toc-h3"><a href="#text-style-v4">Text Style v4</a></li>
+            <li class="toc-h3"><a href="#lock-shadow">Lock Shadow</a></li>
+            <li class="toc-h3"><a href="#auto-show">Auto-Show</a></li>
+            <li class="toc-h3"><a href="#fade-race">Fade-Race Defense</a></li>
+            <li class="toc-h3"><a href="#resize">Resize</a></li>
+            <li class="toc-h3"><a href="#transparency">Transparency</a></li>
+            <li><a href="#dissolve">DissolveOverlay</a></li>
+            <li class="toc-h3"><a href="#dispatcher-rules">Dispatcher Rules</a></li>
+            <li><a href="#logs">Translated Logs</a></li>
+            <li><a href="#glass">Glass Mode</a></li>
+        </ul>
+    </aside>
+
+    <footer class="manual-footer">
+        © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
+        · <a href="../index.html">← Landing page</a>
+    </footer>
+
+</div>
+
+<script src="assets/manual.js"></script>
+</body>
+</html>

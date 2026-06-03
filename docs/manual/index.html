@@ -1,0 +1,396 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBB Manual — Project Reference</title>
+    <link rel="icon" type="image/png" href="../web_assets/mbb_icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/manual.css">
+</head>
+<body>
+
+<div class="bg-particles" aria-hidden="true"></div>
+
+<div class="manual-shell">
+
+    <!-- ════════════════════ HEADER ════════════════════ -->
+    <header class="manual-header">
+        <a href="index.html" class="brand">
+            <span class="dot"></span>
+            <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
+            <span class="tag" style="margin-left:8px">v1.8.18</span>
+        </a>
+        <button class="hamburger" aria-label="Toggle nav">≡</button>
+        <nav>
+            <a href="../index.html">Landing</a>
+            <a href="index.html" class="active">Overview</a>
+            <a href="ui.html">UI Systems</a>
+            <a href="npc-translation.html">NPC + Translation</a>
+            <a href="styling.html">Theme + Settings</a>
+            <a href="reference.html">Reference</a>
+            <a href="prototype.html">[Proto]</a>
+            <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
+        </nav>
+    </header>
+
+    <div class="sync-banner">
+        <span class="sync-dot"></span>
+        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+    </div>
+
+    <!-- ════════════════════ SIDEBAR ════════════════════ -->
+    <aside class="manual-sidebar">
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Overview</div>
+            <ul>
+                <li><a href="index.html" class="active"><span class="lead">▸</span>Project Reference</a></li>
+                <li><a href="index.html#project-goal"><span class="lead">·</span>Project Goal</a></li>
+                <li><a href="index.html#structure"><span class="lead">·</span>Project Structure</a></li>
+                <li><a href="index.html#data-flow"><span class="lead">·</span>Data Flow</a></li>
+                <li><a href="index.html#chat-types"><span class="lead">·</span>ChatType Routing</a></li>
+                <li><a href="index.html#build"><span class="lead">·</span>Build &amp; Distribution</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>UI Systems</div>
+            <ul>
+                <li><a href="ui.html#main-window"><span class="lead">▸</span>Main Window</a></li>
+                <li><a href="ui.html#mini-ui"><span class="lead">▸</span>Mini UI</a></li>
+                <li><a href="ui.html#tui"><span class="lead">▸</span>TUI (Dialog/Choice)</a></li>
+                <li><a href="ui.html#dissolve"><span class="lead">▸</span>DissolveOverlay</a></li>
+                <li><a href="ui.html#logs"><span class="lead">▸</span>Translated Logs</a></li>
+                <li><a href="ui.html#glass"><span class="lead">▸</span>Glass Mode</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Data + Translation</div>
+            <ul>
+                <li><a href="npc-translation.html#npc-manager"><span class="lead">▸</span>NPC Manager</a></li>
+                <li><a href="npc-translation.html#cloud-sync"><span class="lead">▸</span>Cloud Sync</a></li>
+                <li><a href="npc-translation.html#translation-engine"><span class="lead">▸</span>Translation Engine</a></li>
+                <li><a href="npc-translation.html#wide-context"><span class="lead">▸</span>Wide-Context</a></li>
+                <li><a href="npc-translation.html#database"><span class="lead">▸</span>NPC Database</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Styling + Config</div>
+            <ul>
+                <li><a href="styling.html#theme"><span class="lead">▸</span>Theme System</a></li>
+                <li><a href="styling.html#font"><span class="lead">▸</span>Font System</a></li>
+                <li><a href="styling.html#settings"><span class="lead">▸</span>Settings</a></li>
+                <li><a href="styling.html#splash"><span class="lead">▸</span>Splash + Updater</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Reference</div>
+            <ul>
+                <li><a href="reference.html#gemini"><span class="lead">▸</span>Gemini Models</a></li>
+                <li><a href="reference.html#test-messages"><span class="lead">▸</span>Test Messages</a></li>
+                <li><a href="reference.html#gotchas"><span class="lead">▸</span>Hard-Won Rules</a></li>
+                <li><a href="reference.html#plugin"><span class="lead">▸</span>Plugin Manifest</a></li>
+                <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- ════════════════════ CONTENT ════════════════════ -->
+    <main class="manual-content">
+
+        <div class="breadcrumb">
+            <a href="../index.html">MBB</a>
+            <span class="sep">/</span>
+            <span class="here">Manual</span>
+        </div>
+
+        <!-- Hero -->
+        <div class="hero-row">
+            <div class="hero-card">
+                <div class="page-eyebrow">Internal Reference · v1.8.13</div>
+                <h1>MBB Dalamud Project</h1>
+                <p>คู่มืออ้างอิงสำหรับการพัฒนาต่อ — architecture, subsystems, ข้อตกลงที่ผ่านการพิสูจน์มาแล้ว และกฎที่ห้ามฝ่าฝืน. <strong>AI-readable</strong> + <strong>human-readable</strong>.</p>
+                <div class="meta-row">
+                    <span class="tag">Dalamud Plugin · C#</span>
+                    <span class="tag">Python 3.11</span>
+                    <span class="tag">PyQt6 6.9.0</span>
+                    <span class="tag">Tkinter</span>
+                    <span class="tag">Gemini API</span>
+                </div>
+            </div>
+            <div class="card" style="padding:24px">
+                <div class="card-eyebrow">Phases</div>
+                <div style="display:flex; flex-direction:column; gap:10px; font-size:13.5px">
+                    <div><span class="tag success">✓ Phase 1</span> Code cleanup · theme v2 · PyQt6 migration</div>
+                    <div><span class="tag warning">⚙ Phase 2</span> Custom repo + <code>pluginmaster.json</code></div>
+                    <div><span class="tag faint">⏳ Phase 3</span> PyInstaller + 1-click install</div>
+                </div>
+                <hr style="border:none; border-top:1px solid var(--card-border); margin:18px 0">
+                <div style="font-size:12px; color:var(--text-faint); line-height:1.7">
+                    Older per-version changelogs live in git history:<br>
+                    <code style="font-size:11.5px">git log --oneline CLAUDE.md</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- ──────────────── Project Goal ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="project-goal">Project Goal</h2>
+            <p>เปลี่ยน <strong>MBB Dalamud Bridge</strong> เป็นแพ็คเกจที่แจกจ่ายได้ผ่าน Dalamud Custom Plugin Repository — ผู้ใช้เพิ่ม URL ใน Dalamud settings และติดตั้งด้วย 1 คลิก</p>
+
+            <div class="card-grid">
+                <div class="card compact">
+                    <h3>🧹 Code Cleanup</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">ลบ hardcoded paths ทั้งหมด, OCR-era code ถูก purge แล้ว, theme v2 + PyQt6 migration เสร็จสมบูรณ์</p>
+                </div>
+                <div class="card compact">
+                    <h3>📦 Custom Repository</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">สร้าง <code>pluginmaster.json</code> ให้ Dalamud auto-discover plugin</p>
+                </div>
+                <div class="card compact">
+                    <h3>⚡ PyInstaller</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">บรรจุ Python app เป็น standalone .exe พร้อม updater</p>
+                </div>
+                <div class="card compact">
+                    <h3>🚀 One-Click Install</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">ติดตั้งผ่าน Dalamud plugin installer โดยไม่ต้อง setup เอง</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ──────────────── Project Structure ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="structure">Project Structure</h2>
+            <div class="file-tree">
+<span class="folder">C:\MBB_Dalamud/</span>
+├── <span class="folder">python-app/</span>           <span class="note"># Python translation app</span>
+│   ├── <span class="file">MBB.py</span>            <span class="note"># Entry point</span>
+│   ├── <span class="file">translated_ui.py</span>  <span class="note"># TUI (Tkinter, dialog/choice)</span>
+│   ├── <span class="file">translator_gemini.py</span> <span class="note"># Gemini API + prompt v2</span>
+│   ├── <span class="accent">npc.json</span>          <span class="note"># Character database (218 main / 65 npc / 135 lore)</span>
+│   ├── <span class="folder">pyqt_ui/</span>          <span class="note"># PyQt6 panels + overlays</span>
+│   ├── <span class="folder">fonts/</span>            <span class="note"># Anuphan, FC Minimal, Caveat, Pacifico, Google Sans</span>
+│   └── <span class="folder">assets/</span>           <span class="note"># 60+ icons (white-themed, auto-invert on light)</span>
+├── <span class="folder">DalamudMBBBridge/</span>     <span class="note"># C# Dalamud plugin</span>
+├── <span class="folder">docs/</span>                 <span class="note"># Landing page (index.html) + screenshots</span>
+│   └── <span class="accent">manual/</span>           <span class="note"># ← You are here</span>
+├── <span class="folder">scripts/</span>              <span class="note"># build_npc_release.py + automation</span>
+└── <span class="folder">updater/</span>              <span class="note"># Standalone updater (Tkinter)</span></div>
+        </section>
+
+        <!-- ──────────────── Data Flow ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="data-flow">Data Flow</h2>
+            <p>FFXIV in-game text → Dalamud plugin → named pipe → Python translation pipeline → on-screen rendering. ทั้งหมดทำงานแบบ realtime.</p>
+
+            <div class="diagram">
+                <svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MBB data flow diagram">
+                    <defs>
+                        <linearGradient id="boxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(99,102,241,0.25)"/>
+                            <stop offset="100%" stop-color="rgba(99,102,241,0.05)"/>
+                        </linearGradient>
+                        <linearGradient id="boxOrange" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(245,158,11,0.25)"/>
+                            <stop offset="100%" stop-color="rgba(245,158,11,0.05)"/>
+                        </linearGradient>
+                        <linearGradient id="boxCyan" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(6,182,212,0.25)"/>
+                            <stop offset="100%" stop-color="rgba(6,182,212,0.05)"/>
+                        </linearGradient>
+                        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L9,3 z" fill="#a5b4fc"/>
+                        </marker>
+                    </defs>
+
+                    <!-- FFXIV -->
+                    <rect x="20" y="100" width="130" height="70" rx="8" fill="url(#boxOrange)" stroke="#f59e0b" stroke-width="1.5"/>
+                    <text x="85" y="132" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="Kanit, sans-serif">FFXIV Game</text>
+                    <text x="85" y="152" text-anchor="middle" fill="#fcd34d" font-size="11">in-game text</text>
+
+                    <!-- Dalamud -->
+                    <rect x="195" y="100" width="160" height="70" rx="8" fill="url(#boxGrad)" stroke="#6366f1" stroke-width="1.5"/>
+                    <text x="275" y="125" text-anchor="middle" fill="#e0e7ff" font-size="14" font-weight="600" font-family="Kanit, sans-serif">Dalamud Plugin</text>
+                    <text x="275" y="143" text-anchor="middle" fill="#a5b4fc" font-size="11">DalamudMBBBridge.cs</text>
+                    <text x="275" y="158" text-anchor="middle" fill="#a5b4fc" font-size="11">OnChatMessage</text>
+
+                    <!-- Pipe -->
+                    <rect x="400" y="115" width="100" height="40" rx="20" fill="rgba(255,255,255,0.04)" stroke="#a5b4fc" stroke-width="1.5" stroke-dasharray="4,3"/>
+                    <text x="450" y="140" text-anchor="middle" fill="#c7d2fe" font-size="12" font-weight="500">Named Pipe</text>
+
+                    <!-- Python Handler -->
+                    <rect x="545" y="100" width="170" height="70" rx="8" fill="url(#boxCyan)" stroke="#06b6d4" stroke-width="1.5"/>
+                    <text x="630" y="125" text-anchor="middle" fill="#a7f3f6" font-size="14" font-weight="600" font-family="Kanit, sans-serif">Python Handler</text>
+                    <text x="630" y="143" text-anchor="middle" fill="#67e8f9" font-size="11">dalamud_immediate</text>
+                    <text x="630" y="158" text-anchor="middle" fill="#67e8f9" font-size="11">_handler.py</text>
+
+                    <!-- Translator -->
+                    <rect x="545" y="200" width="170" height="60" rx="8" fill="url(#boxGrad)" stroke="#6366f1" stroke-width="1.5"/>
+                    <text x="630" y="225" text-anchor="middle" fill="#e0e7ff" font-size="14" font-weight="600" font-family="Kanit, sans-serif">Translator</text>
+                    <text x="630" y="245" text-anchor="middle" fill="#a5b4fc" font-size="11">translator_gemini.py</text>
+
+                    <!-- Render -->
+                    <rect x="760" y="100" width="120" height="160" rx="8" fill="url(#boxGrad)" stroke="#8b5cf6" stroke-width="1.5"/>
+                    <text x="820" y="130" text-anchor="middle" fill="#e0e7ff" font-size="14" font-weight="600" font-family="Kanit, sans-serif">Renderer</text>
+                    <text x="820" y="155" text-anchor="middle" fill="#c4b5fd" font-size="11">TUI (Tkinter)</text>
+                    <text x="820" y="175" text-anchor="middle" fill="#c4b5fd" font-size="11">DissolveOverlay</text>
+                    <text x="820" y="195" text-anchor="middle" fill="#c4b5fd" font-size="11">(PyQt6)</text>
+                    <text x="820" y="220" text-anchor="middle" fill="#c4b5fd" font-size="11">+ Logs panel</text>
+
+                    <!-- Arrows -->
+                    <path d="M150,135 L190,135" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+                    <path d="M355,135 L395,135" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+                    <path d="M500,135 L540,135" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+                    <path d="M630,170 L630,195" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)"/>
+                    <path d="M715,170 Q745,170 760,170" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+                    <path d="M715,225 Q740,225 755,200" stroke="#a5b4fc" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+                </svg>
+                <div class="caption">FFXIV → Dalamud (C#) → Named Pipe → Python handler → translator + renderer</div>
+            </div>
+        </section>
+
+        <!-- ──────────────── ChatType Routing ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="chat-types">ChatType Routing</h2>
+            <p>แต่ละ ChatType จาก Dalamud จะถูก route ไปยัง renderer ที่เหมาะสม:</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>ChatType</th><th>Mode</th><th>Renderer</th><th>Color</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>61</code></td><td>Dialog</td><td>Tkinter TUI</td><td><span class="color-dot" style="background:#38bdf8"></span> Cyan <code>#38bdf8</code> (speaker)</td></tr>
+                        <tr><td><code>68</code></td><td>Battle</td><td>PyQt6 DissolveOverlay</td><td><span class="color-dot" style="background:#FF6B00"></span> Orange <code>#FF6B00</code></td></tr>
+                        <tr><td><code>71</code></td><td>Cutscene</td><td>PyQt6 DissolveOverlay</td><td><span class="color-dot" style="background:#40E0D0"></span> Turquoise <code>#40E0D0</code></td></tr>
+                        <tr><td><code>0x0045</code>, <code>0x0046</code></td><td>Choice</td><td>Tkinter TUI</td><td><span class="color-dot" style="background:#FFD700"></span> Gold (choice)</td></tr>
+                        <tr><td><code>27</code>, <code>3</code></td><td>Player chat</td><td><span class="tag faint">filtered out</span></td><td>—</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="callout info">
+                <span class="lead">Cross-type context flow</span>
+                Wide-Context Translation system (always-on) injects recent Thai translations across types — dialogue/cutscene/battle context flows freely. ดูรายละเอียดที่ <a href="npc-translation.html#wide-context">Wide-Context Translation</a>
+            </div>
+        </section>
+
+        <!-- ──────────────── Build & Distribution ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="build">Build &amp; Distribution</h2>
+
+            <h3 class="subsection" id="pyqt-pin">PyQt6 PINNED at 6.9.0</h3>
+            <div class="callout danger">
+                <span class="lead">ห้าม upgrade PyQt6 เกิน 6.9.0</span>
+                Qt 6.10+ มี frameless+translucent rendering regression — ทำให้ DissolveOverlay + Polaroid + main window กลายเป็นพื้นทึบสีดำ. ดูโปรโตคอลเต็มที่ <code>BUILD_PROTOCOL.md</code>
+            </div>
+
+            <h3 class="subsection" id="pyinstaller">PyInstaller</h3>
+            <div class="two-col">
+                <div class="card compact">
+                    <h3>📄 Specs</h3>
+                    <ul style="font-size:13.5px; color:var(--text-dim); line-height:1.85; padding-left:18px; margin:0">
+                        <li><code>python-app/mbb.spec</code> — main app</li>
+                        <li><code>python-app/updater/updater.spec</code> — updater</li>
+                    </ul>
+                </div>
+                <div class="card compact">
+                    <h3>📁 Output</h3>
+                    <ul style="font-size:13.5px; color:var(--text-dim); line-height:1.85; padding-left:18px; margin:0">
+                        <li>Build dir: <code>dist_test/</code> (ไม่ใช่ <code>python-app/dist/</code>)</li>
+                        <li>System Python 3.11</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h4 class="minor">Post-build copy</h4>
+            <p>หลัง <code>COLLECT</code> ใน <code>mbb.spec</code> จะ copy <code>npc.json</code> + <code>npc_images/</code> ออกจาก <code>_internal/</code>:</p>
+
+            <div class="file-tree">
+<span class="folder">MBB/</span>
+├── <span class="file">MBB.exe</span>
+├── <span class="accent">npc.json</span>          <span class="note">← user-editable, visible</span>
+├── <span class="accent">npc_images/</span>       <span class="note">← user data, visible</span>
+└── <span class="folder">_internal/</span>
+    ├── <span class="file">npc.json</span>      <span class="note">(fallback)</span>
+    ├── <span class="folder">npc_images/</span>   <span class="note">(fallback)</span>
+    └── ... <span class="note">(Python runtime)</span></div>
+
+            <h3 class="subsection" id="frozen-npc">Frozen-Mode <code>npc.json</code> Rule (v1.8.7)</h3>
+            <div class="callout rule">
+                <span class="lead">Any code touching <code>npc.json</code> MUST use <code>get_npc_file_path()</code></span>
+                <p style="margin-top:8px">
+                <code>resource_path()</code> resolves to <code>sys._MEIPASS/npc.json</code> (immutable bundled snapshot) — fine for static assets (fonts, icons) แต่ <strong>ผิด</strong>สำหรับ <code>npc.json</code> ที่ user เขียนผ่าน NPC Manager. Resolver ต้องชี้ที่ exe-level file.</p>
+                <p style="margin-top:6px"><strong>Verify:</strong> <code>grep -rn 'resource_path.*npc' python-app/</code> ต้อง return zero matches</p>
+            </div>
+
+            <h3 class="subsection" id="version-bump">Version Bump</h3>
+            <pre><code>python bump_version.py patch|minor|major|X.Y.Z</code></pre>
+            <p style="font-size:13.5px; color:var(--text-dim)">อัพเดต 8 ไฟล์อัตโนมัติ — <strong>ห้ามแก้ version strings ด้วยมือ</strong>.</p>
+        </section>
+
+        <!-- ──────────────── Quick Nav ──────────────── -->
+        <section class="doc-section">
+            <h2 class="section-head" id="quick-nav">Quick Navigation</h2>
+
+            <div class="card-grid">
+                <a href="ui.html" class="card" style="text-decoration:none">
+                    <div class="card-eyebrow">UI Systems →</div>
+                    <h3>Main Window, TUI, Logs</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">Layout math, TUI dialog/battle/cutscene modes, DissolveOverlay dispatcher rules, hover patterns, glass mode</p>
+                </a>
+                <a href="npc-translation.html" class="card" style="text-decoration:none">
+                    <div class="card-eyebrow">NPC + Translation →</div>
+                    <h3>Database, Cloud Sync, Engine</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">NPC Manager polaroid + cloud sync, Gemini prompt v2, 3-layer name preservation, wide-context</p>
+                </a>
+                <a href="styling.html" class="card" style="text-decoration:none">
+                    <div class="card-eyebrow">Theme + Config →</div>
+                    <h3>Theme, Font, Settings</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">12 palettes, dual font storage, dual UI architecture (PyQt6 active / Tkinter legacy), splash, updater</p>
+                </a>
+                <a href="reference.html" class="card" style="text-decoration:none">
+                    <div class="card-eyebrow">Reference →</div>
+                    <h3>Models, Gotchas, Roadmap</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">Gemini model matrix, test messages, hard-won rules (must-read for AI), plugin manifest, deferred work</p>
+                </a>
+            </div>
+        </section>
+
+        <!-- ──────────────── Page nav ──────────────── -->
+        <nav class="page-nav">
+            <a class="disabled"><span class="nav-dir">← Prev</span><span class="nav-title">—</span></a>
+            <a href="ui.html" class="next"><span class="nav-dir">Next →</span><span class="nav-title">UI Systems</span></a>
+        </nav>
+    </main>
+
+    <!-- ════════════════════ TOC ════════════════════ -->
+    <aside class="manual-toc">
+        <div class="toc-title">On this page</div>
+        <ul>
+            <li><a href="#project-goal">Project Goal</a></li>
+            <li><a href="#structure">Project Structure</a></li>
+            <li><a href="#data-flow">Data Flow</a></li>
+            <li><a href="#chat-types">ChatType Routing</a></li>
+            <li><a href="#build">Build &amp; Distribution</a></li>
+            <li class="toc-h3"><a href="#pyqt-pin">PyQt6 Pin</a></li>
+            <li class="toc-h3"><a href="#pyinstaller">PyInstaller</a></li>
+            <li class="toc-h3"><a href="#frozen-npc">Frozen-Mode Rule</a></li>
+            <li class="toc-h3"><a href="#version-bump">Version Bump</a></li>
+            <li><a href="#quick-nav">Quick Navigation</a></li>
+        </ul>
+    </aside>
+
+    <!-- ════════════════════ FOOTER ════════════════════ -->
+    <footer class="manual-footer">
+        © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
+        · Compacted 2026-05-19 · <a href="../index.html">← Landing page</a>
+    </footer>
+
+</div>
+
+<script src="assets/manual.js"></script>
+</body>
+</html>

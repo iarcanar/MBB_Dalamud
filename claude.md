@@ -405,7 +405,7 @@ Saved height + y-position are preserved (user-tunable). Width override means use
 
 **Root cause:** `_trigger_tui_auto_show` fires from the status-update path the moment `_translating_in_progress=True` is set inside the translation thread (line 295 of `dalamud_immediate_handler.py`). At that point, MBB.py doesn't know the chat_type yet, so the `_dissolve_active` guard in `_do_tui_auto_show` hasn't been armed. Auto-show deiconifies TK; the translation takes another ~1s; `_route_to_dissolve_overlay` finally withdraws TK and shows the overlay — but the user already saw the stale dialog flash.
 
-**Fix:** in `dalamud_immediate_handler.py` `process_message`, right before `thread.start()` (after all early-return gates + cache check), if `chat_type ∈ {68, 71}` — pre-flight:
+**Fix:** in `dalamud_immediate_handler.py` `process_message`, right before `thread.start()` (after all early-return gates + cache check), if `chat_type ∈ {68, 71, 70}` — pre-flight:
 
 1. Set `translated_ui._dissolve_active = True` synchronously on the bridge thread (atomic Python attribute write — GIL covers it).
 2. Schedule `ui.root.withdraw()` on the Tk main thread via `safe_after(0, ...)`. The withdraw callback also sets `_tk_was_visible_before_dissolve` based on actual `root.state()`.
@@ -415,6 +415,8 @@ Saved height + y-position are preserved (user-tunable). Width override means use
 - If `was_pre_flighted` AND `_translation_displayed=False` (`_show_immediately` was never called), reset `_dissolve_active=False`. Otherwise a translation failure leaves TUI hidden forever — next dialogue's auto-show stays blocked.
 
 **Placement notes:** pre-flight must be AFTER all early returns (cache hit calls `_show_immediately` synchronously; "already translating" defers to the in-flight thread). Pre-flighting before those would leak `_dissolve_active=True` without a thread to clean up.
+
+**v1.8.18 — extended to choice (ChatType 70):** the pre-flight block is now generalized over `{68, 71, 70}`. For 70 it arms `_choice_overlay_active` (not `_dissolve_active`) and the withdraw callback sets `_tk_was_visible_before_choice` (the choice overlay's own restore flag — distinct from dissolve's `_tk_was_visible_before_dissolve`); the `finally` cleanup resets whichever flag was armed via a `_preflight_flag` variable. Without it the first choice flashed stale dialogue for ~1s exactly like battle/cutscene did pre-v1.8.10. 68/71 behaviour is byte-identical to before.
 
 ## First-Show HWND Race — Fix (v1.8.10)
 
@@ -607,6 +609,8 @@ When user clicks a character name on the TUI, [npc_manager_panel.py:open_with_ch
 
 Each match step uses the same first-token fuzziness as the speaker confirm-icon: target "Nashu Mhakaracca" matches a registry firstName "Nashu" because the registry typically stores only the first token. For npcs (single `name` field) the fuzziness is bidirectional: target's first token vs registry's `name` AND registry's first token vs target. Prevents duplicate entries when a character already lives in the NPCs database.
 
+**v1.8.18 fix:** `_open_at_tab` fills the search box with the **registry-stored** key (the matched entry's `firstName` / `name`), NOT the raw TUI name. Previously a full "First Last" TUI name that matched a first-token-only registry entry was fed to `dm.search` (forward-substring) → the row was filtered OUT → the tab switched but the list was empty and no row selected (the opposite of the intended auto-select). Passing the registry key guarantees the row re-appears so selection-by-index works.
+
 ## Polaroid Avatar View (v1.8.2)
 
 Clicking avatar opens `_PolaroidCard` overlay (~400×510px) inside details panel. Card shows full image (top-cropped) + firstName in Caveat handwriting font.
@@ -790,7 +794,7 @@ Strips `[brackets]` Gemini added on its own (e.g. `[adventurer]`, `[WoL]`).
 ## get_relevant_names()
 
 - Names appearing in dialogue text + essential names
-- Capped at 20 (token control)
+- Capped at 20 (token control). **v1.8.18:** names ACTUALLY PRESENT in the line are ordered FIRST, then essentials pad to the cap. Previously the ~19 always-on essentials filled the cap and crowded out detected side-characters — a line naming 2+ non-essential NPCs lost all but one from preservation (nondeterministic, set ordering). Detected-first guarantees in-line names are never dropped.
 - Essential (20): Y'shtola, Alphinaud, Alisaie, Wuk Lamat, Estinien, G'raha Tia, Thancred, Urianger, Krile, Emet-Selch, Hythlodaeus, Venat, Meteion, Zenos, Koana, Zoraal Ja, Gulool Ja, Sphene, Otis
 
 ---
@@ -1181,6 +1185,12 @@ Bug history: `text_corrector.load_npc_data()` used `resource_path()` → after N
 
 `load_npc_data` calls `ensure_npc_file_exists()` before reading (resilience for fresh installs).
 
+**v1.8.18 frozen-mode robustness** (fixes the real-world "settings don't save" / "npc.json not read" / unexplained NPC Manager crashes seen only in the packaged exe):
+- **Atomic npc.json write** — `npc_data_manager.save()` writes to `npc.json.tmp` → `flush()` + `os.fsync()` → `os.replace()` (atomic on NTFS). A mid-write crash (incl. the Tk+Qt GIL fatal) can no longer leave npc.json truncated/corrupt. Timestamped backup in `backups/` still made first.
+- **Loader `.get()` hardening** — `text_corrector` + `translator_gemini` `load_npc_data()` read every key via `.get(k, default)`, so an incomplete/partial npc.json degrades to an empty-but-functional state instead of raising `KeyError` → "Failed to load NPC data".
+- **CWD normalization** — `os.chdir(get_app_dir())` at the very top of `MBB.py`'s `__main__` (before splash/Settings). Relative opens (`settings.json`, `font_settings.json`, logs/) resolve against the exe dir on every launch path. The Dalamud launcher already sets `WorkingDirectory`, but a direct desktop-shortcut/Explorer/script launch could leave CWD elsewhere → settings silently written to the wrong folder (= the "doesn't save via exe" symptom).
+- **Stub schema fix** — `ensure_npc_file_exists()`'s default stub now matches the real schema (`main_characters/npcs/lore/character_roles/word_fixes/_game_info`); the old stub omitted keys → `KeyError` on a fresh/incomplete install.
+
 ## Version Bump
 
 `python bump_version.py patch|minor|major|X.Y.Z` updates 8 files. **Never edit version strings by hand.**
@@ -1266,14 +1276,17 @@ if (atkValuesPtr != null
 
 The FIRST cinematic line of a cutscene arrives via PreRefresh's AtkValues, not PreSetup's. Code that handles only `AddonSetupArgs` silently drops the first line of every cutscene. Reference: `TalkSubtitleHandler.cs` at https://github.com/lokinmodar/Echoglossian (NativeUI/AddonHandlers/Talk).
 
+**Dispose (v1.8.18 fix):** `TalkSubtitle`'s PreSetup + PreRefresh listeners MUST be unregistered in `Dispose()` — they were leaked until v1.8.18, so after a plugin reload the next cutscene fired the handler on a disposed instance → crash. Every addon listener registered in init needs a matching `Dispose()` unregister (verify the register ↔ dispose lists stay symmetric).
+
 ## Native safety (v1.8.11 game-crash incident)
 
 `AtkValue` is a **union** type. Reading `.String.Value` when `.Type != AtkValueType.String` returns a garbage pointer → `MemoryHelper.ReadSeStringAsString` dereferences in native code → **access violation crashes the game**. C# `try/catch` does NOT catch native AVs.
 
 Hard rules:
-- **Always** `if (atkValue.Type == AtkValueType.String && atkValue.String.Value != null)` BEFORE reading.
+- **Always** `if (atkValue.Type == AtkValueType.String && atkValue.String.Value != null)` BEFORE reading — **where the addon actually reports a String type.** ⚠️ **Exception — the `Talk` addon (dialogue, 61):** at PreRefresh it hands back a *readable* String pointer at `AtkValues[0]` (message) / `[1]` (speaker), but its `.Type` is **NOT** `AtkValueType.String`. Applying the strict `== String` gate there early-returns on **every** line → all NPC dialogue silently stops being captured (v1.8.17 regression → reverted v1.8.18). `OnTalkAddonPreReceive` must **null-check the pointer only, no type gate**. TalkSubtitle (71) is the opposite (its `[0].Type` IS String → keeps the gate). The gate is for union *safety*; don't blanket-apply it to an addon whose Type field isn't String — log the real `.Type` first if unsure. Memory: [[feedback-talk-addon-no-type-guard]].
 - **Never** register `PostUpdate` / `PreDraw` for text capture — they fire every frame (60Hz+) and any per-frame heavy iteration + unsafe pointer read = instant crash. Use them ONLY for native text replacement (which we don't do at all).
 - **Never** iterate text nodes `0..N` speculatively. Stick to known good IDs (TalkSubtitle = 2, 3, 4 per Echoglossian).
+- **Capture ONLY the addon types MBB renders** — dialogue (61), battle (68), cutscene (71), choice (70); filter everything else. The online-game hook floods messages; widening the net = disaster. Never add broad/speculative hooks without user sign-off. Memory: [[feedback-capture-only-used-types]].
 - Captured in memory: [[feedback-dalamud-native-safety]].
 
 # Plugin Manifest
