@@ -233,9 +233,16 @@ namespace DalamudMBBBridge
                 // Extract text from AtkValues exactly as documented in guide
                 // Speaker Node: updateAtkValues[1].String
                 // Message Node: updateAtkValues[0].String
+                // NOTE: the Talk addon reliably delivers readable String pointers at
+                // [0]/[1] on PreRefresh, but its AtkValue.Type is NOT AtkValueType.String
+                // here. A strict `.Type == String` gate (correct for TalkSubtitle) instead
+                // REJECTS every dialogue line → no capture. So guard with a null-check on
+                // the pointer only (matches the proven 1.8.x behaviour). [v1.8.18 fix of
+                // the v1.8.17 over-guard regression.]
                 string speakerName = updateAtkValues[1].String.Value != null ?
                     MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[1].String.Value) : "";
-                string message = MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value);
+                string message = updateAtkValues[0].String.Value != null ?
+                    MemoryHelper.ReadSeStringAsString(out _, (nint)updateAtkValues[0].String.Value) : "";
 
                 // Use global duplicate prevention system
                 if (IsUniqueMessage(speakerName, message, "dialogue"))
@@ -1260,6 +1267,8 @@ namespace DalamudMBBBridge
             AddonLifecycle.UnregisterListener(AddonEvent.PreRefresh, "Talk", OnTalkAddonPreReceive);
             AddonLifecycle.UnregisterListener(AddonEvent.PreSetup, "_BattleTalk", OnBattleTalkAddon);
             AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "_BattleTalk", OnBattleTalkAddon);
+            AddonLifecycle.UnregisterListener(AddonEvent.PreSetup, "TalkSubtitle", OnTalkSubtitleAddon);
+            AddonLifecycle.UnregisterListener(AddonEvent.PreRefresh, "TalkSubtitle", OnTalkSubtitleAddon);
 
             // Unregister Choice Dialog events (updated for research-based implementation)
             AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectString", OnSelectStringAddon);

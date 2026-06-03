@@ -1,6 +1,6 @@
 # MBB Dalamud — Project Reference
 
-**Version:** 1.8.16 · **Build:** 04032026-01
+**Version:** 1.8.18 · **Build:** 04032026-01
 **Framework:** Dalamud Plugin (C#) + Python (PyQt6 + Tkinter hybrid) + Gemini API
 **Developed by:** iarcanar · **License:** MIT
 
@@ -109,8 +109,10 @@ TranslatedLogs (PyQt6) — history
 | 61 | Dialog | Tkinter TUI |
 | 68 | Battle | PyQt6 DissolveOverlay |
 | 71 | Cutscene | PyQt6 DissolveOverlay |
-| 0x0045, 0x0046 | Choice | Tkinter TUI |
+| 70 (0x0046) | Choice | PyQt6 ChoiceOverlay |
 | 27, 3 (player chat) | Filtered out | — |
+
+**Choice routing detail:** real game choices arrive as `Type="choice"` + `ChatType=70` with pipe-separated body (`"What will you say? | Choice1 | Choice2"`). The handler ([dalamud_immediate_handler.py:363-370](python-app/dalamud_immediate_handler.py#L363-L370)) detects `Type=="choice"` and calls `translate_choice()` which converts pipes → newlines + bullet prefixes BEFORE Gemini, preserving format through translation. Output reaches `translated_ui.update_text` with `chat_type=70`; dispatcher routes to `_route_to_choice_overlay`. **Tk Canvas `_handle_choice_text` is kept as fallback** if `self.choice_overlay is None` (creation failed in MBB.py).
 
 ---
 
@@ -450,6 +452,81 @@ If `tui_positions[battle/cutscene]` corrupts to dialogue's position (legacy bug)
 
 ---
 
+# TUI — Choice Mode (PyQt6, `pyqt_ui/choice_overlay.py`)
+
+~430-line `QWidget`, frameless + translucent. Replaces Tk Canvas choice rendering for `Type="choice"` messages (real FFXIV SelectString addon → ChatType 70).
+
+## Visual
+
+- **Vertical** dissolve gradient (top + bottom fade, 10% each — wider than DissolveOverlay's 5% because the canvas is short ≤400px). Distinct from battle/cutscene's horizontal dissolve.
+- Container BG `#14161c` α=242 (95% opaque — slight see-through to game scene behind, per user preference 2026-05-26).
+- **Header** "คุณจะพูดว่าอย่างไร?" — gold `#FFD700`, bold, Anuphan body_pt+4, **left-aligned** at PADDING_X (matches original Tk anchor="nw").
+- **Choices** rendered as **pills** — each one a rounded-rect (radius=8) with bright BG `#1f242d` α=255 (fully opaque so choices stay readable against the semi-transparent container). Width = snug-fit text width (NOT full container width); height = single line + paddings. Long choices elide with "...".
+- "• " prefix added by parser, NOT by overlay.
+- Font size pulled from `settings["font_size"]` (TUI dialog's font, set via FontPanel target=`tui` or `both`). Font family hardcoded to Anuphan (same as DissolveOverlay — Tk dialog mode is the only renderer that honors `settings["font"]` family).
+
+## Position behavior — in-memory cache (transient)
+
+`self._cached_pos: Optional[tuple[int, int]]` — `None` on first show, set on `mouseReleaseEvent` after drag. Survives auto-hide + re-show within the same app session; reset on app restart. **Never persisted to settings.json** (user explicit decision 2026-05-26 — "จำตำแหน่งไว้ในแคช จนกว่าจะปิดโปรแกรม"). Clamp to screen at every show so a cached pos can't push the window off-screen if user changes resolution mid-session.
+
+Default position (when cache is None): `x = center horizontally`, `y = int(screen_h × 0.601)` — preserves the 60.1% rule from the original Tk choice geometry.
+
+## UI elements
+
+- **Drag-to-move** — anywhere on overlay. Cursor changes to `ClosedHandCursor` during drag. Auto-hide timer pauses while dragging; restarts on release.
+- **Close (X) button** — top-right, 22×22, hover-revealed (cursor poll 140ms — see PyQt6 gotchas, Enter/Leave flickers on overlapping siblings). Red on hover. Click → `hide_overlay()`. Drag is suppressed when click lands on close button rect.
+- **ESC key** → instant hide.
+- **No resize**, no save geometry, no lock/color/fadeout (transient overlay — minimal chrome).
+
+## Auto-hide
+
+- `AUTO_HIDE_MS = 10000`, `FADE_OUT_MS = 500` — same as DissolveOverlay.
+- New `show_choice()` cancels any in-flight fade and snaps opacity back to 1.0.
+- Hover prevention: if cursor inside overlay rect at fire time → restart timer instead of fading.
+
+## Parser — `pyqt_ui/choice_parser.py`
+
+`parse_choice_text(text: str) → (header, choices: list[str])`. Extracted byte-for-byte from old Tk `_handle_choice_text` parsing block. Handles:
+- Pipe format: `"Header | A | B"`
+- Newline fallback with Thai header keyword detection (`พูด ว่า ไร ดี อะไร จะ คุณ ท่าน`)
+- Long-line split on sentence boundaries (>100 chars + 2+ punctuation)
+- Unwanted-header leak strip + 70% similarity dedup
+- Bullet prefix `"• "` applied per choice (parser, not overlay)
+
+## Dispatcher routing — `translated_ui._route_to_choice_overlay`
+
+Modeled on `_route_to_dissolve_overlay`. The 3 must-not-violate rules apply identically (substitute `_choice_overlay_active` for `_dissolve_active`):
+
+1. **MUST NOT update** `current_chat_type` / `choice_mode_active` (Tkinter state stays untouched while overlay is active — same reason as battle/cutscene).
+2. **Mode change choice → other** → `_exit_choice_overlay()` hides overlay + restores Tk root if it was visible before. Triggered in `update_text` dispatcher when `is_choice_dialogue=False` AND `_choice_overlay_active=True`.
+3. **`MBB._do_tui_auto_show` early-returns** when `_choice_overlay_active=True` (extended OR-condition with `_dissolve_active`).
+
+**Cross-mode hook** in `_route_to_dissolve_overlay`: if `_choice_overlay_active` when dissolve fires (choice → battle), hide choice overlay first, preserve `_tk_was_visible_before_*` chain so exit logic restores correctly.
+
+**Defensive timer cancel** — same set as dissolve: `move_end_timer` + `resize_end_timer` + `_deferred_render_id` + fade/window_hide timers killed before withdrawing root.
+
+## Choice detection — `_is_choice_dialogue` + chat_type=70 fallback
+
+[translated_ui.py:3347](python-app/translated_ui.py#L3347) detects pipe-separated format with Thai header patterns (`"คุณจะพูดว่าอย่างไร"` / `"คุณจะพูด"`). After `translate_choice()` removes pipes and adds bullet prefixes, pipe-detection fails — so dispatcher has a second-chance check: `getattr(self, '_current_chat_type', 0) == 70`. Either path routes to `_route_to_choice_overlay`.
+
+## Theme switch crash mitigation
+
+`MBB._apply_theme_update` stops fade animations + hides both overlays + calls `_exit_*_overlay()` BEFORE Mini UI Tk widget rebuild. Without this, the Tk event queue holds stale references during rebuild → GIL fatal in next `root.update()` poll. See [[feedback-tk-qt-theme-switch-crash]].
+
+## Test injection
+
+`pyqt_ui/settings_panel.py` "Choice" button — sends `Type="choice"` + `ChatType=70` + pipe-separated English body (mirrors real C# bridge). `_TEST_CHOICE_2` (2-choice) + `_TEST_CHOICE_3` (3-choice) pools, alternates randomly. **Critical:** `Type` must be `"choice"` (not `"dialogue"`) so handler hits `translate_choice()` path — otherwise Gemini may use a different Thai header wording that `_is_choice_dialogue` doesn't recognize.
+
+## Tk fallback (kept for safety)
+
+If `MBB.choice_overlay` fails to construct (PyQt6 error), `translated_ui.choice_overlay` stays `None` and the dispatcher falls through to the legacy `_handle_choice_text` Tk renderer (kept intact at lines 3366-3762). Safe-by-default — never deletes user-visible feedback.
+
+## Diagnostic logs
+
+`[CHOICE-DBG]` prefix on every dispatch/show/hide site + `[CHOICE-PARSE]` from parser. Grep for fast diagnosis. Keep these in.
+
+---
+
 # Translated Logs UI (PyQt6, `pyqt_ui/translated_logs.py`)
 
 ~1100 LOC; replaced Tkinter version. Compatibility shims (`root`, `winfo_exists`, `state`, `withdraw`, etc.) keep `MBB.py` minimal-change.
@@ -500,6 +577,35 @@ Session-only (always starts unlocked). Drag with no `print()` between events. `s
 - **Personality** inline in MAIN (`character_roles[firstName]` editable as `QTextEdit` between Name and Gender)
 - **WORD FIX tab hidden** — `setVisible(False)`. word_fixes deprecated (see Database section).
 - **ROLES tab merged into MAIN** (v1.7.9)
+
+## Search match indicator (cross-tab, v1.8.16+)
+
+When the panel-level search box has text, the panel scans **all three sections** (main + npcs + lore) for substring matches. Any tab OTHER than the currently-active one that contains a match gets a **dual visual indicator**:
+
+1. **2px accent-coloured border around the tab button** — theme-aware (uses `palette['accent']`). Driven by `QPushButton#npc_tab_btn[has_match="true"]` QSS rule + dynamic property toggle (`setProperty` + `unpolish/polish`). Padding compensated `8px 22px → 7px 21px` so the border addition doesn't change button geometry.
+2. **Hardcoded bright-red badge** (`#ff2d2d` with 2px white ring) — 12×12 child `QFrame` at the top-right corner of the button. Hardcoded red (NOT theme accent) ensures the badge is always distinguishable even when accent itself is reddish.
+
+The active tab never gets an indicator (user is already there). `_compute_match_tabs(query)` returns the set of tabs with at least one match; `_update_tab_dots()` calls `set_has_match(bool)` on each `_TabButton` accordingly. Hooked into `_on_search_changed`, `_switch_tab`, and `_apply_theme` (border colour re-renders automatically via the theme rebuild).
+
+**Performance:** ~423 entries (main 218 + npcs 65 + lore 140), early-exit per section → <1ms per keystroke even with 4-char queries. No throttle/debounce needed.
+
+**Why two visuals, not one:** the border alone could blend with a theme whose accent is close to the active-tab fill; the badge alone could be missed at a glance. Together they're impossible to miss but neither dominates the UI.
+
+## Header-only drag (UI shift fix, v1.8.16+)
+
+`mousePressEvent` checks `event.position().toPoint().y() <= 64` (10px outer margin + 54px header height) before starting a drag. Clicks below that zone (list, details panel, empty bg) leave `self.old_pos = QPoint()` → `mouseMoveEvent` skips drag via `isNull()` check.
+
+**Why this matters:** previously any LMB press anywhere on the panel armed the drag state. Even a 1-2px micro-drift between press and release would nudge the window, producing a subtle "UI shift" visible as a small jitter. The header-only check eliminates this. Matches the same fix pattern used by Theme Manager (`mousePress y ≤ 46`).
+
+## `open_with_character` — cross-section search (v1.8.16+)
+
+When user clicks a character name on the TUI, [npc_manager_panel.py:open_with_character](python-app/pyqt_ui/npc_manager_panel.py) searches **both** `main_characters` and `npcs` before deciding to auto-add. Order:
+
+1. Match in `main_characters` → switch to MAIN tab + select row
+2. Match in `npcs` → switch to NPCS tab + select row
+3. No match anywhere → add new entry to `main_characters` (default for unknown names)
+
+Each match step uses the same first-token fuzziness as the speaker confirm-icon: target "Nashu Mhakaracca" matches a registry firstName "Nashu" because the registry typically stores only the first token. For npcs (single `name` field) the fuzziness is bidirectional: target's first token vs registry's `name` AND registry's first token vs target. Prevents duplicate entries when a character already lives in the NPCs database.
 
 ## Polaroid Avatar View (v1.8.2)
 
@@ -1097,6 +1203,7 @@ Bug history: `text_corrector.load_npc_data()` used `resource_path()` → after N
 4. **`QTimer.singleShot(0, ...)` from worker thread silently no-ops** — fires on calling thread. Use `pyqtSignal` (auto-queued connection) for cross-thread results
 5. **`QtFontManager` is lazy** — runs on Settings/Font panel open. Components needing custom fonts before that should call `QFontDatabase.addApplicationFont()` themselves (idempotent)
 6. **App-level `eventFilter` receives events from background threads** (e.g. global keyboard hook) — wrap callback bodies in try/except + log; exception propagating to Qt's C++ side silently terminates app
+7. **QSS-styled QPushButton custom paintEvent is unreliable** — `setObjectName` + cascaded QSS routes painting through `QStyleSheetStyle::drawControl`, which may paint over a subclass `paintEvent` override that called `super().paintEvent` first. Symptom: `QPainter` shapes drawn in subclass paintEvent are invisible. Fix: use a **child `QFrame` with inline `setStyleSheet`** (background-color + border-radius) as the visual element. Child widgets composite on top of the parent's QSS-painted surface and are immune to this. See `_DotIndicator` in `pyqt_ui/npc_manager_panel.py` for the working pattern.
 
 ## Win32 + Tkinter Don'ts
 
