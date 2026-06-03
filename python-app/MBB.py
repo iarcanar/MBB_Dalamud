@@ -69,6 +69,7 @@ import webbrowser
 # `message_cache`) so MBB.py needs no further changes.
 from pyqt_ui.translated_logs import Translated_Logs
 from pyqt_ui.dissolve_overlay import DissolveOverlay
+from pyqt_ui.choice_overlay import ChoiceOverlay
 from font_manager import FontSettings, initialize_font_manager
 from asset_manager import AssetManager
 from resource_utils import resource_path
@@ -1513,6 +1514,36 @@ class MagicBabelApp:
         try:
             log_func = getattr(self.logging_manager, "log_info", print)
 
+            # ── Defensive: hide overlays + cancel fades BEFORE Mini UI rebuild ──
+            # Mini UI does Tkinter destroy+rebuild below. If a Qt fade animation
+            # (DissolveOverlay or ChoiceOverlay auto-hide) is in-flight at the
+            # same time, the Tk event queue can hold stale references that
+            # crash the next root.update() poll with a GIL-released fatal.
+            # See CLAUDE.md "Tkinter + PyQt6 hybrid" gotcha.
+            for overlay_attr in ("dissolve_overlay", "choice_overlay"):
+                ov = getattr(self, overlay_attr, None)
+                if ov is None:
+                    continue
+                try:
+                    if hasattr(ov, "_fade_anim") and ov._fade_anim is not None:
+                        from PyQt6.QtCore import QAbstractAnimation
+                        if ov._fade_anim.state() == QAbstractAnimation.State.Running:
+                            ov._fade_anim.stop()
+                    if hasattr(ov, "hide_overlay"):
+                        ov.hide_overlay()
+                except Exception as _e:
+                    logging.debug(f"{overlay_attr} pre-theme hide failed: {_e}")
+            # Also reset translated_ui overlay-active flags so dispatchers don't
+            # leave the Tk root withdrawn after this theme switch.
+            try:
+                if hasattr(self, "translated_ui") and self.translated_ui is not None:
+                    if getattr(self.translated_ui, "_choice_overlay_active", False):
+                        self.translated_ui._exit_choice_overlay()
+                    if getattr(self.translated_ui, "_dissolve_active", False):
+                        self.translated_ui._exit_dissolve_overlay()
+            except Exception as _e:
+                logging.debug(f"exit overlay during theme refresh failed: {_e}")
+
             # Update PyQt6 main window theme
             if hasattr(self, "qt_main_window") and self.qt_main_window:
                 try:
@@ -1996,6 +2027,17 @@ class MagicBabelApp:
             self.logging_manager.log_error(f"Error creating dissolve overlay: {e}")
             logging.exception("Detailed error in dissolve overlay creation:")
             self.dissolve_overlay = None
+
+        # ── Choice overlay (PyQt6 replacement for Tk choice rendering) ──
+        try:
+            self.choice_overlay = ChoiceOverlay(self.settings)
+            if hasattr(self, "translated_ui") and self.translated_ui is not None:
+                self.translated_ui.choice_overlay = self.choice_overlay
+            self.logging_manager.log_info("Choice overlay created successfully")
+        except Exception as e:
+            self.logging_manager.log_error(f"Error creating choice overlay: {e}")
+            logging.exception("Detailed error in choice overlay creation:")
+            self.choice_overlay = None
 
     def load_shortcuts(self):
         self.toggle_ui_shortcut = self.settings.get_shortcut("toggle_ui", "alt+h")
@@ -2934,11 +2976,12 @@ class MagicBabelApp:
     def _do_tui_auto_show(self):
         """Actual TUI auto-show logic (must run on main thread)."""
         try:
-            # Skip while DissolveOverlay is active (battle/cutscene mode hides
-            # Tk root intentionally; without this guard the auto-show would
+            # Skip while DissolveOverlay or ChoiceOverlay is active (those modes
+            # hide Tk root intentionally; without this guard the auto-show would
             # deiconify it again on every status update during translation)
             if (hasattr(self, 'translated_ui') and self.translated_ui
-                    and getattr(self.translated_ui, '_dissolve_active', False)):
+                    and (getattr(self.translated_ui, '_dissolve_active', False)
+                         or getattr(self.translated_ui, '_choice_overlay_active', False))):
                 return
             is_visible = self._is_tui_visible()
             if not is_visible:
@@ -5997,6 +6040,14 @@ class MagicBabelApp:
             except Exception as e:
                 self.logging_manager.log_error(f"Error closing dissolve overlay: {e}")
 
+        # Cleanup choice overlay (stop timers, drop animation)
+        if hasattr(self, "choice_overlay") and self.choice_overlay is not None:
+            try:
+                self.choice_overlay.cleanup()
+                self.choice_overlay.close()
+            except Exception as e:
+                self.logging_manager.log_error(f"Error closing choice overlay: {e}")
+
         for window in windows_to_close:
             if window:
                 try:
@@ -6837,6 +6888,21 @@ Traceback:
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import QTimer
+
+    # ────────────────────────────────────────────────────────────────
+    # Normalize CWD to the app/exe directory (frozen-mode persistence fix)
+    # ────────────────────────────────────────────────────────────────
+    # Relative file access (settings.json, font_settings.json, new_friends.json,
+    # logs/) resolves against CWD. The Dalamud launcher sets WorkingDirectory to
+    # the exe dir, but a direct desktop-shortcut / Explorer / script launch can
+    # leave CWD elsewhere → settings silently save to the wrong folder and appear
+    # "not saved" on next launch. chdir here guarantees a consistent CWD for every
+    # launch path. Frozen → exe dir; dev → python-app/ (no-op, already the CWD).
+    try:
+        from resource_utils import get_app_dir
+        os.chdir(get_app_dir())
+    except Exception as _cwd_err:
+        logging.warning(f"[startup] could not normalize CWD: {_cwd_err}")
 
     # ────────────────────────────────────────────────────────────────
     # Single-instance lock (Windows kernel mutex)

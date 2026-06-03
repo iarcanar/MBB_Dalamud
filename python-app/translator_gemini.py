@@ -234,9 +234,9 @@ class TranslatorGemini:
         try:
             with open(get_npc_file_path(), "r", encoding="utf-8") as file:
                 npc_data = json.load(file)
-                self.character_data = npc_data["main_characters"]
-                self.context_data = npc_data["lore"]
-                self.character_styles = npc_data["character_roles"]
+                self.character_data = npc_data.get("main_characters", [])
+                self.context_data = npc_data.get("lore", {})
+                self.character_styles = npc_data.get("character_roles", {})
 
                 # โหลด word_fixes ถ้ามี
                 if "word_fixes" in npc_data:
@@ -256,7 +256,7 @@ class TranslatorGemini:
 
                 # Load main characters (strip ZWS — game text hook sometimes injects them)
                 for char in self.character_data:
-                    first = char["firstName"].strip().translate(_zws_table)
+                    first = char.get("firstName", "").strip().translate(_zws_table)
                     if not first:
                         continue
                     self.character_names_cache.add(first)
@@ -269,8 +269,8 @@ class TranslatorGemini:
                         self._character_lookup[full] = char
 
                 # Load NPCs (strip ZWS, no info dict needed for lookup)
-                for npc in npc_data["npcs"]:
-                    name = npc["name"].strip().translate(_zws_table)
+                for npc in npc_data.get("npcs", []):
+                    name = npc.get("name", "").strip().translate(_zws_table)
                     if name:
                         self.character_names_cache.add(name)
 
@@ -414,13 +414,14 @@ class TranslatorGemini:
             if name in self.character_names_cache:
                 relevant_names.add(name)
 
-        # Limit to maximum 20 names to control token usage (increased for better coverage)
-        # Prioritize essential names first, then detected names
-        essential_in_relevant = [name for name in essential_names if name in relevant_names]
-        other_names = [name for name in relevant_names if name not in essential_names]
-
-        # Combine with essential names first to ensure they're always included
-        prioritized_names = essential_in_relevant + other_names
+        # Limit to maximum 20 names to control token usage.
+        # Prioritize names ACTUALLY PRESENT in this line first, so the 20-cap never
+        # drops an in-text name in favour of an essential that isn't in the line
+        # (the 19 always-on essentials used to crowd out detected side-characters).
+        # Essentials not in the text follow as a safety-net pad.
+        detected_in_text = [n for n in relevant_names if n.lower() in text_lower]
+        padding = [n for n in relevant_names if n not in detected_in_text]
+        prioritized_names = detected_in_text + padding
         return prioritized_names[:20]
 
     def _mark_names_in_text(self, text, names):

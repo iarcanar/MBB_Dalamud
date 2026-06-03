@@ -26,8 +26,8 @@ from PyQt6.QtWidgets import (
     QTextEdit, QHeaderView, QAbstractItemView,
     QDialog, QCheckBox, QScrollArea, QFileDialog, QApplication,
 )
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QCursor
-from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QCursor, QPainter
+from PyQt6.QtCore import Qt, QPoint, QPointF, QSize, QTimer, pyqtSignal
 
 from pyqt_ui.styles import (
     FONT_PRIMARY, FONT_MONO, derive_palette, is_light_theme,
@@ -1297,6 +1297,94 @@ class _TextEditResizeGrip(QWidget):
 
 
 # ────────────────────────────────────────────────────────────────────
+# Tab button with optional "match elsewhere" dot indicator.
+#
+# When the user types into the panel's search box, the panel scans every
+# tab's data section for matches. If matches exist in a tab OTHER than
+# the one currently visible, that tab's button paints a small accent-
+# coloured dot in its top-right corner — so the user knows "your search
+# term is found over there, click to jump."
+#
+# The dot is painted manually (NOT a text suffix) so the button label
+# stays at fixed width and the tab bar doesn't shift when matches appear
+# or disappear. The dot tracks the theme's accent colour via
+# set_dot_color() called from NPCManagerPanel._apply_theme.
+# ────────────────────────────────────────────────────────────────────
+class _DotIndicator(QFrame):
+    """Hardcoded bright-red badge used as a "match exists" indicator.
+
+    Color is intentionally HARDCODED (not theme-derived) — red carries the
+    universal "needs attention" meaning across all themes (light/dark/cream/
+    etc), and a theme accent that happened to be reddish would otherwise
+    blend into the colored border. Two visual cues (red badge + theme-accent
+    button border) make the indicator impossible to miss."""
+    SIZE = 12
+    DOT_COLOR = "#ff2d2d"  # bright red — hardcoded for all themes
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setObjectName("npc_tab_match_dot")
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setStyleSheet(
+            f"QFrame#npc_tab_match_dot {{"
+            f" background-color: {self.DOT_COLOR};"
+            f" border-radius: {self.SIZE // 2}px;"
+            f" border: 2px solid rgba(255,255,255,230);"
+            f"}}"
+        )
+        self.setVisible(False)
+
+
+class _TabButton(QPushButton):
+    """Tab button that can flag itself as "has a match elsewhere":
+       - dynamic property `has_match` toggled → QSS adds accent-colored
+         border around the button (theme-aware)
+       - child _DotIndicator child appears in the top-right corner
+         (hardcoded bright red, universal visibility)
+    """
+    DOT_MARGIN = 4  # distance from top-right corner
+
+    def __init__(self, text: str, parent: Optional[QWidget] = None):
+        super().__init__(text, parent)
+        self.setProperty("has_match", "false")
+        self._dot = _DotIndicator(self)
+
+    def set_has_match(self, has_match: bool) -> None:
+        want = bool(has_match)
+        current = self.property("has_match") == "true"
+        if current == want:
+            return
+        # Toggle the dynamic property and re-polish so QSS rule for
+        # `[has_match="true"]` (defined in NPCManagerPanel theme builder)
+        # picks up the change and redraws the button border.
+        self.setProperty("has_match", "true" if want else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+        # Show/hide the corner badge
+        self._dot.setVisible(want)
+        if want:
+            self._reposition_dot()
+            self._dot.raise_()
+
+    def _reposition_dot(self) -> None:
+        self._dot.move(
+            self.width() - _DotIndicator.SIZE - self.DOT_MARGIN,
+            self.DOT_MARGIN,
+        )
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._reposition_dot()
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        self._reposition_dot()
+        if self._dot.isVisible():
+            self._dot.raise_()
+
+
+# ────────────────────────────────────────────────────────────────────
 # Tab descriptors — registry of all tabs (Phase 1 only enables Main)
 # ────────────────────────────────────────────────────────────────────
 TABS = [
@@ -1553,7 +1641,7 @@ class NPCManagerPanel(QWidget):
         h.setSpacing(8)
 
         for tab_id, label, _, _ in TABS:
-            btn = QPushButton(label)
+            btn = _TabButton(label)
             btn.setObjectName("npc_tab_btn")
             btn.setProperty("active", "false")
             btn.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
@@ -1790,6 +1878,9 @@ class NPCManagerPanel(QWidget):
         page = self._tab_pages.get(tab_id)
         if hasattr(page, "refresh"):
             page.refresh(self._search_input.text() if self._search_input else "")
+        # Refresh tab dots — current tab flipped, so dots need to update
+        # (the formerly-current tab may now need a dot; the new current must lose its).
+        self._update_tab_dots()
         # Update footer count
         self._update_footer()
 
@@ -2089,7 +2180,55 @@ class NPCManagerPanel(QWidget):
         page = self._tab_pages.get(self._current_tab)
         if hasattr(page, "refresh"):
             page.refresh(text)
+        self._update_tab_dots()
         self._update_footer()
+
+    def _compute_match_tabs(self, query: str) -> set:
+        """Return tab_ids that contain at least one substring match for `query`.
+
+        Scans main_characters, npcs, and lore. Lore is included because a
+        search keyword (e.g. an organization or place name) can be relevant
+        even when it's not a character — clicking through to the lore entry
+        helps the user discover linked context. Early-exit on first match
+        per section keeps this <0.5ms even with 200+ entries per section."""
+        q = query.strip().lower()
+        result = set()
+        if not q:
+            return result
+        # main_characters — match against firstName or lastName
+        for c in self.dm.list_main_characters():
+            first = c.get("firstName", "").lower()
+            last = c.get("lastName", "").lower()
+            if q in first or q in last:
+                result.add("main")
+                break
+        # npcs — single `name` field
+        for n in self.dm.list_npcs():
+            nm = n.get("name", "").lower()
+            if nm and q in nm:
+                result.add("npcs")
+                break
+        # lore — (term, definition) tuples; match either side. Keywords often
+        # appear inside definition text (e.g. "Crystal Tower" mentioned in
+        # multiple lore entries), so scanning both fields is the point.
+        for term, defn in self.dm.list_lore():
+            tl = (term or "").lower()
+            dl = (defn or "").lower()
+            if q in tl or q in dl:
+                result.add("lore")
+                break
+        return result
+
+    def _update_tab_dots(self) -> None:
+        """Refresh dot indicators on tab buttons. Dot is shown only when the
+        search query matches in a tab OTHER than the current one — so the
+        current tab never has a dot (user is already there)."""
+        query = self._search_input.text() if self._search_input else ""
+        match_tabs = self._compute_match_tabs(query)
+        for tid, btn in self._tab_buttons.items():
+            if not isinstance(btn, _TabButton):
+                continue
+            btn.set_has_match(tid in match_tabs and tid != self._current_tab)
 
     def _on_filter_changed(self, _value):
         """Filter buttons changed — refresh current tab to apply filters."""
@@ -2272,53 +2411,96 @@ class NPCManagerPanel(QWidget):
     def open_with_character(self, character_name: str):
         """Called when user clicks a character name on the TUI.
         Pipeline:
-          A. Character exists → switch to MAIN tab, fill search box, auto-select row.
-          B. Character missing → add new entry (firstName only) → autosave with
-             custom toast → fall through to pipeline A with the just-added name.
+          A. Match in main_characters → switch to MAIN tab + select row.
+          B. Match in npcs            → switch to NPCS tab + select row.
+          C. No match anywhere        → add new entry to main_characters,
+                                        then fall through to pipeline A.
+
+        Searching both sections prevents duplicate entries: if a character
+        already lives in the NPCs database, clicking their name on TUI must
+        navigate to that NPC entry — NOT auto-create a new main_characters row.
         """
         name = (character_name or "").strip()
         if not name:
             return
-        self._switch_tab("main")
-        page = self._tab_pages.get("main")
-        if not isinstance(page, MainCharactersTab):
-            return
 
-        def _find_index(chars):
-            target = name.lower()
+        target = name.lower()
+        target_first_token = target.split()[0] if " " in target else None
+
+        def _find_in_main(chars):
+            # TUI may pass "FirstName LastName" (e.g. "Nashu Mhakaracca") while
+            # registry has only the firstName. Allow first-token fallback.
             for i, c in enumerate(chars):
                 first = c.get("firstName", "").strip().lower()
                 full = (c.get("firstName", "") + " " + c.get("lastName", "")).strip().lower()
                 if first == target or full == target:
                     return i
+                if target_first_token and first == target_first_token:
+                    return i
             return None
 
-        chars = self.dm.list_main_characters()
-        matched_idx = _find_index(chars)
+        def _find_in_npcs(npcs):
+            # NPCs section uses single `name` field. Match exact, OR allow
+            # first-token fuzziness either direction (target has space vs
+            # registry has space — same idea as main_characters fallback).
+            for i, n in enumerate(npcs):
+                nm = n.get("name", "").strip().lower()
+                if not nm:
+                    continue
+                if nm == target:
+                    return i
+                if target_first_token and nm == target_first_token:
+                    return i
+                # Reverse: registry has "First Last" form, target is single token
+                nm_first = nm.split()[0] if " " in nm else None
+                if nm_first and nm_first == target:
+                    return i
+            return None
 
-        # Pipeline B: auto-add new entry
-        if matched_idx is None:
-            try:
-                self.dm.add_main_character({"firstName": name})
-            except Exception as e:
-                log.error(f"open_with_character: add_main_character failed: {e}")
-                return
-            self.autosave(f"✓ เพิ่ม '{name}' แล้ว")
-            chars = self.dm.list_main_characters()
-            matched_idx = _find_index(chars)
+        # ── Step 1: search main_characters ──
+        main_chars = self.dm.list_main_characters()
+        main_idx = _find_in_main(main_chars)
+        if main_idx is not None:
+            # Pass the registry-stored firstName (NOT the full TUI name) so
+            # dm.search re-includes the row — else a "First Last" TUI name that
+            # matched a first-token-only registry entry filters the row out.
+            self._open_at_tab("main", main_idx, main_chars[main_idx].get("firstName", "").strip() or name)
+            return
 
-        # Pipeline A: filter search + select row.
-        # Don't blockSignals — textChanged drives both list refresh AND clear-button
-        # visibility. Letting it fire normally keeps X button visible after auto-fill.
+        # ── Step 2: search npcs ──
+        npcs = self.dm.list_npcs()
+        npc_idx = _find_in_npcs(npcs)
+        if npc_idx is not None:
+            self._open_at_tab("npcs", npc_idx, npcs[npc_idx].get("name", "").strip() or name)
+            return
+
+        # ── Step 3: not found anywhere → add to main_characters (default) ──
+        try:
+            self.dm.add_main_character({"firstName": name})
+        except Exception as e:
+            log.error(f"open_with_character: add_main_character failed: {e}")
+            return
+        self.autosave(f"✓ เพิ่ม '{name}' แล้ว")
+        main_chars = self.dm.list_main_characters()
+        main_idx = _find_in_main(main_chars)
+        if main_idx is not None:
+            self._open_at_tab("main", main_idx, main_chars[main_idx].get("firstName", "").strip() or name)
+
+    def _open_at_tab(self, tab_id: str, matched_idx: int, search_text: str) -> None:
+        """Switch to a tab, fill the search box, and select the matched row.
+
+        Shared by open_with_character's three branches (main found / npcs
+        found / new-add fall-through)."""
+        self._switch_tab(tab_id)
+        page = self._tab_pages.get(tab_id)
+        if page is None or not hasattr(page, "list_widget"):
+            return
+        # Fill search box — textChanged fires refresh + clear-button visibility
         if self._search_input:
-            self._search_input.setText(name)
-        else:
-            page.refresh(name)
-
-        if matched_idx is None:
-            return  # safety — shouldn't happen after auto-add
-
-        # QTreeWidget — use topLevelItem* methods
+            self._search_input.setText(search_text)
+        elif hasattr(page, "refresh"):
+            page.refresh(search_text)
+        # Find the row whose UserRole matches the original-list index and select
         for row in range(page.list_widget.topLevelItemCount()):
             item = page.list_widget.topLevelItem(row)
             if item.data(0, Qt.ItemDataRole.UserRole) == matched_idx:
@@ -2337,10 +2519,24 @@ class NPCManagerPanel(QWidget):
             )
 
     # ─── Drag (header only) ───
+    # Header sits at y=10..64 in panel-local coords (10px outer margin
+    # + 54px header height). Restricting drag to that zone prevents the
+    # "UI shift" bug where clicking the background area (list, details
+    # panel, empty space) used to start a drag — any sub-pixel cursor
+    # drift between press and release would then nudge the window by a
+    # few pixels, looking unprofessional.
+    _HEADER_DRAG_Y_MAX = 64
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.old_pos = event.globalPosition().toPoint()
-            super().mousePressEvent(event)
+            local_y = event.position().toPoint().y()
+            if local_y <= self._HEADER_DRAG_Y_MAX:
+                self.old_pos = event.globalPosition().toPoint()
+            else:
+                # Outside header — disable drag for this gesture. QPoint()
+                # is null; mouseMoveEvent's `isNull()` check skips movement.
+                self.old_pos = QPoint()
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton and not self.old_pos.isNull():
@@ -2360,6 +2556,10 @@ class NPCManagerPanel(QWidget):
         text_o = self.am.get_theme_color("text_override")
         p = derive_palette(primary, secondary, surface=surface, text_override=text_o)
         self.palette = p
+
+        # Dot color is hardcoded (bright red — see _DotIndicator). What's
+        # theme-aware is the BUTTON BORDER applied via the [has_match="true"]
+        # QSS rule below (built into the panel-level stylesheet).
 
         # Refresh icons that need invert on light theme
         self._update_pin_icon()
@@ -2497,6 +2697,10 @@ class NPCManagerPanel(QWidget):
                 background: {p['accent']};
                 color: {p['toggled_text']};
                 border: 1px solid {p['accent']};
+            }}
+            QPushButton#npc_tab_btn[has_match="true"] {{
+                border: 2px solid {p['accent']};
+                padding: 7px 21px;
             }}
             QPushButton#npc_tab_btn[disabled_tab="true"] {{
                 background: transparent;

@@ -344,6 +344,7 @@ class SettingsPanel(QWidget):
             ("Dialog", "ChatType 61", self._inject_test_dialog),
             ("Battle", "ChatType 68", self._inject_test_battle),
             ("Cutscene", "ChatType 71", self._inject_test_cutscene),
+            ("Choice", "pipe-separated", self._inject_test_choice),
         ]:
             test_row.addWidget(self._make_test_btn(label, subtitle, handler))
 
@@ -769,6 +770,35 @@ class SettingsPanel(QWidget):
     def _inject_test_cutscene(self):
         speaker, message = random.choice(self._TEST_CUTSCENE)
         self._inject_test_message("cutscene", speaker, message, 71)
+
+    # ── Choice test pool — English source, pipe-separated, as the C# bridge
+    # sends them from the FFXIV SelectString addon (ChatType 70). The handler
+    # routes Type="choice" through translate_choice() which preserves the
+    # header + bullet format for the overlay. ──
+    _TEST_CHOICE_2 = [
+        # 2-choice flow — based on real game logs ("She is young..." case)
+        "What will you say? | She is young, but has potential. | She is not ready to rule.",
+        # Mirrors the Aranea/Hildibrand screenshot
+        "What will you say? | I'm Aranea, Agent of Adventure. | I'm simply an ardent admirer of Inspector Hildibrand.",
+        "What will you say? | I'm ready when you are. | Tell me more about the mission first.",
+    ]
+    _TEST_CHOICE_3 = [
+        # 3-choice flow — moral/strategic options
+        "What will you say? | The crystal must be returned to its rightful place. | These people deserve our help, no matter the cost. | This matter is beyond my concern.",
+        "What will you say? | Aye, I'm ready. | Not yet — give me a moment. | What's the plan?",
+        "What will you say? | I'll handle the negotiations. | Let Alphinaud speak first. | We should leave this to the locals.",
+    ]
+
+    def _inject_test_choice(self):
+        # Alternate between 2-choice and 3-choice for varied testing
+        pool = random.choice([self._TEST_CHOICE_2, self._TEST_CHOICE_3])
+        message = random.choice(pool)
+        # Real game sends:
+        #   Type: "choice", ChatType: 70, Message: "Header | A | B [| C]"
+        # The handler detects Type=="choice" → translate_choice() → emits
+        # "Header\n• A\n• B [\n• C]" → reaches update_text with chat_type=70
+        # → _is_choice_dialogue OR chat_type==70 check → routes to overlay.
+        self._inject_test_message("choice", "", message, 70)
 
     # ── Open / Close ──
 

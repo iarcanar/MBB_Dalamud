@@ -105,14 +105,26 @@ class NPCDataManager:
                 shutil.copy2(self.file_path, os.path.join(bdir, bname))
             except Exception as e:
                 log.warning(f"Backup failed (continuing): {e}")
+        tmp_path = self.file_path + ".tmp"
         try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
+            # Atomic write: stream to a temp file, flush + fsync, then os.replace()
+            # (atomic on NTFS/POSIX). A mid-write crash (incl. the known Tk+Qt GIL
+            # fatal) can no longer leave npc.json truncated/corrupt.
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.file_path)
             self._dirty = False
             log.info(f"Saved npc.json")
             return True
         except Exception as e:
             log.error(f"Failed to save npc.json: {e}")
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
             return False
 
     @property

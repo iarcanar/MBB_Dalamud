@@ -296,6 +296,9 @@ class Translated_UI(FontObserver):
         self.dissolve_overlay = None
         self._dissolve_active = False  # True while overlay is shown + Tk root hidden
         self._tk_was_visible_before_dissolve = False  # to restore on mode switch back
+        self.choice_overlay = None
+        self._choice_overlay_active = False  # True while choice overlay shown
+        self._tk_was_visible_before_choice = False
 
         # Position tracking for dialogue mode
         self.dialogue_position_x = None  # Store X position before switching to cutscene
@@ -2241,6 +2244,25 @@ class Translated_UI(FontObserver):
             f"tk_was_visible={self._tk_was_visible_before_dissolve}"
         )
 
+        # If choice overlay is currently visible, hide it before showing dissolve
+        # (cross-mode transition — choice → battle/cutscene). Tk root stays hidden.
+        if self._choice_overlay_active:
+            try:
+                if self.choice_overlay is not None:
+                    self.choice_overlay.hide_overlay()
+                self._choice_overlay_active = False
+                # We're handing Tk-hidden state to dissolve — preserve the
+                # original "was Tk visible before any overlay" so exit logic
+                # restores correctly.
+                self._tk_was_visible_before_dissolve = (
+                    self._tk_was_visible_before_dissolve
+                    or self._tk_was_visible_before_choice
+                )
+                self._tk_was_visible_before_choice = False
+                logging.info("[DISSOLVE-DBG] choice→dissolve transition: hid choice overlay")
+            except Exception as e:
+                logging.debug(f"choice→dissolve hide failed: {e}")
+
         # Cancel pending fade/hide timers — leftover Tkinter fade chains can
         # otherwise reappear and try to manipulate the now-hidden root.
         # Also kill _deferred_render_id so a previous dialogue's deferred render
@@ -2354,6 +2376,110 @@ class Translated_UI(FontObserver):
             logging.debug(f"deiconify tkinter root after dissolve failed: {e}")
         self._dissolve_active = False
         self._tk_was_visible_before_dissolve = False
+
+    def _route_to_choice_overlay(self, text: str) -> None:
+        """Send choice text into the PyQt6 choice overlay; hide the Tk root.
+
+        Called from update_text when `_is_choice_dialogue(text)` is True AND
+        `self.choice_overlay` is wired. Mirrors `_route_to_dissolve_overlay`
+        in lifecycle but uses content detection (not chat_type), and parses
+        text via choice_parser.parse_choice_text before rendering.
+
+        Dispatcher rules (per CLAUDE.md):
+        1. MUST NOT touch self.current_chat_type / self.choice_mode_active
+        2. Cancels pending Tk move/resize/fade timers (defensive)
+        3. The _do_tui_auto_show guard in MBB.py prevents Tk re-deiconify
+        """
+        from pyqt_ui.choice_parser import parse_choice_text
+
+        try:
+            tk_state = self.root.state() if self.root.winfo_exists() else "destroyed"
+        except Exception:
+            tk_state = "?"
+        logging.info(
+            f"[CHOICE-DBG] route_to_choice: tk_state={tk_state} "
+            f"choice_active={self._choice_overlay_active} "
+            f"tk_was_visible={self._tk_was_visible_before_choice}"
+        )
+
+        # Parse text → (header, choices). Skip overlay if parser returned empty.
+        try:
+            header, choices = parse_choice_text(text)
+        except Exception as parse_err:
+            logging.error(f"[CHOICE-DBG] parse_choice_text failed: {parse_err}", exc_info=True)
+            raise
+        if not choices:
+            logging.info("[CHOICE-DBG] parser returned 0 choices → skipping overlay")
+            raise RuntimeError("empty choices — caller should fall back to Tk")
+
+        # Cancel pending Tk fade/move/resize timers (same defensive set as
+        # _route_to_dissolve_overlay — see line 2255 comment for rationale)
+        try:
+            if getattr(self.state, "fade_timer_id", None):
+                self.root.after_cancel(self.state.fade_timer_id)
+                self.state.fade_timer_id = None
+            if getattr(self.state, "window_hide_timer_id", None):
+                self.root.after_cancel(self.state.window_hide_timer_id)
+                self.state.window_hide_timer_id = None
+            if getattr(self, "_deferred_render_id", None):
+                self.root.after_cancel(self._deferred_render_id)
+                self._deferred_render_id = None
+            if getattr(self, "move_end_timer", None):
+                self.root.after_cancel(self.move_end_timer)
+                self.move_end_timer = None
+                self.is_moving = False
+            if getattr(self, "resize_end_timer", None):
+                self.root.after_cancel(self.resize_end_timer)
+                self.resize_end_timer = None
+                self.is_resizing = False
+            self.state.is_fading = False
+        except Exception:
+            pass
+
+        # Hide Tk root if currently visible
+        try:
+            if self.root.winfo_exists():
+                state = self.root.state()
+                if state == "normal" and not self._choice_overlay_active:
+                    self._tk_was_visible_before_choice = True
+                    self.root.withdraw()
+                    logging.info("[CHOICE-DBG] Tk root WITHDRAWN")
+                elif not self._choice_overlay_active:
+                    self._tk_was_visible_before_choice = False
+                    logging.info(f"[CHOICE-DBG] Tk root state={state}, tk_was_visible=False")
+        except Exception as e:
+            logging.debug(f"hide tk root for choice overlay failed: {e}")
+
+        # Show + paint the overlay
+        try:
+            self.choice_overlay.show_choice(header, choices)
+            self._choice_overlay_active = True
+        except Exception as e:
+            logging.error(f"choice_overlay.show_choice failed: {e}", exc_info=True)
+            # Restore Tk if overlay failed so user isn't blank
+            try:
+                if self._tk_was_visible_before_choice:
+                    self.root.deiconify()
+            except Exception:
+                pass
+            self._choice_overlay_active = False
+            raise
+
+    def _exit_choice_overlay(self) -> None:
+        """Hide the choice overlay + restore Tk root if we were the one that
+        hid it. Called when user switches to a non-choice mode."""
+        try:
+            if self.choice_overlay is not None:
+                self.choice_overlay.hide_overlay()
+        except Exception as e:
+            logging.debug(f"choice_overlay.hide_overlay failed: {e}")
+        try:
+            if self._tk_was_visible_before_choice and self.root.winfo_exists():
+                self.root.deiconify()
+        except Exception as e:
+            logging.debug(f"deiconify tk root after choice failed: {e}")
+        self._choice_overlay_active = False
+        self._tk_was_visible_before_choice = False
 
     def update_text(
         self, text: str, is_lore_text: bool = False, force_choice_mode: bool = False, chat_type: int = 61
@@ -3162,6 +3288,18 @@ class Translated_UI(FontObserver):
 
             # ดำเนินการตามประเภทของข้อความ
             if is_choice_dialogue:
+                # Route to PyQt6 ChoiceOverlay if wired; fall through to Tk
+                # renderer on failure (overlay not created / parser empty).
+                if self.choice_overlay is not None:
+                    try:
+                        self._route_to_choice_overlay(text)
+                        return
+                    except Exception as choice_err:
+                        logging.error(
+                            f"Choice overlay dispatch failed, falling back to "
+                            f"Tk: {choice_err}", exc_info=True,
+                        )
+                        # Fall through to Tk path
                 self._handle_choice_text(
                     text,
                     small_font,
@@ -3172,6 +3310,15 @@ class Translated_UI(FontObserver):
                     outline_color,
                 )
             else:
+                # Mode transition: choice → normal text — hide overlay first
+                if self._choice_overlay_active:
+                    try:
+                        self._exit_choice_overlay()
+                    except Exception as exit_err:
+                        logging.error(
+                            f"Failed to exit choice overlay cleanly: {exit_err}",
+                            exc_info=True,
+                        )
                 self._handle_normal_text(
                     text,
                     small_font,
@@ -3754,8 +3901,11 @@ class Translated_UI(FontObserver):
                     tags=("name",),
                 )
 
-                # Add confirmation icon for verified names
-                if name in self.names:
+                # Add confirmation icon for verified names.
+                # Also accept "FirstName LastName" speakers (e.g. "Nashu Mhakaracca")
+                # when only the first-name token is registered in npc.json.
+                _first_token = name.split()[0] if name else ""
+                if name in self.names or (_first_token and _first_token in self.names):
                     name_bbox = self.components.canvas.bbox(name_text)
                     icon_x = name_bbox[2] + 8
                     icon_y = name_y + ((name_bbox[3] - name_bbox[1]) // 2)
@@ -4086,21 +4236,6 @@ class Translated_UI(FontObserver):
                 item_type = self.components.canvas.type(name_item)
                 if item_type == "text":
                     self.components.canvas.itemconfig(name_item, fill=name_color)
-                    
-                    # 🔍 DEBUG: Add character name click debugging
-                    print(f"🔍 DEBUG: Found name item {name_item} with text: '{text}' (type: {item_type})")
-                    
-                    # 🔍 DEBUG: Check if click binding exists
-                    bindings = self.components.canvas.tag_bind(name_item, "<Button-1>")
-                    print(f"🔍 DEBUG: Name item {name_item} click bindings: {bindings}")
-                    
-                    # 🔍 DEBUG: Add/update character name click binding
-                    try:
-                        self.components.canvas.tag_bind(name_item, "<Button-1>", 
-                            lambda event, character_name=text: self._debug_character_click(event, character_name))
-                        print(f"🔍 DEBUG: Added click binding for character: '{text}'")
-                    except Exception as e:
-                        print(f"❌ DEBUG ERROR: Failed to bind character click for '{text}': {e}")
 
         # ตรวจสอบว่ามีข้อความที่จะแสดงหรือไม่
         # เพิ่มการตรวจสอบว่าเพิ่งมีการ fade out สมบูรณ์หรือไม่
@@ -5723,27 +5858,11 @@ class Translated_UI(FontObserver):
             if self.toggle_npc_manager_callback and callable(
                 self.toggle_npc_manager_callback
             ):
-                self.logging_manager.log_info("🔍 [CHARACTER CLICK] Calling toggle_npc_manager_callback")
-
-                # เรียกฟังก์ชันจาก MBB.py เพื่อเปิด NPC Manager
-                self.toggle_npc_manager_callback()
-
-                # หลังจากเปิดแล้ว ให้ส่งชื่อตัวละครไปให้ NPC Manager จัดการ
-                if (
-                    hasattr(self.main_app, "npc_manager")
-                    and self.main_app.npc_manager
-                ):
-                    self.logging_manager.log_info("🔍 [CHARACTER CLICK] NPC Manager found, scheduling search")
-                    # ใช้ after เพื่อให้แน่ใจว่าหน้าต่าง NPC Manager สร้างเสร็จแล้ว
-                    self.root.after(
-                        200, lambda: self._call_npc_manager_search(character_name)
-                    )
-                else:
-                    self.logging_manager.log_error("🔍 [CHARACTER CLICK] NPC Manager not found!")
-                    messagebox.showwarning(
-                        "Warning",
-                        "Could not communicate with NPC Manager after opening.",
-                    )
+                # Pass the name → toggle_npc_manager creates/shows the panel AND calls
+                # open_with_character in one shot. (A no-arg call would merely TOGGLE,
+                # hiding the panel if it was already open.) This is the single click
+                # path now that the per-item DEBUG rebind has been removed.
+                self.toggle_npc_manager_callback(character_name)
             else:
                 self.logging_manager.log_error("🔍 [CHARACTER CLICK] toggle_npc_manager_callback not available!")
                 messagebox.showerror("Error", "NPC Manager function is not available.")
@@ -5953,21 +6072,6 @@ class Translated_UI(FontObserver):
                 item_type = self.components.canvas.type(name_item)
                 if item_type == "text":
                     self.components.canvas.itemconfig(name_item, fill=name_color)
-                    
-                    # 🔍 DEBUG: Add character name click debugging
-                    print(f"🔍 DEBUG: Found name item {name_item} with text: '{text}' (type: {item_type})")
-                    
-                    # 🔍 DEBUG: Check if click binding exists
-                    bindings = self.components.canvas.tag_bind(name_item, "<Button-1>")
-                    print(f"🔍 DEBUG: Name item {name_item} click bindings: {bindings}")
-                    
-                    # 🔍 DEBUG: Add/update character name click binding
-                    try:
-                        self.components.canvas.tag_bind(name_item, "<Button-1>", 
-                            lambda event, character_name=text: self._debug_character_click(event, character_name))
-                        print(f"🔍 DEBUG: Added click binding for character: '{text}'")
-                    except Exception as e:
-                        print(f"❌ DEBUG ERROR: Failed to bind character click for '{text}': {e}")
 
         # ตั้ง timer ใหม่เพื่อเริ่ม fade out หลังจาก 10 วินาที (เฉพาะเมื่อเปิดใช้งาน)
         if self.state.fadeout_enabled:

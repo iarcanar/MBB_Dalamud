@@ -307,29 +307,42 @@ class DalamudImmediateHandler:
             #
             # Cleanup: see `finally` block at the end of the thread.
             was_pre_flighted = False
-            if chat_type in (68, 71):
+            _preflight_flag = None        # overlay-active flag we armed (reset in finally)
+            if chat_type in (68, 71, 70):
+                # ChatType 70 = choice overlay. It owns a separate active-flag +
+                # tk-visible attr from battle/cutscene's dissolve overlay. Without
+                # this pre-flight the FIRST choice flashes stale dialogue for ~1s:
+                # the mid-translation status update fires _do_tui_auto_show and, with
+                # no overlay flag armed yet, re-deiconifies the Tk root until
+                # _route_to_choice_overlay finally withdraws it.
+                if chat_type == 70:
+                    _preflight_flag = "_choice_overlay_active"
+                    _preflight_visible_attr = "_tk_was_visible_before_choice"
+                else:
+                    _preflight_flag = "_dissolve_active"
+                    _preflight_visible_attr = "_tk_was_visible_before_dissolve"
                 try:
                     _preflight_ui = getattr(self.main_app_ref, "translated_ui", None)
                     if _preflight_ui is not None:
-                        _preflight_ui._dissolve_active = True
+                        setattr(_preflight_ui, _preflight_flag, True)
 
-                        def _pre_flight_withdraw_tk(ui_ref=_preflight_ui):
+                        def _pre_flight_withdraw_tk(ui_ref=_preflight_ui, vis_attr=_preflight_visible_attr):
                             """Runs on Tk main thread — withdraw + mark visibility."""
                             try:
                                 if not ui_ref.root.winfo_exists():
                                     return
                                 if ui_ref.root.state() == "normal":
-                                    ui_ref._tk_was_visible_before_dissolve = True
+                                    setattr(ui_ref, vis_attr, True)
                                     ui_ref.root.withdraw()
                                 else:
-                                    ui_ref._tk_was_visible_before_dissolve = False
+                                    setattr(ui_ref, vis_attr, False)
                             except Exception:
                                 pass
 
                         self.main_app_ref.safe_after(0, _pre_flight_withdraw_tk)
                         was_pre_flighted = True
                         self.logger.info(
-                            f"[DISSOLVE-DBG] PRE-FLIGHT armed _dissolve_active "
+                            f"[DISSOLVE-DBG] PRE-FLIGHT armed {_preflight_flag} "
                             f"+ scheduled TK withdraw (ChatType {chat_type})"
                         )
                 except Exception as _pe:
@@ -489,14 +502,14 @@ class DalamudImmediateHandler:
                     # and bring the TUI dialog back. Without this, `_dissolve_active`
                     # stays True forever and the TUI stays hidden until manually
                     # toggled — broken UX.
-                    if was_pre_flighted and not _translation_displayed:
+                    if was_pre_flighted and not _translation_displayed and _preflight_flag:
                         try:
                             _ui = getattr(self.main_app_ref, "translated_ui", None)
                             if _ui is not None:
-                                _ui._dissolve_active = False
+                                setattr(_ui, _preflight_flag, False)
                                 self.logger.info(
-                                    "[DISSOLVE-DBG] PRE-FLIGHT cleanup: reset "
-                                    "_dissolve_active=False (translation not displayed)"
+                                    f"[DISSOLVE-DBG] PRE-FLIGHT cleanup: reset "
+                                    f"{_preflight_flag}=False (translation not displayed)"
                                 )
                         except Exception:
                             pass

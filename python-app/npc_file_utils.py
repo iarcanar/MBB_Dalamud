@@ -95,9 +95,10 @@ def ensure_npc_file_exists():
         # Create initial file
         default_data = {
             "main_characters": [],
-            "side_characters": [],
-            "monsters": [],
-            "locations": [],
+            "npcs": [],
+            "lore": {},
+            "character_roles": {},
+            "word_fixes": {},
             "_game_info": {
                 "game_name": "Unknown Game",
                 "version": "1.0"

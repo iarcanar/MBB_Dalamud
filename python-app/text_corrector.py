@@ -332,7 +332,9 @@ class TextCorrector:
             # เปิดไฟล์ที่พบและโหลดข้อมูล
             with open(file_path, "r", encoding="utf-8") as file:
                 npc_data = json.load(file)
-                self.word_corrections = npc_data["word_fixes"]
+                # .get() defaults: an incomplete/partial npc.json degrades to an
+                # empty name set instead of raising KeyError → "Failed to load NPC data".
+                self.word_corrections = npc_data.get("word_fixes", {})
                 self.names = set()
 
                 # เพิ่ม "???" เป็นชื่อที่ยอมรับได้
@@ -340,19 +342,19 @@ class TextCorrector:
 
                 # Load main characters (strip zero-width chars for clean matching)
                 _zws = "\u200b\u200c\u200d\ufeff"
-                for char in npc_data["main_characters"]:
-                    if char["firstName"]:
+                for char in npc_data.get("main_characters", []):
+                    if char.get("firstName"):
                         clean = char["firstName"].strip().translate(str.maketrans("", "", _zws))
                         if clean:
                             self.names.add(clean)
-                    if char["lastName"]:
+                    if char.get("lastName"):
                         clean = char["lastName"].strip().translate(str.maketrans("", "", _zws))
                         if clean:
                             self.names.add(clean)
 
                 # Load NPCs
-                for npc in npc_data["npcs"]:
-                    clean = npc["name"].strip().translate(str.maketrans("", "", _zws))
+                for npc in npc_data.get("npcs", []):
+                    clean = npc.get("name", "").strip().translate(str.maketrans("", "", _zws))
                     if clean:
                         self.names.add(clean)
 
