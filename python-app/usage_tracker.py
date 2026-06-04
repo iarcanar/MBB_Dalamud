@@ -101,8 +101,17 @@ class UsageTracker:
             self._load_dict(data)
         elif status == "tamper":
             self._zero()
-            self.tampered = True
-            log.warning("[usage] secure store tamper/foreign — translation locked (fail-closed)")
+            if self.trial_limit > 0:
+                # Active trial cap → fail-closed (lock). Recover via the dev reset:
+                # python secure_usage_store.py --reset
+                self.tampered = True
+                log.warning("[usage] secure store tamper/foreign — translation locked (fail-closed)")
+            else:
+                # No trial cap (full/dev build): a legit user must NOT be punished if the
+                # store is unreadable (e.g. MachineGuid changed after an OS reinstall, or a
+                # partial write). Reset to a fresh store, keep translating.
+                log.warning("[usage] secure store unreadable but no trial cap — resetting, no lock")
+                self._store.save(self._counters())
         else:  # "fresh" — migrate any Phase 1 plaintext counter, then own it securely
             self._zero()
             try:
@@ -122,21 +131,26 @@ class UsageTracker:
         except Exception as e:
             log.warning(f"[usage] could not read usage_stats: {e}")
         self._load_dict(stats)
-        # Soft-gate mode: the editable settings.json trial_limit applies.
-        self.trial_limit = int(stats.get("trial_limit", self.trial_limit) or 0)
+        # trial_limit stays the build constant (set in __init__ via _effective_trial_limit).
+        # Do NOT read it from the editable settings.json — otherwise breaking the crypto
+        # import to fall back here would let a user set trial_limit=0 and lift the cap.
 
     # ── query ──
 
     def is_over_limit(self):
+        # No active cap → never block, even if the store looks tampered (don't punish
+        # a legit user on a full/dev build).
+        if self.trial_limit <= 0:
+            return False
         if self.tampered:
             return True
-        return self.trial_limit > 0 and self.total_tokens >= self.trial_limit
+        return self.total_tokens >= self.trial_limit
 
     def remaining(self):
-        if self.tampered:
-            return 0
         if self.trial_limit <= 0:
             return None
+        if self.tampered:
+            return 0
         return max(0, self.trial_limit - self.total_tokens)
 
     def snapshot(self):

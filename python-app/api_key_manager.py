@@ -238,21 +238,46 @@ def validate_format(key: str):
 
 
 def save_key(key: str):
-    """Write key to .env + os.environ + reload. Returns (ok, error_or_None)."""
+    """Write key to .env + os.environ + reload. Returns (ok, error_or_None).
+
+    Preserves any other lines the user has in .env (only the GEMINI_API_KEY line is
+    replaced) and writes atomically (temp file + os.replace) so a mid-write crash can't
+    leave a truncated .env.
+    """
     key = (key or "").strip()
     ok, msg = validate_format(key)
     if not ok:
         return False, msg
     env_path = os.path.join(get_app_dir(), ".env")
     try:
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.write("# Google Gemini API Key\n")
-            f.write(f"GEMINI_API_KEY={key}\n")
-            f.write("\n# Application Settings\n")
-            f.write("MBB_DEBUG=false\n")
-            f.write("MBB_LOG_LEVEL=info\n")
+        existing = []
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                existing = f.read().splitlines()
+
+        out, replaced = [], False
+        for line in existing:
+            if line.lstrip().startswith("GEMINI_API_KEY"):
+                if not replaced:           # replace first, drop any duplicates
+                    out.append(f"GEMINI_API_KEY={key}")
+                    replaced = True
+            else:
+                out.append(line)
+        if not replaced:
+            if not out:
+                out.append("# Google Gemini API Key")
+            out.append(f"GEMINI_API_KEY={key}")
+
+        content = "\n".join(out) + "\n"
+        tmp = env_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, env_path)
+
         os.environ["GEMINI_API_KEY"] = key
-        load_dotenv(env_path)
+        load_dotenv(env_path, override=True)
         return True, None
     except Exception as e:
         return False, str(e)
