@@ -20,6 +20,9 @@ pywin32>=306
 # AI translation
 google-generativeai>=0.3.0
 
+# Trial-usage token store (Phase 2 anti-tamper — Fernet encrypted, machine-bound)
+cryptography>=42.0.0
+
 # System
 psutil>=5.9.0
 keyboard>=0.13.5

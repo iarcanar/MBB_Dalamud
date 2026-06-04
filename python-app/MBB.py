@@ -3881,6 +3881,19 @@ class MagicBabelApp:
         # บันทึกล็อก
         self.logging_manager.log_info(f"🔤 Font applied via Font Manager to {target_mode}: {font_name} size {font_size}")
 
+    def reload_api_key(self):
+        """Re-apply a freshly-saved Gemini API key to the live translator without a
+        restart (used by the Model panel's inline API-key editor). Mutates the existing
+        translator in place so handler wiring + caches stay intact."""
+        try:
+            if getattr(self, "translator", None) and hasattr(self.translator, "reload_api_key"):
+                ok = self.translator.reload_api_key()
+                self.logging_manager.log_info(f"reload_api_key → {ok}")
+                return ok
+        except Exception as e:
+            self.logging_manager.log_error(f"reload_api_key failed: {e}")
+        return False
+
     def update_api_settings(self):
         """อัพเดท API settings และสร้าง translator ใหม่ตามประเภท model
 
@@ -6002,6 +6015,15 @@ class MagicBabelApp:
         self.stop_translation()
         self.hide_show_area()
         self.remove_all_hotkeys()
+
+        # Flush ตัวนับ token (limited usage) ที่ค้างใน buffer ลงดิสก์ก่อนปิด
+        if getattr(self, "translator", None) is not None:
+            tracker = getattr(self.translator, "usage_tracker", None)
+            if tracker is not None:
+                try:
+                    tracker.flush()
+                except Exception as e:
+                    self.logging_manager.log_error(f"Error flushing usage tracker: {e}")
         try:
             keyboard.unhook_all()
         except Exception as e:

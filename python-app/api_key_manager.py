@@ -198,6 +198,66 @@ def show_invalid_key_ui() -> bool:
     return dlg.success
 
 
+# ── Reusable key helpers (shared by APIKeyDialog + Model panel inline editor) ─────
+
+def get_current_key() -> str:
+    """Return the saved Gemini API key (loads .env first), or '' if none/placeholder."""
+    for env_path in (os.path.join(get_app_dir(), ".env"), os.path.join(os.getcwd(), ".env")):
+        if os.path.exists(env_path):
+            load_dotenv(env_path)
+            break
+    key = (os.getenv("GEMINI_API_KEY", "") or "").strip()
+    return "" if key == "your_api_key_here" else key
+
+
+def mask_key(key: str) -> str:
+    """Mask a key for display, e.g. AIza••••••••3xQ."""
+    key = (key or "").strip()
+    if not key:
+        return ""
+    if len(key) <= 10:
+        return key[:2] + "•" * max(0, len(key) - 2)
+    return key[:4] + "•" * 8 + key[-3:]
+
+
+def validate_format(key: str):
+    """(ok, message) — lenient format check.
+
+    Google issues more than one key shape: the classic 39-char `AIza…` keys AND newer
+    formats (e.g. `AQ.…`). Don't hard-require an `AIza` prefix — that rejects valid
+    newer keys. Just guard against empty / whitespace / obviously-too-short input.
+    """
+    key = (key or "").strip()
+    if not key:
+        return False, "✗  ยังไม่ได้ใส่ API Key"
+    if any(ch.isspace() for ch in key):
+        return False, "✗  API Key ไม่ควรมีช่องว่าง"
+    if len(key) < 20:
+        return False, f"✗  สั้นเกินไป ({len(key)} ตัวอักษร)"
+    return True, f"✓  รูปแบบใช้ได้ ({len(key)} ตัวอักษร)"
+
+
+def save_key(key: str):
+    """Write key to .env + os.environ + reload. Returns (ok, error_or_None)."""
+    key = (key or "").strip()
+    ok, msg = validate_format(key)
+    if not ok:
+        return False, msg
+    env_path = os.path.join(get_app_dir(), ".env")
+    try:
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.write("# Google Gemini API Key\n")
+            f.write(f"GEMINI_API_KEY={key}\n")
+            f.write("\n# Application Settings\n")
+            f.write("MBB_DEBUG=false\n")
+            f.write("MBB_LOG_LEVEL=info\n")
+        os.environ["GEMINI_API_KEY"] = key
+        load_dotenv(env_path)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 class APIKeyDialog(QDialog):
@@ -417,11 +477,7 @@ class APIKeyDialog(QDialog):
         )
 
     def _validate_format(self, key: str):
-        if not key.startswith("AIza"):
-            return False, "✗  ต้องเริ่มด้วย 'AIza'"
-        if len(key) < 30:
-            return False, f"✗  สั้นเกินไป ({len(key)} ตัวอักษร — ควรมีประมาณ 39)"
-        return True, f"✓  รูปแบบถูกต้อง ({len(key)} ตัวอักษร)"
+        return validate_format(key)
 
     def _set_status(self, msg: str, ok: bool = True):
         color = _GREEN if ok else _RED
@@ -438,30 +494,19 @@ class APIKeyDialog(QDialog):
             self._entry.setFocus()
             return
 
-        app_dir = get_app_dir()
-        env_path = os.path.join(app_dir, ".env")
+        saved, err = save_key(key)
+        if not saved:
+            self._set_status(f"✗  บันทึกไฟล์ไม่ได้: {err}", ok=False)
+            return
 
-        try:
-            with open(env_path, "w", encoding="utf-8") as f:
-                f.write("# Google Gemini API Key\n")
-                f.write(f"GEMINI_API_KEY={key}\n")
-                f.write("\n# Application Settings\n")
-                f.write("MBB_DEBUG=false\n")
-                f.write("MBB_LOG_LEVEL=info\n")
+        self.success = True
 
-            os.environ["GEMINI_API_KEY"] = key
-            load_dotenv(env_path)
-            self.success = True
-
-            # Success flash
-            self._btn_save.setText("  ✓  บันทึกแล้ว — กำลังเริ่มโปรแกรม...")
-            self._btn_save.setStyleSheet(
-                f"QPushButton#api_save {{ background: {_GREEN}; color: white; border: none; border-radius: 6px; font-family: '{_FONT}'; font-size: 10pt; font-weight: bold; padding: 9px 16px; }}"
-            )
-            QTimer.singleShot(900, self.accept)
-
-        except Exception as e:
-            self._set_status(f"✗  บันทึกไฟล์ไม่ได้: {e}", ok=False)
+        # Success flash
+        self._btn_save.setText("  ✓  บันทึกแล้ว — กำลังเริ่มโปรแกรม...")
+        self._btn_save.setStyleSheet(
+            f"QPushButton#api_save {{ background: {_GREEN}; color: white; border: none; border-radius: 6px; font-family: '{_FONT}'; font-size: 10pt; font-weight: bold; padding: 9px 16px; }}"
+        )
+        QTimer.singleShot(900, self.accept)
 
     # ── Drag (header-only) ────────────────────────────────────────────────────
 

@@ -107,6 +107,11 @@ hiddenimports = [
     'keyboard',
     'dotenv',
 
+    # ---- Trial-usage anti-tamper store (Phase 2) ----
+    'cryptography',
+    'cryptography.fernet',
+    'cryptography.hazmat.backends.openssl',
+
     # ---- PyQt6 (core + extras) ----
     'PyQt6',
     'PyQt6.QtCore',
@@ -143,6 +148,9 @@ hiddenimports = [
     'translation_logger',
     'translator_factory',
     'translator_gemini',
+    'usage_tracker',
+    'secure_usage_store',
+    'trial_config',
     'ui_config',
 
     # ---- ui_components (Tkinter helper widgets) ----

@@ -17,6 +17,7 @@ import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from text_corrector import TextCorrector, DialogueType
 from dialogue_cache import DialogueCache
+from usage_tracker import UsageTracker
 
 # เพิ่มการ import EnhancedNameDetector ถ้ามี
 try:
@@ -79,6 +80,31 @@ def _translate_api_error(error) -> str:
     # Generic fallback (keep original for debugging but in Thai wrapper)
     short = str(error)[:120]
     return f"⚠ ข้อผิดพลาด API: {short}"
+
+
+def _trial_limit_message() -> str:
+    """ข้อความที่แสดงบน TUI เมื่อใช้ token ครบโควต้าทดลอง (limited usage gate)."""
+    return (
+        "⚠️ ใช้โควต้าทดลองครบแล้ว\n"
+        "โปรแกรมแปลครบจำนวน token สำหรับแพ็คทดลองแล้ว\n"
+        "กรุณาติดต่อผู้พัฒนาเพื่อใช้งานต่อ"
+    )
+
+
+def _trial_tamper_message() -> str:
+    """ข้อความเมื่อตรวจพบการแก้ไขข้อมูลการใช้งาน (Phase 2 fail-closed)."""
+    return (
+        "⚠️ พบการแก้ไขข้อมูลการใช้งาน\n"
+        "ระบบถูกล็อกเพื่อความปลอดภัย\n"
+        "กรุณาติดต่อผู้พัฒนาหรือติดตั้งใหม่"
+    )
+
+
+def _trial_block_message(tracker) -> str:
+    """เลือกข้อความบล็อกตามสาเหตุ: tamper (fail-closed) หรือใช้โควต้าครบ."""
+    if getattr(tracker, "tampered", False):
+        return _trial_tamper_message()
+    return _trial_limit_message()
 
 
 class TranslatorGemini:
@@ -176,6 +202,14 @@ class TranslatorGemini:
             safety_settings=self.safety_settings,
         )
         self.model = genai_model
+
+        # Usage tracking for the free-trial limit (counts real API calls only).
+        # None when no settings backend is available (e.g. standalone import).
+        try:
+            self.usage_tracker = UsageTracker(settings) if settings else None
+        except Exception as e:
+            logging.warning(f"[usage] tracker init failed: {e}")
+            self.usage_tracker = None
 
         self.cache = DialogueCache()
         # >>> AUDIT_FIX_H1: bound last_translations cache to prevent unbounded growth.
@@ -486,6 +520,47 @@ class TranslatorGemini:
         """Rough token estimation for monitoring (OPTIMIZATION)"""
         # Rough estimate: 1 token ≈ 4 characters for mixed EN/TH
         return len(text) // 4
+
+    def reload_api_key(self, key=None):
+        """Re-apply the saved Gemini API key to this live translator (no restart).
+        Rebuilds the model object so the new key takes effect on the next call.
+        Keeps caches + usage_tracker intact (in-place mutation)."""
+        key = key or os.getenv("GEMINI_API_KEY")
+        if not key:
+            logging.warning("[api-key] reload skipped — no key in environment")
+            return False
+        try:
+            self.api_key = key
+            genai.configure(api_key=key)
+            self.model = genai.GenerativeModel(
+                model_name=self.model_name,
+                generation_config={
+                    "max_output_tokens": self.max_tokens,
+                    "temperature": self.temperature,
+                    "top_p": self.top_p,
+                },
+                safety_settings=self.safety_settings,
+            )
+            logging.info("[api-key] translator API key reloaded")
+            return True
+        except Exception as e:
+            logging.error(f"[api-key] reload failed: {e}")
+            return False
+
+    def _record_usage(self, response):
+        """Accumulate real token usage from a Gemini response (no-op if tracker off
+        or usage_metadata absent). Used for the retry/fallback/choice API paths."""
+        if not self.usage_tracker:
+            return
+        try:
+            usage = getattr(response, "usage_metadata", None)
+            if usage is None:
+                return
+            in_t = getattr(usage, "prompt_token_count", 0) or 0
+            out_t = getattr(usage, "candidates_token_count", 0) or 0
+            self.usage_tracker.add(in_t, out_t, self.model_name)
+        except Exception as e:
+            logging.debug(f"[usage] record failed: {e}")
 
     # Pre-compiled regex patterns — ป้องกันการ compile ซ้ำทุก translation call
     _RE_BRACKET_CLEANUP = re.compile(r'\[([^\[\]]{1,30})\]')
@@ -931,6 +1006,12 @@ class TranslatorGemini:
                 context = ""
                 character_style = ""
 
+            # Limited-usage gate: หยุดยิง API เมื่อใช้ token ครบโควต้าทดลอง
+            # (วางหลัง cache check ด้านบน — คำแปลที่ cache ไว้แล้วยังแสดงได้ตามปกติ)
+            if self.usage_tracker and self.usage_tracker.is_over_limit():
+                logging.warning("[usage] trial token limit reached — translation blocked")
+                return _trial_block_message(self.usage_tracker)
+
             # สร้าง prompt และแปล
             # Use role-specific system prompt
             base_prompt = self.get_system_prompt()
@@ -1008,15 +1089,28 @@ class TranslatorGemini:
                 # คำนวณเวลาที่ใช้
                 elapsed_time = time.time() - start_time
 
-                # สำหรับ Gemini เราไม่มีจำนวน token ที่แน่นอน ให้ประมาณจากจำนวนคำ
-                input_words = len(prompt.split())
-                output_words = (
-                    len(response.text.split()) if hasattr(response, "text") else 0
-                )
-                # ประมาณ token โดยเฉลี่ย 1 คำ = 1.3 token
-                input_tokens = int(input_words * 1.3)
-                output_tokens = int(output_words * 1.3)
-                total_tokens = input_tokens + output_tokens
+                # Token count — ใช้ค่าจริงจาก Gemini usage_metadata ถ้ามี
+                # (แม่นกว่าการประมาณคำ และตรงกับที่ Google คิดเงิน)
+                usage = getattr(response, "usage_metadata", None)
+                if usage is not None:
+                    input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+                    output_tokens = getattr(usage, "candidates_token_count", 0) or 0
+                    total_tokens = getattr(usage, "total_token_count", 0) or (
+                        input_tokens + output_tokens
+                    )
+                else:
+                    # Fallback: ประมาณจากจำนวนคำ (1 คำ ≈ 1.3 token) เผื่อ SDK ไม่ส่ง usage_metadata
+                    input_words = len(prompt.split())
+                    output_words = (
+                        len(response.text.split()) if hasattr(response, "text") else 0
+                    )
+                    input_tokens = int(input_words * 1.3)
+                    output_tokens = int(output_words * 1.3)
+                    total_tokens = input_tokens + output_tokens
+
+                # Accumulate สำหรับระบบ limited usage (นับเฉพาะ API call จริง ไม่นับ cache hit)
+                if self.usage_tracker:
+                    self.usage_tracker.add(input_tokens, output_tokens, self.model_name)
 
                 # แสดงข้อมูลในคอนโซล
                 short_model = (
@@ -1116,6 +1210,7 @@ class TranslatorGemini:
                             request_options={"timeout": 30},
                         )
 
+                        self._record_usage(retry_response)
                         if hasattr(retry_response, "text") and retry_response.text:
                             retry_translation = retry_response.text.strip()
 
@@ -1202,6 +1297,7 @@ class TranslatorGemini:
                         request_options={"timeout": 30},
                     )
 
+                    self._record_usage(response)
                     if hasattr(response, "text") and response.text:
                         translated_dialogue = response.text.strip()
 
@@ -1548,6 +1644,11 @@ class TranslatorGemini:
                             f"Auto-separated choices into {len(sentences)} sentences"
                         )
 
+            # Limited-usage gate: หยุดยิง API เมื่อใช้ token ครบโควต้าทดลอง
+            if self.usage_tracker and self.usage_tracker.is_over_limit():
+                logging.warning("[usage] trial token limit reached — choice translation blocked")
+                return _trial_block_message(self.usage_tracker)
+
             # 4. สร้าง Prompt ใหม่สำหรับแปล Choices ทั้งก้อน
             try:
                 choices_block_prompt = (
@@ -1578,6 +1679,7 @@ class TranslatorGemini:
                     safety_settings=self.safety_settings,
                 )
 
+                self._record_usage(choice_response)
                 if hasattr(choice_response, "text") and choice_response.text:
                     translated_choices_block = choice_response.text.strip()
                     logging.debug(

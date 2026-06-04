@@ -168,6 +168,15 @@ class Settings:
             "cpu_limit": 80,  # ค่า default CPU limit (legacy field, unused)
             # CPU Monitoring Settings (Smart Performance) removed 2026-04-25
             # — was OCR-era throttling, no benefit under Dalamud pipe-push architecture.
+            "usage_stats": {  # ระบบนับ token สำหรับ limited usage (แพ็คทดลอง) — นับเฉพาะ API call จริง
+                "total_tokens": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_requests": 0,
+                "per_model": {},
+                "trial_limit": 0,  # 0 = ไม่จำกัด; ตั้ง > 0 ตอน build แพ็คทดลองเพื่อเปิด gate
+                "first_use_at": None,
+            },
         }
         self.settings = {}  # เริ่มต้น settings เป็น dict ว่าง
         self.load_settings()  # โหลดค่าจากไฟล์ (ถ้ามี)
@@ -404,6 +413,16 @@ class Settings:
                             self.settings[key][mode] = {"x": None, "y": None}
                             changes_made = True
                             logging.info(f"Added missing tui_positions mode '{mode}'.")
+            elif key == "usage_stats":  # ตรวจสอบ key ย่อยของ usage_stats
+                if not isinstance(self.settings[key], dict):
+                    self.settings[key] = self.default_settings[key].copy()
+                    changes_made = True
+                else:
+                    for sub_key, sub_default in self.default_settings[key].items():
+                        if sub_key not in self.settings[key]:
+                            self.settings[key][sub_key] = sub_default
+                            changes_made = True
+                            logging.info(f"Added missing usage_stats key '{sub_key}'.")
             # --- จบการตรวจสอบโครงสร้างภายใน ---
 
         # --- ส่วนสำคัญ: ตรวจสอบและจัดการ area_presets (เหมือนเดิม แต่รวมอยู่ใน Loop ใหญ่) ---

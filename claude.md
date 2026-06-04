@@ -876,6 +876,78 @@ self.conversation_logger.end_session()  # save JSON only if disk_logging=True
 
 ---
 
+# Token Usage Tracking & Trial Limit (v1.8.19+)
+
+Counts cumulative Gemini token usage to power a **free-trial usage cap** for distributed trial packs.
+
+## Source of truth — real tokens, not estimates
+
+The pre-v1.8.19 code estimated tokens via `words × 1.3`. Since `google-generativeai` **v0.8.5** exposes **`response.usage_metadata`** (`prompt_token_count` / `candidates_token_count` / `total_token_count`), `translator_gemini.py` now reads the **real** counts (matches Google billing). Word-based estimate kept ONLY as fallback if `usage_metadata` is absent (SDK change safety).
+
+## `usage_tracker.py` — `UsageTracker`
+
+Owned by `TranslatorGemini` (`self.usage_tracker`, created in `__init__` when `settings` present; `None` otherwise). API:
+- `is_over_limit()` — `trial_limit > 0 AND total_tokens >= trial_limit`
+- `remaining()` — tokens left, or `None` when unlimited
+- `add(in, out, model)` — accumulate one **real** API call (ignores 0-token / cache-hit calls); debounced flush every `FLUSH_EVERY=5` calls
+- `flush()` — write `usage_stats` to settings.json (called on debounce + `MBB.exit_program`)
+- `snapshot()` — dict for UI
+
+## Counting rules (CRITICAL)
+
+- **Cache hits are NOT counted** — they never hit Gemini. The quota guard sits AFTER the cache-return in `translate()` ([translator_gemini.py](python-app/translator_gemini.py), after both speaker/general branches) so cached lines still render even when over limit.
+- Recorded at every real `generate_content`: main path (inline, also drives the token log line), retry path, fallback path, and `translate_choice` — via `self._record_usage(response)` helper (no-op if tracker off / no usage_metadata).
+- Analyze methods (`analyze_translation_quality` / `analyze_custom_prompt`) are dev-only and intentionally NOT counted.
+
+## Enforcement
+
+When over limit, `translate()` / `translate_choice()` return `_trial_limit_message()` (Thai "ใช้โควต้าทดลองครบแล้ว…") instead of calling the API → renders on TUI like any translation.
+
+## Persistence — `settings.json["usage_stats"]`
+
+```json
+{ "total_tokens": 0, "input_tokens": 0, "output_tokens": 0,
+  "total_requests": 0, "per_model": {}, "trial_limit": 0, "first_use_at": null }
+```
+- **`trial_limit: 0` = unlimited (default)** — the developer's own runs are never gated. Set `> 0` only when building a trial pack to arm the gate.
+- Schema + `ensure_default_values` sub-key migration in `settings.py` (mirrors `logs_ui` pattern).
+- Debounced write (≤4 calls can be lost on crash — acceptable for a soft gate).
+
+## UI — Model Panel (`pyqt_ui/model_panel.py`)
+
+"การใช้งาน Token (Trial Usage)" section below Parameters: `QLabel` (used / limit / %) + `QProgressBar` (chunk green <80% / amber 80-99% / red full) + per-model breakdown line. Reads `main_app.translator.usage_tracker.snapshot()`. Refreshes on `showEvent` + 5s `QTimer` (stopped in `hideEvent`). Panel `HEIGHT` bumped 440→510. When `trial_limit=0` shows "ใช้ไป N tokens · M ครั้ง (ไม่จำกัด)" with empty bar. Token counts abbreviated via `_fmt_tokens()` so the UI stays clean: `<1000` as-is, `1000–99999` → `12.3k`, `≥100000` → `100k` (request count keeps `,` grouping).
+
+## Phase 2 — medium-grade anti-tamper (`secure_usage_store.py`, implemented)
+
+For real community release. `UsageTracker` auto-selects a backend:
+- **Secure (Phase 2):** used whenever `cryptography` imports (real builds). `SecureUsageStore` stores the counter as a **Fernet** blob (AES-128-CBC + HMAC-SHA256) — encrypted (number hidden) + authenticated (edits fail to verify). Key = `SHA256(embedded_app_secret + Windows MachineGuid)` → a blob from machine A can't decrypt on machine B. **Dual store**: file `%LOCALAPPDATA%/MBB_Dalamud/.usage` + registry `HKCU\Software\MBB_Dalamud\u` — deleting one heals from the other. **Anti-rollback**: monotonic `seq`, `load()` takes `max(seq)` so an old backup of one store is overridden. **Fail-closed**: a store exists but nothing decrypts → status `tamper` → `is_over_limit()` returns True (locked) + TUI shows `_trial_tamper_message()` "พบการแก้ไขข้อมูล". Only a truly empty machine → `fresh` (start 0, migrates any Phase-1 plaintext counter once).
+- **Settings (Phase 1 fallback):** plaintext `settings.json` when `cryptography` absent (dev). Soft gate.
+
+**`trial_limit` source (security-critical):** in secure mode it is the build constant `usage_tracker.TRIAL_LIMIT` (0 = unlimited; set > 0 when packaging a trial), NOT a file — so a user can't raise their own cap. Dev-only env override `MBB_TRIAL_LIMIT` is honoured ONLY in non-frozen runs (ignored in a release exe). In settings-fallback mode the editable `settings.json` value still applies.
+
+**Dev reset path (REQUIRED):** MachineGuid changes on OS reinstall → both stores fail to decrypt → a legit user is falsely locked. Recover with `python secure_usage_store.py --reset` (or `SecureUsageStore().clear()`), which wipes file + registry → next launch is `fresh`.
+
+**Untouched by Phase 2:** the translate guard + Model Panel UI — they only call `is_over_limit()/snapshot()/add()`. Swapping the backend was the whole point of Phase 1's seam.
+
+## Trial lockdown + Model Panel redesign (`trial_config.py`)
+
+`trial_config.py` centralizes ALL build-time trial toggles (one place to flip when packaging):
+`TRIAL_PACK` (master) · `TRIAL_TOKEN_LIMIT` (read by `usage_tracker`) · `LOCK_MODEL` · `LOCK_PARAMETERS` (both default to `TRIAL_PACK`) · `FORCED_MODEL="gemini-3.1-flash-lite"` · `FORCED_PARAMS={max_tokens:500, temperature:0.8, top_p:0.9}`. Trial build = set `TRIAL_PACK=True` + `TRIAL_TOKEN_LIMIT=N`, rebuild. Added to `mbb.spec` hiddenimports.
+
+**Model Panel** (`pyqt_ui/model_panel.py`, 420×620, card-based: API Key · Model · Parameters · Trial Usage):
+- **Locked** (`LOCK_MODEL`/`LOCK_PARAMETERS`): model shown as a read-only pill (no dropdown — selection hidden); parameter sliders **stay visible but disabled** (view-only, title gets "🔒 ล็อก (แสดงอย่างเดียว)"), set to `FORCED_PARAMS` regardless of settings so the user/dev can SEE the tuned values without changing them; RESET/APPLY footer hidden only when BOTH locked. Editing (dropdown + draggable sliders + APPLY) is the dev/full build (`TRIAL_PACK=False`). `_on_apply`/`_reset_defaults`/`_load_current` guard `_model_combo is None` and read `FORCED_PARAMS` when `LOCK_PARAMETERS`.
+- **`_reset_defaults` now uses `FORCED_PARAMS`** (temperature 0.8) — fixes the old inconsistency where reset wrote 0.7 but the load default was 0.8.
+
+**Inline API-key card** (always shown, both modes): masked key (`AIza••••3xQ` / `mask_key()`) + 👁 reveal + ✎ edit→💾 save inline + green/red status dot + "เปิด Google AI Studio" link. Save → `api_key_manager.save_key()` (.env) → `MBB.reload_api_key()` → `TranslatorGemini.reload_api_key()` rebuilds the live model with the new key **without restart** (caches + usage_tracker preserved). No more startup-only key entry.
+
+**`api_key_manager.py` refactor:** key logic extracted to module fns `get_current_key()` / `mask_key()` / `validate_format()` / `save_key()` — shared by both the startup `APIKeyDialog` and the inline editor (no dup). **`validate_format` relaxed**: Google issues non-`AIza` keys too (e.g. `AQ.…`); the old strict `AIza`-prefix check would reject valid newer keys (and falsely red-dot a working key). Now: non-empty, no whitespace, ≥20 chars.
+
+**Dead code:** `model.py` (Tkinter `ModelSettings`) is unused — not imported anywhere. Flag for deletion; don't edit.
+
+**Threat coverage:** defeats notepad edit / file delete / cross-machine copy / backup-rollback. Does NOT defeat binary RE extracting the embedded secret (medium tier; Phase 3 = server-side grant). Build: add `cryptography` to requirements + `mbb.spec` hiddenimports; the embedded secret is XOR-obfuscated in `secure_usage_store.py` (`_S1`/`_S2`) — regenerate per public build if desired.
+
+---
+
 # Zero-Width Character Safety
 
 `text_corrector.py` strips ZWS chars from npc.json names on load:
@@ -1307,6 +1379,7 @@ Hard rules:
 | Phase B — encryption + private repo | After paid tier strategy | same |
 | Phase C — paid tier gate | After Phase B | same |
 | **v1.9.0 TUI module split** — `TUI_dialog` / `TUI_battle` / `TUI_cutscene` / `TUI_choice` separate modules | If more shared-state bugs in `translated_ui.py` | `project_tui_split_plan_v190.md` |
+| **Token trial — Phase 3 server-side grant** (true enforcement, resists binary RE) | Only if Phase 2 medium-tier proves insufficient | `project_token_trial_phase2_encryption.md` |
 | Phase 2 file split — `tui_fade_system` / `tui_resize_system` / `tui_auto_hide` (~1100 more lines extractable) | When ready for mixin/delegation pattern | — |
 | Custom repository setup (`pluginmaster.json`) | Phase 2 of distribution | — |
 | PyInstaller one-click install | Phase 3 of distribution | — |
