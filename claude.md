@@ -890,7 +890,7 @@ Owned by `TranslatorGemini` (`self.usage_tracker`, created in `__init__` when `s
 - `is_over_limit()` — `trial_limit > 0 AND total_tokens >= trial_limit`
 - `remaining()` — tokens left, or `None` when unlimited
 - `add(in, out, model)` — accumulate one **real** API call (ignores 0-token / cache-hit calls); debounced flush every `FLUSH_EVERY=5` calls
-- `flush()` — write `usage_stats` to settings.json (called on debounce + `MBB.exit_program`)
+- `flush()` — persist to the active backend (Phase-2 secure store, else settings.json); called on debounce + `MBB.exit_program`
 - `snapshot()` — dict for UI
 
 ## Counting rules (CRITICAL)
@@ -903,19 +903,16 @@ Owned by `TranslatorGemini` (`self.usage_tracker`, created in `__init__` when `s
 
 When over limit, `translate()` / `translate_choice()` return `_trial_limit_message()` (Thai "ใช้โควต้าทดลองครบแล้ว…") instead of calling the API → renders on TUI like any translation.
 
-## Persistence — `settings.json["usage_stats"]`
+## Persistence
 
-```json
-{ "total_tokens": 0, "input_tokens": 0, "output_tokens": 0,
-  "total_requests": 0, "per_model": {}, "trial_limit": 0, "first_use_at": null }
-```
-- **`trial_limit: 0` = unlimited (default)** — the developer's own runs are never gated. Set `> 0` only when building a trial pack to arm the gate.
-- Schema + `ensure_default_values` sub-key migration in `settings.py` (mirrors `logs_ui` pattern).
+Counter fields (identical in both backends): `total_tokens / input_tokens / output_tokens / total_requests / per_model / first_use_at` (+ `seq` in the secure store).
+- **Primary = Phase-2 secure store** (below) when `cryptography` is available; **fallback = plaintext `settings.json["usage_stats"]`** otherwise (schema + `ensure_default_values` migration in `settings.py`, mirrors `logs_ui`).
+- `trial_limit` is **not** a persisted gate value — it ALWAYS comes from the `trial_config` build constant (see Phase 2). Any `trial_limit` key left in settings.json is display-only / ignored.
 - Debounced write (≤4 calls can be lost on crash — acceptable for a soft gate).
 
 ## UI — Model Panel (`pyqt_ui/model_panel.py`)
 
-"การใช้งาน Token (Trial Usage)" section below Parameters: `QLabel` (used / limit / %) + `QProgressBar` (chunk green <80% / amber 80-99% / red full) + per-model breakdown line. Reads `main_app.translator.usage_tracker.snapshot()`. Refreshes on `showEvent` + 5s `QTimer` (stopped in `hideEvent`). Panel `HEIGHT` bumped 440→510. When `trial_limit=0` shows "ใช้ไป N tokens · M ครั้ง (ไม่จำกัด)" with empty bar. Token counts abbreviated via `_fmt_tokens()` so the UI stays clean: `<1000` as-is, `1000–99999` → `12.3k`, `≥100000` → `100k` (request count keeps `,` grouping).
+"การใช้งาน Token (Trial Usage)" card (layout details in the redesign section below): `QLabel` (used / limit / %) + `QProgressBar` (chunk green <80% / amber 80-99% / red full) + per-model breakdown line. Reads `main_app.translator.usage_tracker.snapshot()`. Refreshes on `showEvent` + 5s `QTimer` (stopped in `hideEvent`). When `trial_limit=0` shows "ใช้ไป N tokens · M ครั้ง (ไม่จำกัด)" with empty bar. Token counts abbreviated via `_fmt_tokens()`: `<1000` as-is, `1000–99999` → `12.3k`, `≥100000` → `100k` (request count keeps `,` grouping).
 
 ## Phase 2 — medium-grade anti-tamper (`secure_usage_store.py`, implemented)
 
@@ -944,7 +941,7 @@ For real community release. `UsageTracker` auto-selects a backend:
 
 **Dead code:** `model.py` (Tkinter `ModelSettings`) is unused — not imported anywhere. Flag for deletion; don't edit.
 
-**Threat coverage:** defeats notepad edit / file delete / cross-machine copy / backup-rollback. Does NOT defeat binary RE extracting the embedded secret (medium tier; Phase 3 = server-side grant). Build: add `cryptography` to requirements + `mbb.spec` hiddenimports; the embedded secret is XOR-obfuscated in `secure_usage_store.py` (`_S1`/`_S2`) — regenerate per public build if desired.
+**Threat coverage (honest, from the 2026-06-04 security audit):** defeats casual resets — notepad/settings.json edits, deleting or write-blocking ONE store (the other heals), copying another machine's file (machine-bound key → fails closed). Does NOT defeat — restoring BOTH stores from an early backup, deleting BOTH (→ fresh reset), write-blocking BOTH (counter can't persist), or binary RE of the embedded secret. These are accepted at medium tier; closing them needs Phase 3 = server-side grant. Build: `cryptography` in requirements + `mbb.spec` hiddenimports; embedded secret XOR-obfuscated in `secure_usage_store.py` (`_S1`/`_S2`) — regenerate per public build if desired.
 
 ---
 
