@@ -1,27 +1,32 @@
 """
 trial_config.py — central build-time toggles for trial-pack distribution.
 
-Flip these when packaging a free-trial build, then rebuild. They are baked into the
-frozen exe so end users cannot edit them (unlike settings.json).
+Flip these when packaging a build, then rebuild. They are baked into the frozen exe so
+end users cannot edit them (unlike settings.json).
 
-Normal / full build (default):
-    TRIAL_PACK = False  →  nothing locked, token counter unlimited.
+*** CURRENT PHASE: initial free distribution ***
+    TRIAL_PACK = False, TRIAL_TOKEN_LIMIT = 0
+    →  UNLIMITED translation (nothing blocked, nothing locked, full editable Model panel)
+       BUT token usage is still counted and stored per machine/user (encrypted, local),
+       so each install accumulates its own running total — visible in the Model panel as
+       "ใช้ไป N tokens (ไม่จำกัด)". This gives us per-user usage data now, with zero
+       friction, and lets us turn on a real cap later by flipping the two values below.
 
-Trial-pack build:
+Later — trial-pack build (one flip):
     TRIAL_PACK = True
     TRIAL_TOKEN_LIMIT = 500_000   (or whatever quota the trial grants)
-    →  model fixed to FORCED_MODEL, parameters fixed to FORCED_PARAMS (sliders + the
-       RESET/APPLY buttons hidden in the Model panel), translation blocked once the
-       token quota is spent.
+    →  model fixed to FORCED_MODEL, parameters fixed to FORCED_PARAMS (sliders shown but
+       disabled, RESET/APPLY hidden), translation blocked once the quota is spent.
 
-The Model panel still always shows the API-key card + the usage card — a trial user
-supplies their own Gemini key; the cap is on top of Google's own free quota.
+The Model panel always shows the API-key card + the usage card — users supply their own
+Gemini key; any future cap is on top of Google's own free quota.
 """
 
-# Master switch — one flag arms the whole trial lockdown.
+# Master switch — one flag arms the whole trial lockdown. (Initial distribution: False)
 TRIAL_PACK = False
 
 # Lifetime token quota (tokens). 0 = unlimited. Read by usage_tracker.
+# Initial distribution = 0 (count only, never block). Set > 0 to arm a real trial cap.
 TRIAL_TOKEN_LIMIT = 0
 
 # Derived locks (default to the master switch; override individually only if needed).
