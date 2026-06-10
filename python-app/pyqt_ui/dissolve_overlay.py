@@ -94,6 +94,16 @@ BG_ALPHA = 252                   # 252/255 ≈ 99% opaque (v1.8.10 — was 230 �
 # (`tui_geometries["cutscene"]["w"]`) and re-centers position x.
 CUTSCENE_WIDTH_FRACTION = 0.90
 
+# >>> FLOWFIX_6: battle position is FORCED at show time — x centered,
+# y at 15% of screen height from the top (per user request 2026-06-10,
+# scales across resolutions). A stale/corrupted saved position (a real
+# settings.json had battle at screen-center from an old spurious save)
+# can no longer override the intended top-of-screen placement. Saved
+# w/h stay user-tunable, mirroring the cutscene width-force pattern.
+# REVERT: delete this const + the battle force-block in show_for_mode.
+BATTLE_TOP_FRACTION = 0.15
+# <<< FLOWFIX_6
+
 COLOR_BATTLE = "#FF6B00"         # vibrant orange — matches TUI v4
 COLOR_CUTSCENE = "#40E0D0"       # turquoise — v1.8.8 (was gold #FFD700)
 COLOR_SPEAKER_FALLBACK = "#FFE6C8"
@@ -442,6 +452,21 @@ class DissolveOverlay(QWidget):
                     x = _geo.x() + (_geo.width() - w) // 2
             except Exception as e:
                 log.debug(f"cutscene 90%-width recalc failed: {e}")
+
+        # >>> FLOWFIX_6 ── Battle: FORCE position — x centered, y at 15% of
+        # screen height. Overrides saved tui_positions["battle"] every show
+        # (heals stale center-of-screen values). Saved SIZE is preserved.
+        # REVERT: delete this block (saved/default position applies again).
+        if mode == "battle":
+            try:
+                _screen = QApplication.primaryScreen()
+                if _screen is not None:
+                    _geo = _screen.availableGeometry()
+                    x = _geo.x() + (_geo.width() - w) // 2
+                    y = _geo.y() + int(_geo.height() * BATTLE_TOP_FRACTION)
+            except Exception as e:
+                log.debug(f"battle 15%-top recalc failed: {e}")
+        # <<< FLOWFIX_6
 
         # Clamp to primary screen so a stale saved position can't push the
         # window off-screen (e.g. user unplugged a monitor)

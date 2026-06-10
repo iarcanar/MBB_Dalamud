@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # MBB Dalamud Bridge - PyInstaller Specification
-# Version: 1.8.18
+# Version: 1.8.19
 # Build: 04032026-02 (rebuilt 2026-05-01 for v1.8.2 with PyQt6 + cleanup)
 #
 # Build command:
@@ -122,7 +122,6 @@ hiddenimports = [
     # ---- MBB core modules (imported lazily / conditionally) ----
     'version',
     'api_key_manager',
-    'api_manager',
     'appearance',
     'asset_manager',
     'button_factory',
@@ -136,16 +135,13 @@ hiddenimports = [
     'loggings',
     'Manager',
     'mini_ui',
-    'model',
     'npc_data_manager',
     'npc_file_utils',
     'resource_utils',
     'settings',
     'simplified_hotkey_ui',
     'text_corrector',
-    'translated_logs',  # legacy Tkinter version (unused but kept on disk)
     'translated_ui',
-    'translation_logger',
     'translator_factory',
     'translator_gemini',
     'usage_tracker',

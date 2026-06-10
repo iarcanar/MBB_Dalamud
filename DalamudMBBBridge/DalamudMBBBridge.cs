@@ -41,6 +41,18 @@ namespace DalamudMBBBridge
         private bool isConnected = false;
         private bool isRunning = true;
         private readonly ConcurrentQueue<TextHookData> messageQueue = new();
+        // >>> FLOWFIX_4: cap the queue. It only drains while the pipe is connected,
+        // so playing disconnected grows it forever and the whole stale backlog
+        // floods Python at connect. EnqueueHookData() drops oldest past the cap.
+        // REVERT: remove this const + EnqueueHookData() and restore the 9 direct
+        // messageQueue.Enqueue(...) call sites.
+        private const int MaxQueuedMessages = 200;
+        // FLOWFIX_4: allowlist for OnChatMessage. Project hard rule — capture ONLY
+        // 61/68/71/70. The old code built a ~70-entry denylist per message and
+        // leaked everything else (emotes, FC chat, system lines) to Python.
+        // 71/70 never arrive via ChatMessage but are harmless + document intent.
+        private static readonly HashSet<int> AllowedChatTypes = new() { 61, 68, 71, 70 };
+        // <<< FLOWFIX_4
         private readonly ConcurrentDictionary<string, long> globalMessageHistory = new();
         private string lastTalkMessage = "";
         private string lastSpeaker = "";
@@ -147,9 +159,20 @@ namespace DalamudMBBBridge
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 ChatType = 0
             };
-            messageQueue.Enqueue(data);
+            EnqueueHookData(data);  // FLOWFIX_4
             Log.Info($"[SYSTEM] Territory changed to {territoryId}");
         }
+
+        // >>> FLOWFIX_4: bounded enqueue — drop oldest when over the cap so a long
+        // disconnected session can't accumulate an unbounded stale backlog.
+        // REVERT: delete this method, restore direct messageQueue.Enqueue(...) calls.
+        private void EnqueueHookData(TextHookData data)
+        {
+            messageQueue.Enqueue(data);
+            while (messageQueue.Count > MaxQueuedMessages)
+                messageQueue.TryDequeue(out _);
+        }
+        // <<< FLOWFIX_4
 
         // ENHANCED DUPLICATE PREVENTION: Global message deduplication system
         private bool IsUniqueMessage(string speaker, string message, string type)
@@ -159,24 +182,33 @@ namespace DalamudMBBBridge
             var messageKey = $"{type}:{speaker}:{message}";
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
+            // >>> FLOWFIX_4: these dedup-check logs fire on EVERY captured message —
+            // demote Info → Debug to cut hot-path I/O during long sessions.
+            // REVERT: change Debug → Info on the three lines below.
             // Enhanced debug logging
-            Log.Info($"[DUPLICATE CHECK] Key: {messageKey.Substring(0, Math.Min(80, messageKey.Length))}...");
+            Log.Debug($"[DUPLICATE CHECK] Key: {messageKey.Substring(0, Math.Min(80, messageKey.Length))}...");
 
             // Check if we've seen this exact message recently (within 3 seconds)
             if (globalMessageHistory.TryGetValue(messageKey, out var lastSeenTime))
             {
                 var timeDiff = currentTime - lastSeenTime;
-                Log.Info($"[DUPLICATE CHECK] Found existing entry, time diff: {timeDiff}s");
+                Log.Debug($"[DUPLICATE CHECK] Found existing entry, time diff: {timeDiff}s");
                 if (timeDiff <= 3)
                 {
-                    Log.Info($"[DUPLICATE PREVENTION] ❌ BLOCKED duplicate {type}: {speaker}: {message.Substring(0, Math.Min(30, message.Length))}...");
+                    // FLOWFIX_4: sliding window — refresh the stored timestamp so a
+                    // persistently re-firing addon (e.g. SelectString PreRefresh while
+                    // the user hovers choices >4s) keeps getting blocked instead of
+                    // re-sending the same choice every ~4 seconds.
+                    globalMessageHistory[messageKey] = currentTime;
+                    Log.Debug($"[DUPLICATE PREVENTION] ❌ BLOCKED duplicate {type}: {speaker}: {message.Substring(0, Math.Min(30, message.Length))}...");
                     return false; // Duplicate - block it
                 }
             }
 
             // Record this message as seen
             globalMessageHistory[messageKey] = currentTime;
-            Log.Info($"[DUPLICATE CHECK] ✅ ALLOWED new message {type}: {speaker}: {message.Substring(0, Math.Min(30, message.Length))}...");
+            Log.Debug($"[DUPLICATE CHECK] ✅ ALLOWED new message {type}: {speaker}: {message.Substring(0, Math.Min(30, message.Length))}...");
+            // <<< FLOWFIX_4
 
             // Clean old entries periodically (every 100 messages)
             if (globalMessageHistory.Count > 100)
@@ -260,7 +292,7 @@ namespace DalamudMBBBridge
                         ChatType = 0x003D
                     };
 
-                    messageQueue.Enqueue(textData);
+                    EnqueueHookData(textData);  // FLOWFIX_4
                     Log.Info($"[TALK-{type}] Dialog captured: {speakerName}: {message.Substring(0, Math.Min(50, message.Length))}...");
                 }
             }
@@ -277,63 +309,15 @@ namespace DalamudMBBBridge
                 var type = chatMessage.LogKind;
                 var sender = chatMessage.Sender;
                 var message = chatMessage.Message;
-                // FIXED: Handle non-Talk chat types only to prevent overlap with AddonLifecycle
-                // Exclude type 0x003D (Talk) as it's handled by OnTalkAddonPreReceive
-                // 🔥 CRITICAL FIX: Block combat/duty spam ChatTypes with REAL values from logs
-                var blockedTypes = new HashSet<int> {
-                    0x0048, // System notifications
+                // >>> FLOWFIX_4: allowlist replaces the per-message ~70-entry denylist.
+                // Talk (0x003D) is handled by OnTalkAddonPreReceive; everything not in
+                // AllowedChatTypes (combat/emote/FC/system spam) is dropped here.
+                // REVERT: restore the old blockedTypes HashSet + denylist condition +
+                // the per-message [DEBUG-FILTER] Log.Info.
+                if (!AllowedChatTypes.Contains((int)type))
+                    return;
 
-                    // Real ChatTypes from actual game logs
-                    2092,   // Player actions (You use a bowl of mesquite soup)
-                    2857,   // Combat damage (You hit Necron for X damage)
-                    12457,  // Enemy damage (Necron hits you for X damage)
-                    4139,   // Ability casting (Krile begins casting, uses abilities)
-                    4777,   // Damage taken (Necron takes X damage)
-                    2729,   // Critical hits (Critical! You hit X for Y damage)
-                    4398,   // Status gained (gains the effect of)
-                    4400,   // Status lost (loses the effect of)
-                    4269,   // HP recovery (You recover X HP)
-
-                    // v1.4.8.1 ADDITIONS: Equipment and System Messages
-                    // 71 REMOVED - CONTAINS CUTSCENE TEXT! ("Or was it a gift─the terminal's parting miracle?")
-                    2105,   // Equipment unequip messages (Ceremonial bangle of aiming unequipped) - RE-ADDED AFTER VERIFICATION
-
-                    // v1.4.8.4 ADDITIONS: Combat Text Filtering (from live testing)
-                    2221,   // HP absorption messages (You absorb X HP)
-                    2735,   // Status effect messages (suffers the effect of)
-                    10283,  // Spell casting/interruption messages (begins casting, is interrupted)
-                    2874,   // Combat victory messages (You defeat X)
-
-                    // v1.4.8.5 ADDITIONS: Job/Gear Change Messages
-                    57,     // Gear/job change messages (Gear recommended, Job registered)
-
-                    // v1.4.8.6 ADDITIONS: NPC/Monster Casting Messages
-                    12331,  // NPC/Monster spell casting (begins casting, casts)
-
-                    // v1.4.8.7 ADDITIONS: Hunt/Party Messages
-                    11,     // Hunt board notifications and party status messages
-
-                    // v1.4.8.9 ADDITIONS: Combat Zone Filtering (from live testing)
-                    9001,   // Combat damage messages (The striking dummy takes X damage, Critical!)
-                    10929,  // Status recovery messages (recovers from the effect of)
-                    29,     // Other player actions/emotes (gives enthusiastic Lali-ho!)
-
-                    // v1.4.10.1 ADDITIONS: Additional Combat Zone Filtering
-                    9002,   // Combat immunity messages (The striking dummy is unaffected)
-                    9007,   // Status effect application (suffers the effect of)
-                    13105,  // Status effect recovery (recovers from the effect of)
-
-                    // Legacy types (keep for safety)
-                    2091, 2110, 2218, 2219, 2220, 2222, 2224, 2233, 2235, 2240, 2241, 2242,
-                    2265, 2266, 2267, 2283, 2284, 2285, 2317, 2318, 2730, 2731, 3001,
-                    8235, 8745, 8746, 8747, 8748, 8749, 8750, 8752, 8754,
-                    10409, 10410, 10411, 10412, 10413
-                };
-
-                // 🔍 DEBUG: ChatType filtering
-                Log.Info($"[DEBUG-FILTER] ChatType {(int)type} - Blocked: {blockedTypes.Contains((int)type)}");
-
-                if (type != (XivChatType)0x003D && !blockedTypes.Contains((int)type))
+                if (type != (XivChatType)0x003D)
                 {
                     var speakerName = sender.TextValue;
                     var messageText = message.TextValue;
@@ -350,10 +334,11 @@ namespace DalamudMBBBridge
                             ChatType = (int)type
                         };
 
-                        messageQueue.Enqueue(textData);
+                        EnqueueHookData(textData);
                         Log.Info($"[CHAT] Non-Talk captured: {speakerName}: {messageText.Substring(0, Math.Min(50, messageText.Length))}... (ChatType: {(int)type})");
                     }
                 }
+                // <<< FLOWFIX_4
             }
             catch (Exception ex)
             {
@@ -398,7 +383,7 @@ namespace DalamudMBBBridge
                                 ChatType = 0x0044 // BattleTalk type
                             };
 
-                            messageQueue.Enqueue(textData);
+                            EnqueueHookData(textData);  // FLOWFIX_4
                             Log.Info($"[BATTLETALK] Captured: {speaker}: {message.Substring(0, Math.Min(50, message.Length))}...");
                         }
                     }
@@ -496,7 +481,7 @@ namespace DalamudMBBBridge
                                         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                                         ChatType = 0x0047
                                     };
-                                    messageQueue.Enqueue(textData);
+                                    EnqueueHookData(textData);  // FLOWFIX_4
                                     Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via AtkValue[0] in {type}: {text.Substring(0, Math.Min(50, text.Length))}...");
                                     return;
                                 }
@@ -536,7 +521,7 @@ namespace DalamudMBBBridge
                                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                                 ChatType = 0x0047
                             };
-                            messageQueue.Enqueue(textData);
+                            EnqueueHookData(textData);  // FLOWFIX_4
                             Log.Info($"✅ [CUTSCENE-TALKSUBTITLE] Captured via Node{nodeId} ({type}): {text.Substring(0, Math.Min(50, text.Length))}...");
                             return;
                         }
@@ -695,7 +680,7 @@ namespace DalamudMBBBridge
                             ChatType = 0x0046 // Choice dialog ChatType
                         };
 
-                        messageQueue.Enqueue(textData);
+                        EnqueueHookData(textData);  // FLOWFIX_4
                         Log.Info($"[CHOICE-SUCCESS] Sent: {dialogTitle} with {choices.Count} options");
                     }
                 }
@@ -815,7 +800,7 @@ namespace DalamudMBBBridge
                         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                         ChatType = 0x0046  // Choice dialog ChatType
                     };
-                    messageQueue.Enqueue(textData);
+                    EnqueueHookData(textData);  // FLOWFIX_4
                     Log.Info($"✅ [CHOICE] Queued: {combinedText.Substring(0, Math.Min(80, combinedText.Length))}...");
                 }
             }
@@ -887,10 +872,15 @@ namespace DalamudMBBBridge
                             Speaker = "Icon Choice",
                             Message = combinedChoices,
                             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            ChatType = 0x0047 // Custom icon choice type
+                            // >>> FLOWFIX_5: 0x0047 (=71, cutscene) routed this choice to the
+                            // DissolveOverlay. SelectIconString is a CHOICE addon — must be
+                            // 0x0046 (=70, choice) to match OnSelectStringAddon.
+                            // REVERT: change 0x0046 back to 0x0047.
+                            ChatType = 0x0046 // Choice dialog ChatType (was 0x0047)
+                            // <<< FLOWFIX_5
                         };
 
-                        messageQueue.Enqueue(textData);
+                        EnqueueHookData(textData);  // FLOWFIX_4
                         Log.Info($"[CHOICE-ICON-SUCCESS] Sent: {choices.Count} icon choices");
                     }
                 }

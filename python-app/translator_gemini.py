@@ -1673,11 +1673,18 @@ class TranslatorGemini:
                 }
 
                 logging.debug("Sending choices block to Gemini for translation...")
+                # >>> FLOWFIX_2: timeout on choice API call (matches translate() ~1086).
+                # A hung choice request blocks its daemon thread forever → the
+                # handler's pre-flight _choice_overlay_active flag is never reset
+                # by the thread's finally → TUI stays hidden the whole session.
+                # REVERT: remove request_options line.
                 choice_response = self.model.generate_content(
                     choices_block_prompt,
                     generation_config=choice_gen_config,
                     safety_settings=self.safety_settings,
+                    request_options={"timeout": 30},
                 )
+                # <<< FLOWFIX_2
 
                 self._record_usage(choice_response)
                 if hasattr(choice_response, "text") and choice_response.text:
@@ -1748,9 +1755,18 @@ class TranslatorGemini:
                                 "4. Preserve proper names exactly.\n"
                                 "5. Return ONLY the Thai translation of the option.\n"
                             )
+                            # >>> FLOWFIX_2: per-choice fallback was calling the API
+                            # with NO config/safety/timeout — a hang here leaks the
+                            # daemon thread + pre-flight flag (same failure as above).
+                            # choice_gen_config is in scope from ~line 1669.
+                            # REVERT: revert to generate_content(choice_prompt_individual).
                             choice_response_fb = self.model.generate_content(
-                                choice_prompt_individual
+                                choice_prompt_individual,
+                                generation_config=choice_gen_config,
+                                safety_settings=self.safety_settings,
+                                request_options={"timeout": 30},
                             )
+                            # <<< FLOWFIX_2
                             if (
                                 hasattr(choice_response_fb, "text")
                                 and choice_response_fb.text

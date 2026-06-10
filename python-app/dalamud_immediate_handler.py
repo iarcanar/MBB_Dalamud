@@ -25,6 +25,15 @@ ESSENTIAL_CHAT_TYPES = {
 # 🔴 DEPRECATED - No longer needed with Allow List approach
 # Previously had 50+ blocked ChatTypes - now we just allow 2-3 types!
 
+# >>> FLOWFIX_1: detect translator error/trial-limit results so they are NOT
+# cached (would poison the line for the whole session on a transient blip) and
+# NOT fed into wide-context (error text would leak into future Gemini prompts).
+# Both "⚠" (API errors) and "⚠️" (U+26A0 + U+FE0F, trial/tamper) start with U+26A0.
+# REVERT: delete this helper + its two call-site guards in process_message.
+def _is_error_result(text):
+    return bool(text) and text.lstrip().startswith("⚠")
+# <<< FLOWFIX_1
+
 def should_translate_message(message_data):
     """
     Determine if a message should be translated based on ChatType filtering
@@ -88,6 +97,18 @@ class DalamudImmediateHandler:
         # REVERT: remove self._cache_lock and `with self._cache_lock:` blocks below
         self._cache_lock = threading.Lock()
         # <<< AUDIT_FIX_H2
+
+        # >>> FLOWFIX_3: per-surface display-ordering guard. Each message spawns
+        # its own translation thread; a slow OLD line can finish after a fast
+        # NEWER line and overwrite it on screen (rapid cutscene subtitles).
+        # Each arrival gets a monotonic seq; a result older than the last shown
+        # seq for its render surface (dissolve/choice/tui) is dropped. Reuses
+        # _cache_lock — do NOT add a new lock.
+        # REVERT: remove these two fields + _surface_group + the seq logic in
+        # process_message / _show_immediately / clear_cache.
+        self._msg_seq = 0
+        self._last_shown_seq = {}  # surface-group → last displayed seq
+        # <<< FLOWFIX_3
 
         # Statistics
         self.stats = {
@@ -238,6 +259,13 @@ class DalamudImmediateHandler:
                 return
 
             self.stats['messages_received'] += 1
+            # >>> FLOWFIX_3: assign arrival sequence BEFORE the cache-hit check so
+            # cache-hit displays also participate in per-surface ordering.
+            # REVERT: remove this block + the msg_seq args at both _show_immediately sites.
+            with self._cache_lock:
+                self._msg_seq += 1
+                msg_seq = self._msg_seq
+            # <<< FLOWFIX_3
             # >>> AUDIT_FIX_H4: use raw message text as key (no hash collisions).
             # Memory cost is negligible (cache capped at 100 entries).
             # REVERT: change `cache_key = message_text` back to `cache_key = hash(message_text)`
@@ -267,7 +295,7 @@ class DalamudImmediateHandler:
             if cached_translation is not None:
                 self.logger.debug(f"[CACHE HIT] แสดงคำแปลจาก cache ทันที!")
                 self.stats['cache_hits'] += 1
-                self._show_immediately(cached_translation, chat_type)
+                self._show_immediately(cached_translation, chat_type, msg_seq)  # FLOWFIX_3
                 return
 
             if not reserved_for_translate:
@@ -324,9 +352,20 @@ class DalamudImmediateHandler:
                 try:
                     _preflight_ui = getattr(self.main_app_ref, "translated_ui", None)
                     if _preflight_ui is not None:
+                        # >>> FLOWFIX_8a: capture chain state BEFORE arming our flag.
+                        # If an overlay is already active, the root is withdrawn
+                        # because THAT overlay hid it — not because the user hid it.
+                        # REVERT: remove this capture + the `elif not chain_active`
+                        # guard below (restore plain else).
+                        _overlay_was_active = bool(
+                            getattr(_preflight_ui, "_dissolve_active", False)
+                            or getattr(_preflight_ui, "_choice_overlay_active", False)
+                        )
+                        # <<< FLOWFIX_8a
                         setattr(_preflight_ui, _preflight_flag, True)
 
-                        def _pre_flight_withdraw_tk(ui_ref=_preflight_ui, vis_attr=_preflight_visible_attr):
+                        def _pre_flight_withdraw_tk(ui_ref=_preflight_ui, vis_attr=_preflight_visible_attr,
+                                                    chain_active=_overlay_was_active):
                             """Runs on Tk main thread — withdraw + mark visibility."""
                             try:
                                 if not ui_ref.root.winfo_exists():
@@ -334,8 +373,17 @@ class DalamudImmediateHandler:
                                 if ui_ref.root.state() == "normal":
                                     setattr(ui_ref, vis_attr, True)
                                     ui_ref.root.withdraw()
-                                else:
+                                elif not chain_active:
+                                    # Root hidden by the USER (fade auto-hide / close)
+                                    # before any overlay — don't restore it on exit.
                                     setattr(ui_ref, vis_attr, False)
+                                # else — FLOWFIX_8a: root is withdrawn because a
+                                # PREVIOUS overlay in this chain hid it (rapid
+                                # battle→cutscene→choice switching). The old
+                                # unconditional `setattr(False)` here destroyed the
+                                # "restore Tk on exit" memory → the next dialogue
+                                # rendered into a withdrawn window (invisible until
+                                # manual TUI button). Preserve the chain memory.
                             except Exception:
                                 pass
 
@@ -347,6 +395,21 @@ class DalamudImmediateHandler:
                         )
                 except Exception as _pe:
                     self.logger.debug(f"[DISSOLVE-DBG] PRE-FLIGHT failed: {_pe}")
+            # >>> FLOWFIX_7: dialogue keep-alive — same placement rationale as the
+            # overlay pre-flight above (only when a translation thread is really
+            # about to run; cache hits display synchronously with no race window).
+            # Cancels the TUI's pending auto-fade/hide on the Tk thread NOW, so a
+            # 10s fade firing during the ~1s translation can't blank the dialog.
+            # REVERT: delete this elif branch + keep_alive_for_incoming in
+            # translated_ui.py.
+            elif chat_type == 61:
+                try:
+                    _ka_ui = getattr(self.main_app_ref, "translated_ui", None)
+                    if _ka_ui is not None and hasattr(_ka_ui, "keep_alive_for_incoming"):
+                        self.main_app_ref.safe_after(0, _ka_ui.keep_alive_for_incoming)
+                except Exception:
+                    pass
+            # <<< FLOWFIX_7
 
             def translate_and_show_immediately():
                 # Track whether _show_immediately was actually invoked — used in
@@ -412,8 +475,15 @@ class DalamudImmediateHandler:
                         self.logger.debug(f"[แปลผล] {translated_text[:80]}")
                         # <<< AUDIT_FIX_M1
 
+                    # >>> FLOWFIX_1: skip context-feed + cache-write for error results.
+                    # A transient error (network blip / trial-limit / tamper) must
+                    # NOT poison the line's cache for the session, nor leak into
+                    # future [Recent dialogue] context. It is still displayed below.
+                    # REVERT: drop the `if not _is_error_result(...)` guards (re-indent body).
+                    _is_error = _is_error_result(translated_text)
+
                     # 📝 CONVERSATION LOGGER: เติมคำแปลที่ได้
-                    if self.conversation_logger:
+                    if self.conversation_logger and not _is_error:
                         try:
                             self.conversation_logger.update_translation(
                                 message, translated_text
@@ -423,12 +493,14 @@ class DalamudImmediateHandler:
 
                     # >>> AUDIT_FIX_H2: cache write under lock, plus FIFO eviction with cap.
                     # REVERT: replace block with original 4-line dict insert + len-check
-                    with self._cache_lock:
-                        self.translation_cache[cache_key] = translated_text
-                        self.translation_cache.move_to_end(cache_key)
-                        while len(self.translation_cache) > self.cache_max_size:
-                            self.translation_cache.popitem(last=False)
+                    if not _is_error:
+                        with self._cache_lock:
+                            self.translation_cache[cache_key] = translated_text
+                            self.translation_cache.move_to_end(cache_key)
+                            while len(self.translation_cache) > self.cache_max_size:
+                                self.translation_cache.popitem(last=False)
                     # <<< AUDIT_FIX_H2
+                    # <<< FLOWFIX_1
 
                     self.stats['messages_translated'] += 1
 
@@ -437,8 +509,14 @@ class DalamudImmediateHandler:
                         # >>> AUDIT_FIX_M1: hot-path info → debug
                         self.logger.debug(f"[แสดงทันที] แสดงคำแปลทันที (ChatType {chat_type})!")
                         # <<< AUDIT_FIX_M1
-                        self._show_immediately(translated_text, chat_type)
-                        _translation_displayed = True  # pre-flight cleanup guard
+                        # >>> FLOWFIX_3: _translation_displayed = the RETURN VALUE, not
+                        # unconditional True — on a REAL display failure the finally
+                        # block must roll back _dissolve_active/_choice_overlay_active.
+                        # (Stale-skip returns True: the newer same-surface message owns
+                        # the armed flag — see _show_immediately docstring.)
+                        # REVERT: revert call to no-arg + set _translation_displayed = True.
+                        _translation_displayed = self._show_immediately(translated_text, chat_type, msg_seq)
+                        # <<< FLOWFIX_3
 
                         # *** ADD TO HISTORY: เพิ่มข้อความแปลจริงลงใน history สำหรับ Previous Dialog ***
                         if hasattr(self, 'main_app_ref') and self.main_app_ref:
@@ -526,9 +604,45 @@ class DalamudImmediateHandler:
             self.stats['errors'] += 1
             self.logger.error(f"Error processing message: {e}")
 
-    def _show_immediately(self, text: str, chat_type: int = None):
-        """แสดงข้อความทันทีใน UI โดย schedule ลง main thread"""
+    # >>> FLOWFIX_3: map a chat_type to its render surface. Ordering is enforced
+    # PER surface so a battle line and a dialog line (different surfaces) never
+    # suppress each other — only same-surface stale results are dropped.
+    @staticmethod
+    def _surface_group(chat_type):
+        if chat_type in (68, 71):
+            return "dissolve"
+        if chat_type == 70:
+            return "choice"
+        return "tui"
+    # <<< FLOWFIX_3
+
+    def _show_immediately(self, text: str, chat_type: int = None, msg_seq=None):
+        """แสดงข้อความทันทีใน UI โดย schedule ลง main thread
+
+        FLOWFIX_3: return value answers "is the pre-flight overlay flag in the
+        right state?" — True when displayed OR stale-skipped (the newer
+        same-surface message that superseded us owns the armed flag; rolling it
+        back would re-deiconify Tk under a live overlay = the v1.8.10 flash bug).
+        False only on a real display failure.
+        """
         try:
+            # >>> FLOWFIX_3: drop stale out-of-order results (same surface only).
+            # REVERT: remove this block + return True at the end + the msg_seq param.
+            if msg_seq is not None:
+                with self._cache_lock:
+                    group = self._surface_group(chat_type)
+                    last = self._last_shown_seq.get(group, 0)
+                    if msg_seq < last:
+                        self.logger.info(
+                            f"[SEQ-SKIP] stale result (seq {msg_seq} < {last}) not displayed"
+                        )
+                        # True (not False): nothing was shown, but the NEWER message
+                        # that set last_shown_seq has the overlay flag legitimately
+                        # armed — the finally-block must NOT roll it back.
+                        return True
+                    self._last_shown_seq[group] = msg_seq
+            # <<< FLOWFIX_3
+
             self.stats['immediate_displays'] += 1
             self.logger.info(f"[UI UPDATE] แสดงใน UI (ChatType {chat_type}): {text[:50]}...")
 
@@ -539,8 +653,11 @@ class DalamudImmediateHandler:
                 # Fallback: try direct call (will fail from bg thread with PyQt6)
                 self._do_show_on_main_thread(text, chat_type)
 
+            return True  # FLOWFIX_3
+
         except Exception as e:
             self.logger.error(f"[UI ERROR] ไม่สามารถแสดง UI: {e}")
+            return False  # FLOWFIX_3
 
     def _do_show_on_main_thread(self, text: str, chat_type: int = None):
         """Actual UI update logic - must run on main thread."""
@@ -585,6 +702,11 @@ class DalamudImmediateHandler:
         """Clear translation cache"""
         self.translation_cache.clear()
         self.translating_messages.clear()
+        # >>> FLOWFIX_3: reset per-surface ordering on cache clear (NOT _msg_seq,
+        # which is a monotonic arrival counter and must keep increasing).
+        # REVERT: remove this line.
+        self._last_shown_seq.clear()
+        # <<< FLOWFIX_3
         self.logger.info("Translation cache cleared")
 
     def force_clear_cache(self):

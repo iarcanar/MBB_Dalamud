@@ -2238,6 +2238,14 @@ class Translated_UI(FontObserver):
             tk_state = self.root.state() if self.root.winfo_exists() else "destroyed"
         except Exception:
             tk_state = "?"
+        # >>> FLOWFIX_8b: capture at ENTRY whether an overlay chain already owns
+        # the withdrawn root (before the choice-transfer block consumes
+        # _choice_overlay_active). Used below to stop the marking branch from
+        # clobbering the was-visible memory mid-chain.
+        # REVERT: remove this capture + restore the plain `elif not
+        # self._dissolve_active` marking branch below.
+        _chain_owned_root = self._dissolve_active or self._choice_overlay_active
+        # <<< FLOWFIX_8b
         logging.info(
             f"[DISSOLVE-DBG] route_to_overlay: mode={mode} chat_type={chat_type} "
             f"tk_state={tk_state} dissolve_active={self._dissolve_active} "
@@ -2314,10 +2322,20 @@ class Translated_UI(FontObserver):
                     self._tk_was_visible_before_dissolve = True
                     self.root.withdraw()
                     logging.info(f"[DISSOLVE-DBG] Tk root WITHDRAWN (was normal)")
-                elif not self._dissolve_active:
-                    # Already withdrawn — remember so we don't deiconify on exit
+                elif not self._dissolve_active and not _chain_owned_root:
+                    # Withdrawn by the USER (fade auto-hide / close) before any
+                    # overlay — remember so we don't deiconify on exit
                     self._tk_was_visible_before_dissolve = False
                     logging.info(f"[DISSOLVE-DBG] Tk root state={state}, marked tk_was_visible=False")
+                elif not self._dissolve_active:
+                    # FLOWFIX_8b: withdrawn by the overlay chain (e.g. cache-hit
+                    # battle right after choice — the transfer block above just
+                    # OR-ed choice's memory in). Old code clobbered it to False
+                    # here → dialogue never restored. Preserve the memory.
+                    logging.info(
+                        f"[DISSOLVE-DBG] Tk root state={state}, chain-owned — "
+                        f"preserving tk_was_visible={self._tk_was_visible_before_dissolve}"
+                    )
                 else:
                     logging.info(f"[DISSOLVE-DBG] Tk withdraw skipped: dissolve_active=True")
         except Exception as e:
@@ -2396,6 +2414,10 @@ class Translated_UI(FontObserver):
             tk_state = self.root.state() if self.root.winfo_exists() else "destroyed"
         except Exception:
             tk_state = "?"
+        # >>> FLOWFIX_8c: same chain-ownership capture as _route_to_dissolve_overlay
+        # (see FLOWFIX_8b) — used by the marking branch below.
+        _chain_owned_root = self._dissolve_active or self._choice_overlay_active
+        # <<< FLOWFIX_8c
         logging.info(
             f"[CHOICE-DBG] route_to_choice: tk_state={tk_state} "
             f"choice_active={self._choice_overlay_active} "
@@ -2440,13 +2462,27 @@ class Translated_UI(FontObserver):
         try:
             if self.root.winfo_exists():
                 state = self.root.state()
-                if state == "normal" and not self._choice_overlay_active:
+                # FLOWFIX_8c: withdraw whenever the root is visible — even when
+                # _choice_overlay_active was already armed by the handler
+                # pre-flight. During a dissolve→choice transition the dispatcher's
+                # _exit_dissolve_overlay deiconifies the root AFTER the pre-flight
+                # withdraw ran; the old `not self._choice_overlay_active` guard
+                # then skipped the re-withdraw and left the Tk root visible
+                # underneath the choice overlay.
+                if state == "normal":
                     self._tk_was_visible_before_choice = True
                     self.root.withdraw()
                     logging.info("[CHOICE-DBG] Tk root WITHDRAWN")
-                elif not self._choice_overlay_active:
+                elif not self._choice_overlay_active and not _chain_owned_root:
+                    # Withdrawn by the USER before any overlay — don't restore on exit
                     self._tk_was_visible_before_choice = False
                     logging.info(f"[CHOICE-DBG] Tk root state={state}, tk_was_visible=False")
+                else:
+                    # FLOWFIX_8c: withdrawn by the overlay chain — preserve memory
+                    logging.info(
+                        f"[CHOICE-DBG] Tk root state={state}, chain-owned — "
+                        f"preserving tk_was_visible={self._tk_was_visible_before_choice}"
+                    )
         except Exception as e:
             logging.debug(f"hide tk root for choice overlay failed: {e}")
 
@@ -6698,12 +6734,75 @@ class Translated_UI(FontObserver):
         except Exception as e:
             logging.error(f"Error clearing displayed text: {e}")
 
+    # >>> FLOWFIX_7: keep-alive at translation START (not display time).
+    # The existing FADE-RACE FIX in update_text cancels fade/hide timers only
+    # when the translation DISPLAYS (~1s after the message arrives). If the
+    # 10s auto-fade/hide fires DURING that translation window, the TUI fades
+    # or withdraws and only reappears when update_text restores it — the
+    # "dialog vanishes for a moment" symptom. The handler schedules this on
+    # the Tk thread the moment a dialogue (ChatType 61) translation thread
+    # starts, closing the window.
+    # REVERT: delete this method + its call in dalamud_immediate_handler
+    # process_message (chat_type == 61 keep-alive branch).
+    def keep_alive_for_incoming(self):
+        """Cancel pending fade/hide + bump activity — a translation is in
+        flight. Does NOT deiconify a hidden window (the auto-show setting
+        gate stays in MBB._trigger_tui_auto_show / the display path)."""
+        try:
+            if not self.root.winfo_exists():
+                return
+            if self.state.fade_timer_id:
+                try:
+                    self.root.after_cancel(self.state.fade_timer_id)
+                except Exception:
+                    pass
+                self.state.fade_timer_id = None
+            if self.state.window_hide_timer_id:
+                try:
+                    self.root.after_cancel(self.state.window_hide_timer_id)
+                except Exception:
+                    pass
+                self.state.window_hide_timer_id = None
+            was_fading = self.state.is_fading
+            self.state.is_fading = False
+            self.state.last_activity_time = time.time()
+            # Mid-fade with the window still visible → snap alpha back so the
+            # user doesn't watch it dim while the translation is in flight.
+            if was_fading and self.root.state() == "normal":
+                self.restore_user_transparency()
+            logging.debug("[KEEP-ALIVE] fade/hide timers cancelled (translation in flight)")
+        except Exception as e:
+            logging.debug(f"[KEEP-ALIVE] failed: {e}")
+    # <<< FLOWFIX_7
+
     def show_tui_on_new_translation(self):
         """แสดง TUI เมื่อมีการแปลใหม่"""
         try:
-            if self.state.is_window_hidden:
+            # >>> FLOWFIX_8d: safety net — check the REAL window state, not just
+            # the flag. The overlay pre-flight withdraws the root WITHOUT setting
+            # is_window_hidden — if the was-visible chain ever loses track (any
+            # future bookkeeping bug), the flag says "visible" while the window
+            # is actually withdrawn and dialogue renders invisibly.
+            # GATED so it never fights the overlays: only force-show for a
+            # non-overlay message (choice/battle/cutscene types pass through
+            # here before routing) and only when no overlay chain is active.
+            # REVERT: restore `if self.state.is_window_hidden:` only.
+            try:
+                _root_withdrawn = self.root.state() != "normal"
+            except Exception:
+                _root_withdrawn = False
+            _force_show = (
+                _root_withdrawn
+                and not self._dissolve_active
+                and not self._choice_overlay_active
+                and getattr(self, "_current_chat_type", 61) not in (68, 70, 71)
+            )
+            if _force_show:
+                logging.info("[FLOWFIX_8d] root withdrawn with stale flags — force deiconify")
+            if self.state.is_window_hidden or _force_show:
                 self.root.deiconify()  # แสดงหน้าต่าง
                 self.state.is_window_hidden = False
+            # <<< FLOWFIX_8d
 
             # คืนค่าความโปร่งใสของ TUI ทุกครั้ง (fix: opacity ผิดหลัง fade)
             try:

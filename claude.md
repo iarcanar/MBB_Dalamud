@@ -1,6 +1,6 @@
 # MBB Dalamud — Project Reference
 
-**Version:** 1.8.18 · **Build:** 04032026-01
+**Version:** 1.8.19 · **Build:** 04032026-02
 **Framework:** Dalamud Plugin (C#) + Python (PyQt6 + Tkinter hybrid) + Gemini API
 **Developed by:** iarcanar · **License:** MIT
 
@@ -113,6 +113,23 @@ TranslatedLogs (PyQt6) — history
 | 27, 3 (player chat) | Filtered out | — |
 
 **Choice routing detail:** real game choices arrive as `Type="choice"` + `ChatType=70` with pipe-separated body (`"What will you say? | Choice1 | Choice2"`). The handler ([dalamud_immediate_handler.py:363-370](python-app/dalamud_immediate_handler.py#L363-L370)) detects `Type=="choice"` and calls `translate_choice()` which converts pipes → newlines + bullet prefixes BEFORE Gemini, preserving format through translation. Output reaches `translated_ui.update_text` with `chat_type=70`; dispatcher routes to `_route_to_choice_overlay`. **Tk Canvas `_handle_choice_text` is kept as fallback** if `self.choice_overlay is None` (creation failed in MBB.py).
+
+## Pipeline Hardening (v1.8.19 — FLOWFIX_1-8)
+
+Full pipeline audit batch, 2026-06-10. Every change carries a `FLOWFIX_n` marker comment with a REVERT note — `grep -rn FLOWFIX_` to locate all sites. Details live in each subsystem's section; this is the index:
+
+| # | Fix | Where |
+|---|-----|-------|
+| 1 | Error results ("⚠…") are NOT cached and NOT fed into wide-context — a transient API blip no longer poisons a line for the whole session, nor leaks error text into future prompts. Still displayed. | `dalamud_immediate_handler.py` |
+| 2 | `translate_choice()` API calls (block + per-choice fallback) get `timeout=30` + full generation/safety config — a hung choice request was leaking its thread AND the pre-flight `_choice_overlay_active` flag (TUI hidden forever). | `translator_gemini.py` |
+| 3 | Per-surface display ordering: monotonic `_msg_seq` per arrival; a slow OLD result completing after a NEWER one is dropped (`[SEQ-SKIP]` log) instead of overwriting it. Surfaces tracked separately (tui / dissolve / choice) so cross-surface lines never suppress each other. Stale-skip returns True (the newer message owns the overlay flag — rolling back would re-trigger the v1.8.10 flash bug). | `dalamud_immediate_handler.py` |
+| 4 | C#: `OnChatMessage` allowlist {61,68,71,70} · queue cap 200 (drop-oldest) · sliding dedup window · hot-path logs demoted | `DalamudMBBBridge.cs` |
+| 5 | C#: `OnSelectIconStringAddon` ChatType `0x0047`→`0x0046` (icon choices were landing on the cutscene overlay) | `DalamudMBBBridge.cs` |
+| 6 | Battle overlay position FORCED every show: x centered, y = 15% screen height (heals stale saved positions) | `pyqt_ui/dissolve_overlay.py` |
+| 7 | Dialogue keep-alive at translation START — closes the ~1s window where auto-fade/hide blanked the TUI mid-translation | handler + `translated_ui.py` |
+| 8 | Overlay chain-memory (`_tk_was_visible_before_*`) preservation, 4 guards (8a-d) — rapid mode switching no longer leaves the dialog TUI invisible | handler + `translated_ui.py` |
+
+**Deferred from the same audit** (quality-path, need dedicated translation testing): retry doesn't raise `max_output_tokens` on truncation · API-fallback path skips name-restoration layers · nested-bracket marking (`[[Y'shtola] Rhul]`) when first+full names both match · WMI process-check on the ImGui draw thread.
 
 ---
 
@@ -325,7 +342,7 @@ Methods: `start_resize()` → `on_resize()` → `stop_resize()`. Bindings live O
 | Mode | Default x | Default y |
 |------|-----------|-----------|
 | Dialog | center (`(sw − w) / 2`) | `round(sh × 0.707)` (70.7% from top) |
-| Battle | center | `80` (fixed px, near top — set in `dissolve_overlay.py`) |
+| Battle | center (**forced** every show) | `round(sh × 0.15)` (**forced** every show — FLOWFIX_6 v1.8.19, see DissolveOverlay section) |
 | Cutscene | center | `sh − h − max(80, sh/20)` (near bottom) |
 | Choice | center | `round(sh × 0.601)` (60.1% from top — **absolute**, was relative-to-dialog before v1.8.14) |
 
@@ -381,6 +398,12 @@ Rationale: FFXIV cutscene prose can be very long; an 1100-1400px panel truncates
 
 Saved height + y-position are preserved (user-tunable). Width override means user-resize during a session works visually but resets to 90% on next mode show. Acceptable for cutscene which is event-driven + auto-hides after 10s anyway.
 
+## Battle Position — forced top 15% (v1.8.19, FLOWFIX_6)
+
+`show_for_mode("battle")` **overrides** saved `tui_positions["battle"]` every show: `x` centered, `y = geo.y() + int(screen_h × BATTLE_TOP_FRACTION)` (= 0.15). Saved **size** stays user-tunable.
+
+Rationale: a stale/corrupted saved position (real incident — battle saved at screen-center by an old spurious save) silently overrode the sensible near-top default, which only applied when NO saved value existed. Forcing on every show self-heals bad saved values and scales across resolutions. Same pattern as the cutscene width force above.
+
 ## Auto-Hide
 
 `set_text()` restarts a 10s `QTimer` (`AUTO_HIDE_MS`). On timeout, fade-out via `QPropertyAnimation(windowOpacity)` 500ms → `hide()`.
@@ -417,6 +440,13 @@ Saved height + y-position are preserved (user-tunable). Width override means use
 **Placement notes:** pre-flight must be AFTER all early returns (cache hit calls `_show_immediately` synchronously; "already translating" defers to the in-flight thread). Pre-flighting before those would leak `_dissolve_active=True` without a thread to clean up.
 
 **v1.8.18 — extended to choice (ChatType 70):** the pre-flight block is now generalized over `{68, 71, 70}`. For 70 it arms `_choice_overlay_active` (not `_dissolve_active`) and the withdraw callback sets `_tk_was_visible_before_choice` (the choice overlay's own restore flag — distinct from dissolve's `_tk_was_visible_before_dissolve`); the `finally` cleanup resets whichever flag was armed via a `_preflight_flag` variable. Without it the first choice flashed stale dialogue for ~1s exactly like battle/cutscene did pre-v1.8.10. 68/71 behaviour is byte-identical to before.
+
+**v1.8.19 — chain-memory rule (FLOWFIX_8) — CRITICAL:** `_tk_was_visible_before_*` is the ONLY memory deciding whether the Tk root comes back when overlays exit. **Never write `False` to it while another overlay already owns the withdrawn root.** Real incident: rapid battle→cutscene→choice switching — each later pre-flight saw the root "already withdrawn" (hidden by the PREVIOUS overlay) and clobbered the memory to False → the next dialogue rendered into a withdrawn window (invisible until manual TUI button). Four guards now enforce this (all marked `FLOWFIX_8a-d`, grep-able):
+- **8a** handler pre-flight: captures `_overlay_was_active` BEFORE arming its flag; the withdraw callback writes `False` only when NO chain was active (root hidden by the user, not by an overlay).
+- **8b/8c** both dispatcher routes capture `_chain_owned_root` at entry; their "already withdrawn → mark False" branches preserve the memory when chain-owned. 8c also re-withdraws when the root is `normal` even if `_choice_overlay_active` was pre-armed (dissolve→choice transition: `_exit_dissolve_overlay` deiconifies AFTER the pre-flight withdraw ran).
+- **8d** safety net in `show_tui_on_new_translation`: deiconifies on REAL window state (`root.state() != "normal"`), not just `is_window_hidden` — gated to fire only for non-overlay messages with no overlay active (choice/battle/cutscene types pass through it before routing).
+
+**v1.8.19 — dialogue keep-alive (FLOWFIX_7):** the TUI's 3-layer fade-race defense cancels timers at DISPLAY time (`update_text`) — leaving the ~1s translation window unprotected: a 10s auto-fade/hide firing mid-translation blanked the dialog until the result arrived ("dialog vanishes for a moment"). The handler now schedules `translated_ui.keep_alive_for_incoming()` on the Tk thread the moment a ChatType-61 translation thread starts (same placement as the overlay pre-flight — only when a thread will actually run; cache hits have no race window). It cancels fade/hide timers + bumps activity + restores alpha if mid-fade, but never deiconifies a hidden window (auto-show gate stays in MBB).
 
 ## First-Show HWND Race — Fix (v1.8.10)
 
@@ -939,7 +969,7 @@ For real community release. `UsageTracker` auto-selects a backend:
 
 **`api_key_manager.py` refactor:** key logic extracted to module fns `get_current_key()` / `mask_key()` / `validate_format()` / `save_key()` — shared by both the startup `APIKeyDialog` and the inline editor (no dup). **`validate_format` relaxed**: Google issues non-`AIza` keys too (e.g. `AQ.…`); the old strict `AIza`-prefix check would reject valid newer keys (and falsely red-dot a working key). Now: non-empty, no whitespace, ≥20 chars. **`save_key` is atomic + non-destructive**: it preserves any other lines in `.env` (replaces only the `GEMINI_API_KEY` line, collapses duplicates) and writes via temp+`os.replace` so a mid-write crash can't truncate `.env`. The raw key is never logged — only `mask_key()` output is shown.
 
-**Dead code:** `model.py` (Tkinter `ModelSettings`) is unused — not imported anywhere. Flag for deletion; don't edit.
+**Dead code purge (v1.8.19):** `model.py` (Tkinter `ModelSettings`), legacy Tkinter `translated_logs.py`, `api_manager.py`, `translation_logger.py` deleted (zero imports, verified) + their `mbb.spec` hiddenimports lines removed. Recover from git history if ever needed.
 
 **Threat coverage (honest, from the 2026-06-04 security audit):** defeats casual resets — notepad/settings.json edits, deleting or write-blocking ONE store (the other heals), copying another machine's file (machine-bound key → fails closed). Does NOT defeat — restoring BOTH stores from an early backup, deleting BOTH (→ fresh reset), write-blocking BOTH (counter can't persist), or binary RE of the embedded secret. These are accepted at medium tier; closing them needs Phase 3 = server-side grant. Build: `cryptography` in requirements + `mbb.spec` hiddenimports; embedded secret XOR-obfuscated in `secure_usage_store.py` (`_S1`/`_S2`) — regenerate per public build if desired.
 
@@ -1178,11 +1208,10 @@ Ordered cheap → premium so budget users pick the top option, quality seekers s
 
 **Why `gemini-3.1-flash-lite` is default (not the cheapest):** user benchmarked all three on FFXIV cutscenes 2026-05-20. 3.1 Flash-Lite scored noticeably higher on translation quality + character voice consistency than 2.5 Flash-Lite, and was *faster* than `gemini-3.5-flash` (which over-reasoned and produced flatter Thai). Cost is 2.5× the cheapest — but absolute cost stays under $1/day for heavy 6-hour sessions, and 3.1 has a 7-month-longer deprecation runway. The cheaper 2.5 family will need re-migration before October 2026 anyway, so anchoring the default to 3.1 saves a future round-trip.
 
-**5 files to update when changing the model list:**
+**4 files to update when changing the model list** (was 5 — `model.py` deleted v1.8.19):
 - `settings.py` (`VALID_MODELS` + 5 default-string sites incl. `get_displayed_model` / `get_api_parameters` / build-config block)
 - `pyqt_ui/model_panel.py` (`AVAILABLE_MODELS` + `_load_current` fallback + `_reset_defaults`)
 - `translator_gemini.py` (default `self.model_name` 3 sites + `valid_models` list in `set_api_parameters`)
-- `model.py` (legacy Tkinter `model_var` default + combobox values + `_load_current` fallback)
 - `appearance.py` (legacy combobox in `create_api_parameter_form`)
 
 **Fallback for users on old saved settings:** [settings.py:1027-1033](python-app/settings.py#L1027-L1033) `get_api_parameters` validates `saved_model` against `VALID_MODELS` and falls back to `DEFAULT_API_PARAMETERS["model"]` with a warning log. Means upgrading users who had `gemini-3.1-flash-lite-preview` saved will silently snap to `gemini-2.5-flash-lite` on next launch — no manual migration required.
@@ -1321,6 +1350,13 @@ Single-file Dalamud plugin (1,137 lines after v1.8.13 dead-code cleanup, down fr
 | `OnCutSceneSelectStringAddon` | `CutSceneSelectString`, `_CutSceneSelectString` | PostSetup + PostRefresh | 0x0045/0x0046 (cutscene choices like "Skip cutscene?") |
 
 Removed in v1.8.13 (dead code): `OnCutsceneDiagnostic`, `OnCutsceneAddonTest` + 2 extract helpers, `OnCutsceneAddon` (legacy), `OnChoiceAddon`, `OnChoiceAddonOld`, `OnIconChoiceAddon`, `OnUniversalAddonEvent`, `OnUniversalAddonDetector`, two `potentialCutsceneAddons` 12-element arrays with 48 spurious registrations. Don't reintroduce these — they were exploratory scaffolding that became log spam in production.
+
+## v1.8.19 hardening (FLOWFIX_4/5 — C# side)
+
+- **`OnChatMessage` is now ALLOWLIST-based**: `AllowedChatTypes = {61, 68, 71, 70}` (static readonly), everything else dropped at source. Replaced the old ~70-entry denylist `HashSet` that was rebuilt on EVERY message and leaked emotes/FC/system chat to Python. Enforces the project hard rule "capture only what MBB renders". Talk (0x003D) still excluded inside (handled by the Talk addon hook).
+- **Queue cap**: `EnqueueHookData()` wraps all 9 enqueue sites — drops oldest past `MaxQueuedMessages = 200`. The queue only drains while the pipe is connected; uncapped it grew for hours and blasted the whole stale backlog at Python on connect.
+- **Sliding dedup window**: `IsUniqueMessage` refreshes the stored timestamp when it BLOCKS a duplicate — a persistently re-firing addon (SelectString PreRefresh while the user hovers choices >4s) no longer re-sends the same choice every ~4s. Its per-call `Log.Info` lines demoted to `Log.Debug` (framework-thread I/O during combat spam).
+- **`OnSelectIconStringAddon` ChatType fixed `0x0047`→`0x0046`** (FLOWFIX_5) — icon choices were mis-routed to the cutscene DissolveOverlay instead of ChoiceOverlay.
 
 ## TalkSubtitle (cutscene) — Echoglossian pattern (v1.8.12)
 
