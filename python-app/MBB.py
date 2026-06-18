@@ -3235,7 +3235,10 @@ class MagicBabelApp:
             self.bottom_bar.set_toggle_state("mini", False)
 
     def create_translated_ui(self):
-        self.translated_ui_window = tk.Toplevel(self.root)
+        # Dialogue TUI backend: PyQt6 (TranslatedUIQt) when the flag/env is set,
+        # otherwise the legacy Tkinter Translated_UI (default — safe revert).
+        _use_qt_dialogue = (os.environ.get("MBB_QT_DIALOGUE") == "1"
+                            or bool(self.settings.get("use_qt_dialogue", False)))
 
         # *** ปรับปรุงส่วนนี้ทั้งหมด ***
 
@@ -3259,23 +3262,36 @@ class MagicBabelApp:
         ):
             font_settings = self.font_manager.font_settings
 
-        # 4. สร้าง instance ของ Translated_UI (v9) ด้วยพารามิเตอร์ที่ครบถ้วน
-        self.translated_ui = translated_ui.Translated_UI(
-            self.translated_ui_window,
+        # 4. สร้าง instance ของ Translated_UI — Qt (flag on) หรือ Tk (default)
+        _ui_args = (
             self.toggle_translation,
             self.stop_translation,
-            None,  # 🚫 DISABLED: Force translate disabled to prevent duplicate translation
+            None,  # 🚫 DISABLED: Force translate disabled (duplicate translation)
             self.toggle_main_ui,
             self.toggle_ui,
             self.settings,
             self.switch_area,
             self.logging_manager,
-            character_names=character_names,
-            main_app=self,  # ส่ง self (MagicBabelApp) เข้าไป
-            font_settings=font_settings,  # ส่ง font_settings เข้าไป
-            toggle_npc_manager_callback=toggle_npc_manager_cb,  # ส่ง callback 1
-            on_close_callback=on_close_cb,  # ส่ง callback 2
         )
+        _ui_kwargs = dict(
+            character_names=character_names,
+            main_app=self,
+            font_settings=font_settings,
+            toggle_npc_manager_callback=toggle_npc_manager_cb,
+            on_close_callback=on_close_cb,
+        )
+        if _use_qt_dialogue:
+            # The Qt widget is its own window (root arg ignored). Point
+            # translated_ui_window at its TkWindowShim so MBB's direct Tk-style
+            # calls (deiconify/withdraw/geometry/state/...) keep working.
+            from pyqt_ui.translated_ui_qt import TranslatedUIQt
+            self.translated_ui = TranslatedUIQt(None, *_ui_args, **_ui_kwargs)
+            self.translated_ui_window = self.translated_ui.root
+            self.logging_manager.log_info("[TUI] PyQt6 dialogue (TranslatedUIQt) active")
+        else:
+            self.translated_ui_window = tk.Toplevel(self.root)
+            self.translated_ui = translated_ui.Translated_UI(
+                self.translated_ui_window, *_ui_args, **_ui_kwargs)
 
         # *** PREVIOUS DIALOG: ตั้งค่า callback สำหรับ Previous Dialog System ***
         if hasattr(self.translated_ui, 'previous_dialog_callback'):

@@ -507,11 +507,14 @@ class TranslatedUIQt(QWidget):
             self._rail[key] = btn
 
     def _on_log(self):
-        if callable(self.toggle_ui):
-            try:
-                self.toggle_ui()
-            except Exception:
-                pass
+        # Open the Translated Logs — NOT toggle_ui (that swaps Main/Mini UI).
+        try:
+            if self.main_app and hasattr(self.main_app, "toggle_translated_logs"):
+                self.main_app.toggle_translated_logs()
+            else:
+                log.warning("[TUIQT log btn] main_app.toggle_translated_logs unavailable")
+        except Exception as e:
+            log.error(f"[TUIQT log btn] toggle failed: {e}")
 
     def _on_lock(self):
         # Cycle lock_mode 0→1→2→0 (circular):
@@ -530,14 +533,20 @@ class TranslatedUIQt(QWidget):
 
     def _on_fadeout(self):
         self._fade_enabled = not self._fade_enabled
+        log.info(f"[TUIQT] fadeout toggled → enabled={self._fade_enabled} "
+                 f"(visible={self.isVisible()})")
         if not self._fade_enabled:
             self._autohide_timer.stop()
             if self._fade_anim.state() == QAbstractAnimation.State.Running:
                 self._fade_anim.stop()
             if self.windowOpacity() < 1.0:
                 self.setWindowOpacity(1.0)
+            self.show_feedback_message("ปิดซ่อนข้อความอัตโนมัติ",
+                                       bg_color="#c62828", font_size=11, duration=1600)
         else:
             self._restart_autohide()
+            self.show_feedback_message("เปิดซ่อนข้อความอัตโนมัติ (10 วิ)",
+                                       bg_color="#2e7d32", font_size=11, duration=1600)
         btn = self._rail.get("fadeout")
         if btn:
             btn.setToolTip("ซ่อนข้อความอัตโนมัติ: เปิด" if self._fade_enabled
@@ -555,10 +564,14 @@ class TranslatedUIQt(QWidget):
 
     def _begin_fade(self):
         if not self.isVisible() or not self._fade_enabled:
+            log.info(f"[TUIQT] auto-hide tick skipped "
+                     f"(visible={self.isVisible()} enabled={self._fade_enabled})")
             return
         if self._cursor_inside:            # don't fade under the user's cursor
+            log.info("[TUIQT] auto-hide deferred (cursor inside) — retry in 10s")
             self._autohide_timer.start()
             return
+        log.info("[TUIQT] auto-hide START fade-out")
         self._fade_anim.stop()
         self._fade_anim.setStartValue(self.windowOpacity())
         self._fade_anim.setEndValue(0.0)
@@ -566,6 +579,7 @@ class TranslatedUIQt(QWidget):
 
     def _on_fade_finished(self):
         if self.windowOpacity() <= 0.05 and self.isVisible():
+            log.info("[TUIQT] auto-hide COMPLETE → hide()")
             self.hide()
             self.setWindowOpacity(1.0)
             self.state.is_window_hidden = True
@@ -1037,7 +1051,27 @@ class TranslatedUIQt(QWidget):
 
     def show_feedback_message(self, message, bg_color="#C62828", x_offset=10,
                               y_offset=10, duration=800, font_size=10):
-        pass  # P3: toast widget
+        try:
+            if getattr(self, "_toast", None) is None:
+                self._toast = QLabel(self)
+                self._toast.setAttribute(
+                    Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+                self._toast_timer = QTimer(self)
+                self._toast_timer.setSingleShot(True)
+                self._toast_timer.timeout.connect(
+                    lambda: self._toast.setVisible(False))
+            self._toast.setStyleSheet(
+                f"background:{bg_color};color:#ffffff;border-radius:6px;"
+                f"padding:5px 10px;font:600 {font_size}pt 'Segoe UI';")
+            self._toast.setText(message)
+            self._toast.adjustSize()
+            tx = max(4, (self.width() - self._toast.width()) // 2)
+            self._toast.move(tx, max(4, y_offset))
+            self._toast.setVisible(True)
+            self._toast.raise_()
+            self._toast_timer.start(int(duration))
+        except Exception as e:
+            log.debug(f"toast failed: {e}")
 
     def force_check_overflow(self):
         pass  # P2: overflow arrow
