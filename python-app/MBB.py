@@ -53,7 +53,7 @@ from translator_gemini import TranslatorGemini
 from settings import Settings
 from pyqt_ui.settings_panel import SettingsPanel
 # advance_ui import removed 2026-04-25 — AdvanceUI never instantiated (OCR-era).
-from mini_ui import MiniUI
+from mini_ui_qt import MiniUI  # PyQt6 Mini UI (revert: `from mini_ui import MiniUI`)
 from loggings import LoggingManager
 # DISABLED - Rainbow progress bar causes tkinter errors
 from translator_factory import TranslatorFactory
@@ -1593,7 +1593,7 @@ class MagicBabelApp:
             # so the user doesn't see the mini UI "bounce" to default
             # position when changing theme while in mini mode.
             try:
-                from mini_ui import _refresh_mini_theme
+                from mini_ui_qt import _refresh_mini_theme
                 _refresh_mini_theme()
                 if hasattr(self, "mini_ui") and self.mini_ui:
                     try:
