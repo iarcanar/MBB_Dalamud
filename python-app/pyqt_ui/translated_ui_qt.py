@@ -397,7 +397,7 @@ class TranslatedUIQt(QWidget):
         self._restore_geometry()
         self._reposition_chrome()
 
-        self._text_update.connect(self._apply_text)
+        self._text_update.connect(self._dispatch)
 
         # the shim MBB.py / overlays call Tk methods on
         self.root = TkWindowShim(self)
@@ -926,7 +926,7 @@ class TranslatedUIQt(QWidget):
         # P4 will route 68/71/70 to the overlays here. P1 = dialogue only.
         self._text_update.emit(str(text or ""), bool(is_lore_text), int(chat_type))
 
-    def _apply_text(self, text, is_lore, chat_type):
+    def _render_dialogue(self, text, is_lore, chat_type):
         self._is_lore = is_lore
         # Speaker is "Name: body" (Tk fast-path split on ": "). Strip rich-text
         # markers + zero-width chars from the name (matches translated_ui).
@@ -1049,11 +1049,154 @@ class TranslatedUIQt(QWidget):
         if callable(self.toggle_translation):
             self.toggle_translation()
 
+    # ════════════════════════════════════════════════════════════════
+    # Dispatcher + mode-switch coordination — ports translated_ui's
+    # update_text routing + FLOWFIX_8 chain-memory. self.hide()/show()
+    # replace Tk root.withdraw()/deiconify(); the overlays are the SAME
+    # PyQt6 widgets MBB wires into .dissolve_overlay / .choice_overlay.
+    # ════════════════════════════════════════════════════════════════
+    def _dispatch(self, text, is_lore, chat_type):
+        self._current_chat_type = chat_type
+        # Battle (68) / Cutscene (71) → dissolve overlay
+        if self.dissolve_overlay is not None and chat_type in (68, 71):
+            try:
+                self._route_to_dissolve_overlay(text, chat_type, is_lore)
+                return
+            except Exception as e:
+                log.error(f"dissolve dispatch failed → dialogue: {e}", exc_info=True)
+        elif self._dissolve_active and chat_type not in (68, 71):
+            try:
+                self._exit_dissolve_overlay()
+            except Exception as e:
+                log.error(f"exit dissolve failed: {e}")
+        # Choice (chat_type 70 or pipe-detected) → choice overlay
+        is_choice = (chat_type == 70) or self._is_choice_dialogue(text)
+        if self.choice_overlay is not None and is_choice:
+            try:
+                self._route_to_choice_overlay(text)
+                return
+            except Exception as e:
+                log.error(f"choice dispatch failed → dialogue: {e}", exc_info=True)
+        elif self._choice_overlay_active and not is_choice:
+            try:
+                self._exit_choice_overlay()
+            except Exception as e:
+                log.error(f"exit choice failed: {e}")
+        # Dialogue (61 / fallback)
+        self._render_dialogue(text, is_lore, chat_type)
+
+    def _split_speaker_dialogue(self, text):
+        """(speaker, dialogue) for the overlays — mirrors translated_ui."""
+        if not text:
+            return "", ""
+        t = text.strip()
+        if ":" in t:
+            head, tail = t.split(":", 1)
+            for junk in ("**", "*", "​", "‌", "‍", "﻿"):
+                head = head.replace(junk, "")
+            head = head.strip()
+            if head and len(head) <= 40 and "\n" not in head:
+                return head, tail.strip()
+        return "", t
+
+    def _is_choice_dialogue(self, text):
+        if " | " in (text or ""):
+            parts = text.split(" | ")
+            if len(parts) >= 2:
+                first = parts[0].strip().lower()
+                if "what will you say" in first:
+                    return True
+                if "คุณจะพูดว่าอย่างไร" in first or "คุณจะพูด" in first:
+                    return True
+        return False
+
+    def _stop_dialogue_timers(self):
+        for t in (self._type_timer, self._autohide_timer, self._save_timer):
+            try:
+                if t.isActive():
+                    t.stop()
+            except Exception:
+                pass
+        try:
+            if self._fade_anim.state() == QAbstractAnimation.State.Running:
+                self._fade_anim.stop()
+        except Exception:
+            pass
+        self._typing = False
+        if self.windowOpacity() < 1.0:
+            self.setWindowOpacity(1.0)
+
+    def _route_to_dissolve_overlay(self, text, chat_type, is_lore=False):
+        mode = "battle" if chat_type == 68 else "cutscene"
+        chain_owned = self._dissolve_active or self._choice_overlay_active
+        # choice → dissolve transition: hide choice + transfer was-visible memory
+        if self._choice_overlay_active:
+            try:
+                if self.choice_overlay is not None:
+                    self.choice_overlay.hide_overlay()
+            except Exception:
+                pass
+            self._choice_overlay_active = False
+            self._tk_was_visible_before_dissolve = (
+                self._tk_was_visible_before_dissolve
+                or self._tk_was_visible_before_choice)
+            self._tk_was_visible_before_choice = False
+        self._stop_dialogue_timers()
+        # FLOWFIX_8b chain-memory: only write False when no chain owns the hide.
+        if self.isVisible() and not self._dissolve_active:
+            self._tk_was_visible_before_dissolve = True
+            self.hide()
+        elif not self._dissolve_active and not chain_owned:
+            self._tk_was_visible_before_dissolve = False
+        # else (dissolve_active OR chain-owned) → preserve the memory
+        speaker, dialogue = self._split_speaker_dialogue(text)
+        cur = getattr(self.dissolve_overlay, "_current_mode", None)
+        if (not self.dissolve_overlay.isVisible()) or cur != mode:
+            self.dissolve_overlay.show_for_mode(mode)
+        self.dissolve_overlay.set_text(dialogue, speaker=speaker, is_lore=is_lore)
+        self._dissolve_active = True
+
     def _exit_dissolve_overlay(self):
-        pass  # P4
+        try:
+            if self.dissolve_overlay is not None:
+                self.dissolve_overlay.hide_overlay()
+        except Exception:
+            pass
+        if self._tk_was_visible_before_dissolve:
+            self.show()
+            self.raise_()
+        self._dissolve_active = False
+        self._tk_was_visible_before_dissolve = False
+
+    def _route_to_choice_overlay(self, text):
+        from pyqt_ui.choice_parser import parse_choice_text
+        chain_owned = self._dissolve_active or self._choice_overlay_active
+        header, choices = parse_choice_text(text)
+        if not choices:
+            raise RuntimeError("empty choices — caller falls back to dialogue")
+        self._stop_dialogue_timers()
+        # FLOWFIX_8c: withdraw whenever visible (even if pre-armed); only write
+        # False when no chain owns the hide.
+        if self.isVisible():
+            self._tk_was_visible_before_choice = True
+            self.hide()
+        elif not self._choice_overlay_active and not chain_owned:
+            self._tk_was_visible_before_choice = False
+        # else preserve
+        self.choice_overlay.show_choice(header, choices)
+        self._choice_overlay_active = True
 
     def _exit_choice_overlay(self):
-        pass  # P4
+        try:
+            if self.choice_overlay is not None:
+                self.choice_overlay.hide_overlay()
+        except Exception:
+            pass
+        if self._tk_was_visible_before_choice:
+            self.show()
+            self.raise_()
+        self._choice_overlay_active = False
+        self._tk_was_visible_before_choice = False
 
     # ── demo helpers ──
     def set_speaker(self, name):
