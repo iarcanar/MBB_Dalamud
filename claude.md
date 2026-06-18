@@ -211,7 +211,80 @@ Shadow: blur 24→16, alpha 160→60 (when glass on).
 
 ---
 
-# Mini UI — `mini_ui.py`
+# PyQt6 TUI Migration (Mini UI + Dialogue) — 2026-06-18
+
+Mini UI and the dialogue TUI were rewritten Tkinter → PyQt6 (the dialogue's whole
+point: a **feathered/diffuse background** — Tk's 1-bit `transparentcolor` can't do
+per-pixel alpha). New files:
+
+| File | Role |
+|------|------|
+| `mini_ui_qt.py` | PyQt6 Mini UI — **default-on, in-place** (MBB.py imports it; Tk `mini_ui.py` kept only for git-revert) |
+| `pyqt_ui/translated_ui_qt.py` | PyQt6 dialogue TUI (`TranslatedUIQt`) — **opt-in behind a feature flag**; Tk `translated_ui.py` stays the default |
+| `pyqt_ui/tk_compat.py` | `TkWindowShim` — a Tk-method shim over a QWidget, shared by both |
+
+## Feature flag — dialogue backend
+MBB.py construction (~line 3263) branches on:
+```python
+_use_qt_dialogue = (os.environ.get("MBB_QT_DIALOGUE") == "1"
+                    or bool(self.settings.get("use_qt_dialogue", False)))
+```
+- **OFF (default):** legacy Tk `Translated_UI` (unchanged — safe revert).
+- **ON:** `TranslatedUIQt`; `self.translated_ui_window` = `translated_ui.root` (a `TkWindowShim`) so MBB's ~20 direct Tk calls on that window keep working untouched. `_ui_args`/`_ui_kwargs` are shared by both branches.
+Test a session: launch with `MBB_QT_DIALOGUE=1`. Persist: `use_qt_dialogue: true` in settings. Standalone preview: `python pyqt_ui/translated_ui_qt.py` (has a sys.path bootstrap).
+
+## `tk_compat.py` — `TkWindowShim`
+Plain **wrapper** over a QWidget (NOT a QWidget mixin — a Tk-style `geometry()`
+would clash with `QWidget.geometry()`). Implements ONLY the Tk methods MBB.py
+calls: `winfo_exists / state / withdraw / deiconify / lift / geometry (read+write)
+/ attributes("-topmost") / winfo_x/y/width/height / winfo_children / destroy /
+update_idletasks`. `state()` returns "normal"/"withdrawn" from `isVisible()`.
+Used as Mini UI's `.mini_ui` and the dialogue's `.root`.
+
+## What the Qt dialogue ports
+- **Feathered diffuse bg** (cached pixmap; stacked rounded-rects, ease-in alpha
+  ramp). Tunables: `FEATHER_PX=30`, `EDGE_FALLOFF=1.8`, `BG_RADIUS=16`.
+- **Rich text reuses Tk `RichTextFormatter`** (Tk-free) → identical segmentation;
+  rendered via `QTextDocument` (Thai wrap + per-segment HTML: italic=FC Minimal,
+  `**highlight**`=#FFB366, name=cyan/purple).
+- **Typewriter matches Tk `type_writer_effect`** — batch 5 Thai / 4 long / 3
+  default at `TYPE_BASE_MS=15` + punctuation pauses (NOT the slow 50ms
+  `_continue_typing_animation`). ⚠️ if it feels slow it regressed to 1 char/tick.
+- **Speaker name + tapered dissolving underline** (centred on the name, clamped
+  in-bounds). Tunables: `NAME_LINE_TAPER=0.44`, `NAME_LINE_EXTRA_CHARS=4`,
+  `NAME_LINE_ALPHA=130`.
+- **Hover icon rail** (close/lock/color/fadeout/log) — same PNG icons as Tk:
+  - **Lock 3-mode** (circular): `normal.png` bg+drag · `lock.png` hide-bg (text +
+    painted dark outline) + locked · `BG_lock.png` bg + locked.
+  - **Colour/transparency modal** (`_ColorAlphaModal`): step-lock **50/80/92/100%**
+    + bg-colour pick, live + saved.
+  - **Fade-out + auto-hide** (10s idle → fade → hide; fadeout button toggles +
+    toast). Logs `[TUIQT] auto-hide ...`.
+  - **log button** → `main_app.toggle_translated_logs()` (NOT `toggle_ui`, which
+    swaps Main/Mini — a bug that bit during P5).
+  - **Click the speaker name** → `toggle_npc_manager_callback(name)`.
+- **Dispatcher + FLOWFIX_8 chain-memory** in `_dispatch` (a `pyqtSignal` slot, so
+  the translator thread's `update_text` marshals onto the UI thread): 68/71 →
+  dissolve, 70/pipe → choice, 61 → dialogue; exits the active overlay on
+  switch-back. `self.hide()/show()` replace `root.withdraw()/deiconify()`; the
+  `_tk_was_visible_before_*` memory survives overlay→overlay chains so the
+  dialogue restores every time. Verified by a full mode-switch matrix.
+
+## Status
+Mini UI shipped (default). Dialogue behind the flag, **live-tested via Settings
+test buttons** (no errors) — real-game capture still pending. **Deferred:** remove
+the 16ms `tk_poll_timer` (MBB.py:7076-7078) — possible only once the dialogue flag
+is default AND Mini UI is Qt (only the transient splash stays Tk).
+
+---
+
+# Mini UI — `mini_ui.py` → now PyQt6 (`mini_ui_qt.py`)
+
+> **Migrated to PyQt6 (2026-06-18, default-on).** `mini_ui_qt.py` is what MBB.py
+> imports now (see the PyQt6 TUI Migration section above). The Tk details below
+> describe the original `mini_ui.py`, kept only for git-revert — the Qt version
+> replaces the Win32 corners with a `paintEvent`, monitor-detect with
+> `QGuiApplication.screenAt`, and destroy-rebuild theming with a live re-theme.
 
 Tkinter Toplevel, 50×176, frameless (`overrideredirect`), always-on-top.
 Snapped to left edge of screen, vertically aligned with main window.
@@ -229,6 +302,10 @@ Snapped to left edge of screen, vertically aligned with main window.
 ---
 
 # TUI — Dialog & Choice Mode (Tkinter, `translated_ui.py`)
+
+> **A PyQt6 alternative exists** (`pyqt_ui/translated_ui_qt.py`, opt-in via the
+> `MBB_QT_DIALOGUE` flag — see the PyQt6 TUI Migration section above). This
+> section documents the **default** Tk renderer.
 
 ## Text Style System v4
 
@@ -839,7 +916,7 @@ Inject recent Thai translations into Gemini prompt for consistency (pronouns, ho
 ConversationLogger.log_message()         (always-on, in-memory)
 ConversationLogger.update_translation()
         ↓
-ConversationLogger.get_recent_context()  cutscene=8, dialogue=6, battle=3
+ConversationLogger.get_recent_context()  cutscene=4, dialogue=3, battle=SKIP (no context — short standalone lines)
         ↓
 dalamud_immediate_handler.py
         ↓
@@ -851,9 +928,10 @@ translator_gemini.translate(conversation_context="...")
 - Source: `_current_conv['messages']` (same conversation)
 - Uses `translated` field only (don't send EN — Gemini may copy)
 - Skip if no `translated` or `chattype_group == 'other'`
-- Max **80 chars** per entry
+- Max **50 chars** per entry (truncate at 47 + `...` — reduced from 80 to save tokens; verified in code 2026-06-10)
 - `exclude_last=True` (avoid dup with "Text to translate")
 - Strips dup speaker prefix
+- **Pronoun memory block appended** — session-scoped `_pronoun_lock`: first detected first-person pronoun per speaker (priority list, ข้าพเจ้า before ข้า) locked + appended as `[Speakers' established pronouns — MUST keep consistent]`. Survives conversation-boundary resets, unlike the recent-dialogue window.
 
 ## Rule 10 (System Prompt)
 
