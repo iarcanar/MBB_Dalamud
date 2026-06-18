@@ -37,7 +37,17 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from PyQt6.QtCore import QPoint, QRectF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import (
+    QAbstractAnimation,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from PyQt6.QtGui import (
     QColor,
     QCursor,
@@ -54,7 +64,15 @@ from PyQt6.QtGui import (
     QPolygon,
     QTextDocument,
 )
-from PyQt6.QtWidgets import QApplication, QPushButton, QWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from resource_utils import resource_path
 from tui_rich_text import RichTextFormatter
@@ -110,6 +128,9 @@ MIN_H = 90
 GRIP_SIZE = 16
 SAVE_DEBOUNCE_MS = 400
 HOVER_POLL_MS = 140
+TYPE_BASE_MS = 15                        # typewriter base delay (matches Tk type_writer_effect)
+AUTO_HIDE_MS = 10000                     # fade out + hide after this idle time
+FADE_OUT_MS = 500
 # Diffuse radial-gradient shape (fraction of size). cy below centre so the halo
 # sits a touch low, matching where dialogue text usually lands.
 FEATHER_PX = 30                          # soft-edge band width (px) for diffuse bg
@@ -187,6 +208,80 @@ class _ResizeGrip(QWidget):
 
 
 # ────────────────────────────────────────────────────────────────────
+# Colour + transparency popup (mirrors the Tk ImprovedColorAlphaPickerWindow:
+# 6 step-locked transparency levels + a bg-colour pick, applied live)
+# ────────────────────────────────────────────────────────────────────
+class _ColorAlphaModal(QDialog):
+    STEPS = (50, 80, 92, 100)
+
+    def __init__(self, parent, cur_hex, cur_pct, apply_cb):
+        super().__init__(parent)
+        self._apply_cb = apply_cb
+        self._hex = cur_hex if (isinstance(cur_hex, str) and cur_hex.startswith("#")) else DEFAULT_BG
+        self._pct = min(self.STEPS, key=lambda s: abs(s - cur_pct))
+        self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setStyleSheet(
+            "QDialog{background:#1b1f27;border:1px solid #2a3340;border-radius:8px;}"
+            "QLabel{color:#cfd8e3;font:600 10pt 'Segoe UI';}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(8)
+        lay.addWidget(QLabel("ความโปร่งใสพื้นหลัง"))
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        self._step_btns = {}
+        for s in self.STEPS:
+            b = QPushButton(f"{s}%")
+            b.setFixedSize(46, 26)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.clicked.connect(lambda _=False, v=s: self._set_pct(v))
+            row.addWidget(b)
+            self._step_btns[s] = b
+        lay.addLayout(row)
+        crow = QHBoxLayout()
+        crow.setSpacing(8)
+        crow.addWidget(QLabel("สีพื้นหลัง"))
+        self._swatch = QLabel()
+        self._swatch.setFixedSize(40, 22)
+        crow.addWidget(self._swatch)
+        cbtn = QPushButton("เลือกสี…")
+        cbtn.setFixedHeight(26)
+        cbtn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cbtn.setStyleSheet("QPushButton{background:#262c36;color:#cfd8e3;border:none;"
+                           "border-radius:5px;padding:0 10px;font:600 9pt 'Segoe UI';}"
+                           "QPushButton:hover{background:#374252;}")
+        cbtn.clicked.connect(self._pick_color)
+        crow.addWidget(cbtn)
+        crow.addStretch(1)
+        lay.addLayout(crow)
+        self._refresh()
+
+    def _refresh(self):
+        for s, b in self._step_btns.items():
+            on = (s == self._pct)
+            b.setStyleSheet(
+                f"QPushButton{{background:{'#2f6df0' if on else '#262c36'};"
+                f"color:{'#ffffff' if on else '#cfd8e3'};border:none;border-radius:5px;"
+                "font:600 9pt 'Segoe UI';}QPushButton:hover{background:#374252;}")
+        self._swatch.setStyleSheet(
+            f"background:{self._hex};border:1px solid #3a4150;border-radius:4px;")
+
+    def _set_pct(self, v):
+        self._pct = v
+        self._refresh()
+        self._apply_cb(self._hex, v)
+
+    def _pick_color(self):
+        from PyQt6.QtWidgets import QColorDialog
+        c = QColorDialog.getColor(QColor(self._hex), self, "เลือกสีพื้นหลัง")
+        if c.isValid():
+            self._hex = c.name()
+            self._refresh()
+            self._apply_cb(self._hex, self._pct)
+
+
+# ────────────────────────────────────────────────────────────────────
 # Dialogue TUI
 # ────────────────────────────────────────────────────────────────────
 class TranslatedUIQt(QWidget):
@@ -250,10 +345,12 @@ class TranslatedUIQt(QWidget):
         self._is_lore = False
         self._rich = RichTextFormatter()   # Tk-free segmenter, reused as-is
         self._segments = []                # parsed body segments
+        self._type_text = ""               # joined body text for the typewriter
         self._doc = None                   # QTextDocument for the body
         self._typed_chars = 0              # typewriter reveal count
         self._total_chars = 0
         self._typing = False
+        self._name_rect = QRect()          # speaker-name hit area (click → NPC mgr)
         self._font_family = self._setting("font", DEFAULT_FONT)
         self._font_size = int(self._setting("font_size", DEFAULT_FONT_SIZE))
         self._bg_rgb = self._load_bg_rgb()
@@ -281,6 +378,18 @@ class TranslatedUIQt(QWidget):
 
         self._type_timer = QTimer(self)
         self._type_timer.timeout.connect(self._typewriter_tick)
+
+        # Fade-out + auto-hide (Tk fadeout principle): AUTO_HIDE_MS after the
+        # last text, fade the window out then hide it. Toggled by the rail
+        # fadeout button.
+        self._fade_enabled = True
+        self._autohide_timer = QTimer(self)
+        self._autohide_timer.setSingleShot(True)
+        self._autohide_timer.setInterval(AUTO_HIDE_MS)
+        self._autohide_timer.timeout.connect(self._begin_fade)
+        self._fade_anim = QPropertyAnimation(self, b"windowOpacity", self)
+        self._fade_anim.setDuration(FADE_OUT_MS)
+        self._fade_anim.finished.connect(self._on_fade_finished)
 
         self._rail = {}
         self._build_rail()
@@ -405,19 +514,88 @@ class TranslatedUIQt(QWidget):
                 pass
 
     def _on_lock(self):
-        # P3-continuation: real lock-mode. For now cycle the flag + swap the icon
-        # so the control is visibly live.
+        # Cycle lock_mode 0→1→2→0 (circular):
+        #   0 normal.png  — bg shown, UI draggable
+        #   1 lock.png    — bg HIDDEN (text + outline only), UI locked
+        #   2 BG_lock.png — bg shown, UI locked
         self.lock_mode = (self.lock_mode + 1) % 3
         btn = self._rail.get("lock")
         if btn:
             btn.setIcon(self._icon(
                 {0: "normal.png", 1: "lock.png", 2: "BG_lock.png"}[self.lock_mode]))
+        self.update()  # bg show/hide changed
 
     def _on_color(self):
-        pass   # P3-continuation: color/alpha step-lock picker
+        self._open_color_modal()
 
     def _on_fadeout(self):
-        pass   # P3-continuation: toggle fade-out
+        self._fade_enabled = not self._fade_enabled
+        if not self._fade_enabled:
+            self._autohide_timer.stop()
+            if self._fade_anim.state() == QAbstractAnimation.State.Running:
+                self._fade_anim.stop()
+            if self.windowOpacity() < 1.0:
+                self.setWindowOpacity(1.0)
+        else:
+            self._restart_autohide()
+        btn = self._rail.get("fadeout")
+        if btn:
+            btn.setToolTip("ซ่อนข้อความอัตโนมัติ: เปิด" if self._fade_enabled
+                           else "ซ่อนข้อความอัตโนมัติ: ปิด (ค้างไว้)")
+
+    # ── fade-out + auto-hide (Tk fadeout principle) ─────────────────
+    def _restart_autohide(self):
+        if self._fade_anim.state() == QAbstractAnimation.State.Running:
+            self._fade_anim.stop()
+        if self.windowOpacity() < 1.0:
+            self.setWindowOpacity(1.0)
+        self._autohide_timer.stop()
+        if self._fade_enabled:
+            self._autohide_timer.start()
+
+    def _begin_fade(self):
+        if not self.isVisible() or not self._fade_enabled:
+            return
+        if self._cursor_inside:            # don't fade under the user's cursor
+            self._autohide_timer.start()
+            return
+        self._fade_anim.stop()
+        self._fade_anim.setStartValue(self.windowOpacity())
+        self._fade_anim.setEndValue(0.0)
+        self._fade_anim.start()
+
+    def _on_fade_finished(self):
+        if self.windowOpacity() <= 0.05 and self.isVisible():
+            self.hide()
+            self.setWindowOpacity(1.0)
+            self.state.is_window_hidden = True
+
+    # ── colour / transparency modal ─────────────────────────────────
+    def _open_color_modal(self):
+        cur_hex = "#%02x%02x%02x" % self._bg_rgb
+        cur_pct = round(self._bg_alpha / 255 * 100)
+        m = _ColorAlphaModal(self, cur_hex, cur_pct, self._apply_bg_color_alpha)
+        btn = self._rail.get("color")
+        if btn:
+            gp = btn.mapToGlobal(QPoint(0, 0))
+            m.move(max(0, gp.x() - 230), gp.y())
+        m.show()
+
+    def _apply_bg_color_alpha(self, hex_color, alpha_pct):
+        try:
+            h = hex_color.lstrip("#")
+            self._bg_rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+        except Exception:
+            return
+        self._bg_alpha = int(max(0, min(100, alpha_pct)) / 100.0 * 255)
+        self._bg_pixmap = None              # force feathered-bg rebuild
+        self.update()
+        if self.settings is not None:
+            try:
+                self.settings.set("bg_color", hex_color, save_immediately=False)
+                self.settings.set("bg_alpha", alpha_pct / 100.0, save_immediately=True)
+            except Exception:
+                pass
 
     def _reposition_chrome(self):
         # Rail: vertical column on the right, inset onto the solid bar, stacked
@@ -441,23 +619,27 @@ class TranslatedUIQt(QWidget):
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
         w, h = self.width(), self.height()
 
-        if self._style == "box":
-            r, g, b = self._bg_rgb
-            path = QPainterPath()
-            path.addRoundedRect(QRectF(0, 0, w, h), BG_RADIUS, BG_RADIUS)
-            p.fillPath(path, QColor(r, g, b, self._bg_alpha))
-        else:
-            # DIFFUSE: a feathered rounded-rect — edges fade softly to
-            # transparent on ALL sides (the "ฟุ้ง" look Tk's 1-bit colour-key
-            # can't do). Cached pixmap, rebuilt only when the size changes.
-            if (self._bg_pixmap is None
-                    or self._bg_pixmap.width() != w
-                    or self._bg_pixmap.height() != h):
-                self._rebuild_bg()
-            if self._bg_pixmap is not None:
-                p.drawPixmap(0, 0, self._bg_pixmap)
+        # lock_mode 1 = "hide background": skip the bg entirely; the text is
+        # drawn with a dark outline instead (readable over the game scene).
+        hide_bg = (self.lock_mode == 1)
+        if not hide_bg:
+            if self._style == "box":
+                r, g, b = self._bg_rgb
+                path = QPainterPath()
+                path.addRoundedRect(QRectF(0, 0, w, h), BG_RADIUS, BG_RADIUS)
+                p.fillPath(path, QColor(r, g, b, self._bg_alpha))
+            else:
+                # DIFFUSE: a feathered rounded-rect — edges fade softly to
+                # transparent on ALL sides (the "ฟุ้ง" look Tk's 1-bit colour-key
+                # can't do). Cached pixmap, rebuilt only when the size changes.
+                if (self._bg_pixmap is None
+                        or self._bg_pixmap.width() != w
+                        or self._bg_pixmap.height() != h):
+                    self._rebuild_bg()
+                if self._bg_pixmap is not None:
+                    p.drawPixmap(0, 0, self._bg_pixmap)
 
-        self._paint_text(p, w, h)
+        self._paint_text(p, w, h, shadow=hide_bg)
         p.end()
 
     def _rebuild_bg(self):
@@ -493,8 +675,9 @@ class TranslatedUIQt(QWidget):
         qp.end()
         self._bg_pixmap = QPixmap.fromImage(img)
 
-    def _paint_text(self, p: QPainter, w: int, h: int):
+    def _paint_text(self, p: QPainter, w: int, h: int, shadow: bool = False):
         body_y = PAD_Y
+        self._name_rect = QRect()
         # Speaker line — cyan (known) / purple (contains "?" → the ??? speaker).
         # Matches translated_ui._handle_normal_text_fast: colour keys on "?" only.
         if self._speaker:
@@ -511,9 +694,15 @@ class TranslatedUIQt(QWidget):
             # Speaker name — cyan (known) / purple ("?" → ??? speaker), nudged
             # right so it sits centred over its underline.
             p.setFont(f_name)
+            if shadow:                       # hide-bg lock mode → dark outline
+                p.setPen(QColor(0, 0, 0, 235))
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 2)):
+                    p.drawText(int(name_x) + dx, PAD_Y + fm.ascent() + dy,
+                               self._speaker)
             p.setPen(QColor(NAME_COLOR_UNKNOWN if "?" in self._speaker
                             else NAME_COLOR_KNOWN))
             p.drawText(int(name_x), PAD_Y + fm.ascent(), self._speaker)
+            self._name_rect = QRect(int(name_x), PAD_Y, int(bw), fm.height())
             # Thin tapered underline (bright middle dissolving to nothing at both
             # ends) running +N char-widths beyond the name, anchored in-bounds.
             grad = QLinearGradient(float(line_x), 0.0, float(line_x + line_w), 0.0)
@@ -525,12 +714,10 @@ class TranslatedUIQt(QWidget):
             body_y = line_y + 8
 
         # Body — rich text laid out by QTextDocument (handles Thai wrap + the
-        # per-segment styling built in _segments_to_html).
+        # per-segment styling). In hide-bg lock mode it gets a dark outline so
+        # it stays readable over the game scene.
         if self._doc is not None:
-            p.save()
-            p.translate(PAD_L, body_y)
-            self._doc.drawContents(p)
-            p.restore()
+            self._draw_doc_with_shadow(p, PAD_L, body_y, shadow)
 
     # ── rich-text document (body) ───────────────────────────────────
     def _rebuild_doc(self):
@@ -569,11 +756,54 @@ class TranslatedUIQt(QWidget):
                 out.append(f'<span style="color:{color}">{t}</span>')
         return "".join(out)
 
+    def _draw_doc_with_shadow(self, p, x, y, shadow):
+        doc = self._doc
+        if doc is None:
+            return
+        if not shadow:
+            p.save()
+            p.translate(x, y)
+            doc.drawContents(p)
+            p.restore()
+            return
+        # Hide-bg lock mode: render the doc, derive a black silhouette from its
+        # alpha (SourceAtop), stamp it around the text (outline + drop shadow),
+        # then draw the real text on top.
+        sz = doc.size()
+        iw = max(1, int(sz.width()) + 4)
+        ih = max(1, int(sz.height()) + 4)
+        img = QImage(iw, ih, QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(Qt.GlobalColor.transparent)
+        ip = QPainter(img)
+        doc.drawContents(ip)
+        ip.end()
+        sil = QImage(img)
+        sp = QPainter(sil)
+        sp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceAtop)
+        sp.fillRect(sil.rect(), QColor(0, 0, 0, 240))
+        sp.end()
+        ix, iy = int(x), int(y)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1),
+                       (-1, -1), (1, -1), (-1, 1), (1, 1), (1, 2)):
+            p.drawImage(ix + dx, iy + dy, sil)
+        p.drawImage(ix, iy, img)
+
     # ── drag-to-move ────────────────────────────────────────────────
     def mousePressEvent(self, event):  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
-            if self._grip.geometry().contains(event.position().toPoint()):
+            local = event.position().toPoint()
+            if self._grip.geometry().contains(local):
                 return  # grip handles it
+            # Click on the speaker name → open the NPC Manager for that character.
+            if (self._speaker and self.toggle_npc_manager_callback
+                    and self._name_rect.contains(local)):
+                try:
+                    self.toggle_npc_manager_callback(self._speaker)
+                except Exception as e:
+                    log.debug(f"npc-manager callback failed: {e}")
+                return
+            if self.lock_mode != 0:
+                return  # locked (modes 1 & 2) — the UI can't be moved
             self._dragging = True
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -612,10 +842,20 @@ class TranslatedUIQt(QWidget):
     def _poll_hover(self):
         if not self.isVisible():
             return
-        inside = self.rect().contains(self.mapFromGlobal(QCursor.pos()))
+        local = self.mapFromGlobal(QCursor.pos())
+        inside = self.rect().contains(local)
         if inside != self._cursor_inside:
             self._cursor_inside = inside
             self._set_chrome_visible(inside)
+            if inside:
+                self.reset_fade_timer_for_user_activity("hover")
+        # Pointing-hand cursor over the clickable speaker name.
+        if self._speaker and self.toggle_npc_manager_callback:
+            want = (Qt.CursorShape.PointingHandCursor
+                    if self._name_rect.contains(local)
+                    else Qt.CursorShape.ArrowCursor)
+            if self.cursor().shape() != want:
+                self.setCursor(want)
 
     def _set_chrome_visible(self, vis):
         self._grip.setVisible(vis)
@@ -701,14 +941,15 @@ class TranslatedUIQt(QWidget):
         # Reuse the Tk RichTextFormatter (Tk-free) so segmentation stays in
         # lockstep with the legacy renderer: *italic* / **highlight** / names.
         self._segments = self._rich.parse_rich_text_with_names(body, self.names)
-        # Typewriter: reveal the body char-by-char across segments (each keeps
-        # its style). The speaker shows immediately.
-        self._total_chars = sum(len(s.get("text", "")) for s in self._segments)
+        # Typewriter reveals the joined segment text (markers already stripped)
+        # in batches — Thai streams faster — matching the Tk type_writer_effect.
+        self._type_text = "".join(s.get("text", "") for s in self._segments)
+        self._total_chars = len(self._type_text)
         self._typed_chars = 0
         self._typing = self._total_chars > 0
         self._rebuild_doc()
         if self._typing:
-            self._type_timer.start(self._typing_speed())
+            self._type_timer.start(TYPE_BASE_MS)
         else:
             self._type_timer.stop()
         self.update()
@@ -716,25 +957,35 @@ class TranslatedUIQt(QWidget):
             self.show()
         if not self._save_armed:
             self._save_armed = True
-
-    def _typing_speed(self):
-        try:
-            if self.font_settings and hasattr(self.font_settings, "typing_speed"):
-                return max(1, int(self.font_settings.typing_speed))
-        except Exception:
-            pass
-        try:
-            return max(1, int(self._setting("typing_speed", 50)))
-        except Exception:
-            return 50
+        self._restart_autohide()
 
     def _typewriter_tick(self):
-        self._typed_chars += 1
-        if self._typed_chars >= self._total_chars:
+        text = self._type_text
+        i = self._typed_chars
+        if i >= len(text):
             self._typing = False
             self._type_timer.stop()
+            return
+        # Batch size — Thai streams in larger chunks (matches Tk
+        # type_writer_effect: 5 Thai / 4 long / 3 default).
+        window = text[i:i + 20]
+        if any("฀" <= c <= "๿" for c in window):
+            batch = 5
+        elif len(text) > 100:
+            batch = 4
+        else:
+            batch = 3
+        self._typed_chars = min(i + batch, len(text))
         self._rebuild_doc()
         self.update()
+        if self._typed_chars >= len(text):
+            self._typing = False
+            self._type_timer.stop()
+            return
+        # Longer pause after sentence/clause punctuation (Tk: .!? x3, ", " x2).
+        last = text[self._typed_chars - 1]
+        delay = TYPE_BASE_MS * (3 if last in ".!?" else 2 if last in ", " else 1)
+        self._type_timer.start(delay)
 
     def update_font(self, font_name):
         self._font_family = font_name
@@ -777,7 +1028,12 @@ class TranslatedUIQt(QWidget):
 
     # ── stubs filled in later phases (callable now so integration is safe) ──
     def reset_fade_timer_for_user_activity(self, activity_name="user_activity"):
-        self.state.last_activity_time = 0.0  # P2: real fade-timer reset
+        if self._fade_anim.state() == QAbstractAnimation.State.Running:
+            self._fade_anim.stop()
+        if self.windowOpacity() < 1.0:
+            self.setWindowOpacity(1.0)
+        if self._fade_enabled and self.isVisible():
+            self._autohide_timer.start()
 
     def show_feedback_message(self, message, bg_color="#C62828", x_offset=10,
                               y_offset=10, duration=800, font_size=10):
