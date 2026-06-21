@@ -1,6 +1,6 @@
 # MBB Dalamud — Project Reference
 
-**Version:** 1.8.19 · **Build:** 04032026-02
+**Version:** 1.8.20 · **Build:** 04032026-02
 **Framework:** Dalamud Plugin (C#) + Python (PyQt6 + Tkinter hybrid) + Gemini API
 **Developed by:** iarcanar · **License:** MIT
 
@@ -1195,14 +1195,18 @@ Panel-level QSS subtree cascade overrides `setFont()` silently. Two workarounds:
 - Add toggles via `_add_toggle()`. Auto-saves on change.
 - Thai section labels: "ตั้งค่าอื่นๆ" / "ทดสอบการแปลรูปแบบต่างๆ" / "ปุ่มลัด"
 - Modern iOS-style `ToggleSwitch`: 44×22 → 52×26 (v1.8.0 +20% scale), 16px sliding knob, 160ms OutCubic animation. Drop-in API (`isChecked()`, `toggled` signal).
+- **Button hover (v1.8.19+):** every button has a *visible* hover. FONT/MODEL/HOTKEY + test buttons use **accent-tinted** hover (`rgba(accent,0.16)` bg + accent border + `accent_light` text) + `:pressed` (`rgba(accent,0.30)`) — the old `bg_medium`/`border_active` hover was ~5% lightness = invisible. `accent_rgb` derived once in `_apply_theme` via `QColor(p['accent'])`.
+- **Shortcuts = READ-ONLY info card (v1.8.19+), NOT buttons:** the "ปุ่มลัด" section is an info display (`#settings_shortcut_card`, subtle bg+border, visually distinct from the clickable rows above). Two rows via `_make_shortcut_info_row(label,value)` → description left + **keycap** right (`#settings_shortcut_val`: accent text, `bg_deeper` bg, thick `border-bottom` = 3D key look). Panel height bumped 624→676 for the taller card.
+  - **Labels reflect REAL behavior:** "เปิด / ปิด UI" (ALT+H → `toggle_ui`), "โชว์ / ซ่อน TUI" (F9 → `toggle_translated_ui`). F9 is NOT "start/stop translation" (that's the control-panel button) — the old "เริ่ม/หยุด" label was wrong.
+  - **Live refresh:** `_refresh_shortcut_display()` updates the keycaps; `_ensure_hotkey_panel` wraps HotkeyPanel's save-callback so changing a key via HOTKEY updates the card *immediately* (not just on reopen). Default unified to `alt+h` everywhere (was mixed `alt+l`/`alt+h` across `settings.py` default_settings, settings_panel, hotkey_panel).
 
 **LEGACY UI:** `settings.py` Tkinter — backend stays here; DO NOT add new toggle UI.
 
 **Backend:** `Settings` class — `get()`, `set()`, `save_settings()`, `set_logs_settings(**kwargs)`.
 
-## Restart App (v1.8.10)
+## Restart App — behind ⋮ kebab (v1.8.19+)
 
-Footer button below APPLY. Countdown 3..2..1 on button text in `settings_panel.py`. After countdown calls `self.main_app.restart_app()`.
+Footer is `[APPLY (stretch)] [⋮]`. APPLY stays put; **RESTART moved into a `⋮` kebab overflow menu** to its right (`_show_more_menu` → `QMenu` "🔄 รีสตาร์ทโปรแกรม", hover red = destructive) — rare + destructive, tucked away to prevent misclicks (user request 2026-06-21). The old standalone `_restart_btn` was removed; countdown 3..2..1 now shows on `_status_label`, and `_more_btn` + `_apply_btn` disable during it. After countdown calls `self.main_app.restart_app()`.
 
 **`MagicBabelApp.restart_app()`** (in `MBB.py`, right before `exit_program()`):
 1. Re-entry guard via `self._restarting` flag — clicking twice during countdown doesn't spawn 2 children
@@ -1231,31 +1235,29 @@ Defined at top of `if __name__ == "__main__":` in `MBB.py`, BEFORE `QApplication
 
 ---
 
-# Splash Screen — `MBB.py`
+# Splash Screen — `MBB.py` (PyQt6, migrated 2026-06-21)
 
-Tkinter Toplevel + PIL rendering, max 1280×720, aspect-preserved, centered on screen.
+**PyQt6 translucent `QWidget`** (was a Tkinter Toplevel until 2026-06-21). The migration was for a **modern feathered drop shadow**: Tk's `-transparentcolor` is a 1-bit colour key (partial-alpha pixels render as opaque squares) so a soft floating-card shadow was impossible there; Qt's `WA_TranslucentBackground` keeps per-pixel alpha. `QApplication` already exists when the splash builds (created in `__main__` before `MagicBabelApp`), so Qt is available. PIL still renders the whole frame onto an **oversized RGBA canvas** → `QPixmap` → `QLabel` on a frameless translucent `QWidget` (`FramelessWindowHint | WindowStaysOnTopHint | Tool`, same flags as the overlays).
 
-**Visual (v1.8.14, redesigned 2026-05-20 via [docs/manual/prototype.html](docs/manual/prototype.html)):**
-- PIL rounded corner mask via `ImageDraw.rounded_rectangle` + `transparentcolor="black"` (no border)
-- Corner radius: `max(14, new_width // 48)` — subtle (~22px at 1080 wide). Halved from old `max(28, w//24)` ≈ 45px per design review.
-- Image fallback chain: `assets/MBBvisual.jpg` → `MBBvisual.png` → `MBBvisual.jpeg` → `MBBvisual_mar26.png` → `MBBvisual_legacy.png` (project currently ships `.jpg`)
-- **Bottom-center group: `[meteor icon] [4px gap] [version text]`, no background bar**
-  - Meteor icon (`assets/mbb_meteor.png`) loaded at height `max(60, font_size × 3.7)` ≈ 88px at font 24, width auto (preserves ~3:2 meteor aspect)
-  - Icon vertical-centered on text vertical-center — overflows top/bottom so meteor trail keeps its dynamic shape
-  - Icon compositing: cyan halo (silhouette filled `#00e5ff` alpha 140, blur 8) + dark drop shadow (silhouette `(0,0,0,210)` offset (1,2), blur 4) + sharp icon on top
-- **Version text** (drawn into image via PIL): bright cyan `#00e5ff` (matches landing/manual theme), font Anuphan size `max(22, new_width // 44)` ~24px at 1080 wide
-  - **Dark drop-shadow halo** (replaces removed dissolve bar): 2-layer Gaussian (radii 18/6, alphas 150/200, offsets (0,0)/(0,2))
-  - **Cyan glow**: 3-layer Gaussian (radii 12/6/2, alphas 90/140/200)
-  - Sharp top: 1px dark `(0,0,0,230)` offset (1,2) + cyan `#00e5ff` at (text_x, text_y)
-- Bottom margin: `max(36, new_height × 0.07)`
-- Group horizontally centered: `group_left = (new_w − (icon_w + gap + text_w)) // 2`
-- Antialiased rounded edges fade to black → `transparentcolor` catches them → minor dark fringe at corners is acceptable (Tkinter `transparentcolor` is 1-bit; pixels not exactly `#000` aren't transparent)
+**Visual (v1.8.19+, user request 2026-06-21):**
+- **Square (sharp) edges** — rounded mask removed; image pasted straight (`canvas.paste(image, (ox, oy), image)`).
+- **Modern drop shadow** — `SHADOW_PAD = 64` transparent border around the image; two stacked feathered PIL blurs (ambient blur 34/α90/Δy 14 + contact blur 16/α110/Δy 6) = Windows-11/macOS floating-card look. This is the whole reason for the Qt move.
+- Image fallback chain unchanged: `assets/MBBvisual.jpg` → `.png` → `.jpeg` → `_mar26.png` → `_legacy.png` (ships `.jpg`).
+- **Bottom-center group `[meteor icon] [6px gap] [version text]`** — meteor (`mbb_meteor.png`, height `max(60, font×3.7)`, cyan halo `#00e5ff` α130 + dark shadow + sharp) unchanged.
+- **Version text: WHITE `#FFFFFF`, font Segoe UI Light** (`C:/Windows/Fonts/segoeuil.ttf` → Semilight → bundled Google Sans → Anuphan). Modern/thin/clean. The old cyan glow is replaced by a soft dark shadow (blur 7/α130 + blur 3/α170) for legibility on the bright sky — no glow.
+- All element coords are offset by `(ox, oy) = (SHADOW_PAD, SHADOW_PAD)` (canvas is bigger than the image).
 
-**Timing:** fade-in 400ms (20 steps × 20ms, blocking) → min 5s hold → fade-out 500ms (non-blocking QTimer chain in `_fade_splash_step`).
+**Lifecycle:**
+- `show_splash()` returns `(QWidget, None)` (was `(toplevel, photo)`); on error `(None, None)`. `_complete_startup` guards `if hasattr(self,"splash") and self.splash` + `.isVisible()`, so a failed splash skips straight to `_finish_startup_tasks`.
+- **Fade-in is a blocking pump** — `for i in range(21): setWindowOpacity(i/20); self.qt_app.processEvents(); time.sleep(0.02)`. The Qt event loop isn't running yet inside `__init__`, so pump manually (mirrors the old Tk `update()`/sleep loop). Runs before `bind_events` + `tk_poll_timer` → no re-entrancy.
+- **Fade-out** `_fade_splash_step`: QTimer chain → `setWindowOpacity` down → `close()` + `deleteLater()` + `self.splash = None`.
+- QImage→QPixmap uses `qimg.copy()` to detach from the `tobytes()` buffer (avoids dangling-buffer).
 
-**Imports needed at top of MBB.py:** `from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageFilter`.
+**Splash is built BEFORE `self.settings`** (splash ~782, `Settings()` ~787), so the **`enable_starting_key_visual` toggle** ("เริ่มโปรแกรมด้วยภาพ artwork") is honoured via a **direct `json.load("settings.json")`** at the top of `show_splash` — `False` → early-return `(None, None)` + log `[splash] skipped`; missing/unreadable → default True (show). It was DEAD before v1.8.19 (the Tk version's "checked inside show_splash" comment was stale, never real code — splash always showed); re-wired + tested both ways 2026-06-21. `splash_skip_date` still has no live checkbox.
 
-**Diagnostic log line on success:** `[splash] Loaded <path> · size=WxH · corner_r=N · version=vX.Y.Z`
+**Imports at top of MBB.py:** `from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageFilter` (ImageTk still used by other UI — not orphaned).
+
+**Diagnostic log:** `[splash] Loaded <path> · size=WxH · square edges · version=vX.Y.Z`
 
 ---
 
@@ -1385,6 +1387,7 @@ Bug history: `text_corrector.load_npc_data()` used `resource_path()` → after N
 - `winfo_exists()`, `attributes()`, `update()`, `destroy()` — **main thread ONLY**
 - Thread-based animation → use `root.after()` recursive chain instead
 - Tkinter + PyQt6 hybrid shutdown sometimes crashes with `PyEval_RestoreThread` GIL error — known harmless
+- **`keyboard` global-hotkey callbacks run on the keyboard listener thread** — touching ANY Tk/Qt widget from them is a GIL-fatal crash (NO Python traceback — the process just dies). Wrap on registration: `keyboard.add_hotkey(key, lambda: self.safe_after(0, self.handler))` — `safe_after` enqueues to `_tk_callback_queue`, drained by the 16ms `tk_poll_timer` on the main thread. **v1.8.19 incident:** `toggle_ui` (ALT+H) + `toggle_translated_ui` (F9) crashed *instantly* once `use_qt_dialogue=True` made the TUI a real Qt widget — they called widget ops cross-thread (`hide_and_stop_translation` for WASD already marshalled itself internally, so it was fine). Also v1.8.19: `toggle_ui` now just **delegates to `toggle_mini_ui()`** (the MINI-button handler) so hotkey + button never diverge — old inline `toggle_ui` used a stale `last_mini_ui_pos` and dropped the mini UI at screen-center instead of snapping left. ⚠️ Testing caveat: `keyboard.send()` / Win32 `keybd_event` **injected** keys do NOT trigger MBB's `keyboard` hook (filtered) — global hotkeys can only be verified by a **physical** keypress. Memory: [[feedback-hotkey-callback-marshal-main-thread]].
 
 ## PyQt6 Gotchas
 

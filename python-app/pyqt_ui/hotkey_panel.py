@@ -159,7 +159,7 @@ class HotkeyPanel(QWidget):
         c_layout.setSpacing(8)
 
         hotkeys = [
-            ("toggle_ui", "Toggle UI:", "alt+l"),
+            ("toggle_ui", "Toggle UI:", "alt+h"),
             ("start_stop_translate", "Start/Stop:", "f9"),
             ("previous_dialog", "Previous:", "r-click"),
             ("previous_dialog_key", "Prev Key:", "f10"),
@@ -221,7 +221,7 @@ class HotkeyPanel(QWidget):
 
     def _load_current(self):
         defaults = {
-            "toggle_ui": "alt+l",
+            "toggle_ui": "alt+h",
             "start_stop_translate": "f9",
             "previous_dialog": "r-click",
             "previous_dialog_key": "f10",
@@ -255,7 +255,7 @@ class HotkeyPanel(QWidget):
 
     def _reset_defaults(self):
         defaults = {
-            "toggle_ui": "alt+l",
+            "toggle_ui": "alt+h",
             "start_stop_translate": "f9",
             "previous_dialog": "r-click",
             "previous_dialog_key": "f10",

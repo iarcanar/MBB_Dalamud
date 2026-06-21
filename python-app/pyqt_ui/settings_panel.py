@@ -8,7 +8,7 @@ import logging
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGraphicsDropShadowEffect, QCheckBox, QScrollArea, QFrame,
-    QSizePolicy,
+    QSizePolicy, QMenu,
 )
 from PyQt6.QtGui import QColor, QFont, QPainter, QBrush, QPen
 from PyQt6.QtCore import (
@@ -21,7 +21,7 @@ from pyqt_ui.styles import FONT_PRIMARY, FONT_MONO, derive_palette
 log = logging.getLogger("mbb-qt")
 
 WIDTH = 360    # bumped from 300 (+20%) for easier reading
-HEIGHT = 624   # bumped from 520 (+20%) — proportional to width
+HEIGHT = 676   # +52 over 624 for the taller two-row shortcut info card
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -351,25 +351,34 @@ class SettingsPanel(QWidget):
         c_layout.addLayout(test_row)
         c_layout.addSpacing(4)
 
-        # Section: Shortcuts → "ปุ่มลัด"
+        # Section: Shortcuts → "ปุ่มลัด" — READ-ONLY info display (not buttons).
+        # Rendered as a distinct card with keycap-style values so it reads as a
+        # reference table, visually separate from the clickable buttons above.
+        # (Edit the keys via the HOTKEY button.)
         self._add_section_label(c_layout, "ปุ่มลัด")
-        shortcuts_row = QHBoxLayout()
-        shortcuts_row.setSpacing(8)
 
-        shortcuts_row.addWidget(self._make_shortcut_label("เปิด/ปิด UI:"))
-        self._shortcut_toggle_lbl = self._make_shortcut_value(
-            self.settings.get_shortcut("toggle_ui", "alt+l").upper()
-        )
-        shortcuts_row.addWidget(self._shortcut_toggle_lbl)
-        shortcuts_row.addSpacing(8)
-        shortcuts_row.addWidget(self._make_shortcut_label("เริ่ม/หยุด:"))
-        self._shortcut_start_lbl = self._make_shortcut_value(
-            self.settings.get_shortcut("start_stop_translate", "f9").upper()
-        )
-        shortcuts_row.addWidget(self._shortcut_start_lbl)
-        shortcuts_row.addStretch()
+        sc_card = QWidget()
+        sc_card.setObjectName("settings_shortcut_card")
+        sc_v = QVBoxLayout(sc_card)
+        sc_v.setContentsMargins(12, 9, 12, 9)
+        sc_v.setSpacing(7)
 
-        c_layout.addLayout(shortcuts_row)
+        # NOTE: F9 (start_stop_translate) is bound to toggle_translated_ui() —
+        # it shows/hides the TUI window, so the label reflects that, not
+        # "start/stop translation" (that lives on the control-panel button).
+        row1, self._shortcut_toggle_lbl = self._make_shortcut_info_row(
+            "เปิด / ปิด UI",
+            self.settings.get_shortcut("toggle_ui", "alt+h").upper(),
+        )
+        sc_v.addLayout(row1)
+
+        row2, self._shortcut_start_lbl = self._make_shortcut_info_row(
+            "โชว์ / ซ่อน TUI",
+            self.settings.get_shortcut("start_stop_translate", "f9").upper(),
+        )
+        sc_v.addLayout(row2)
+
+        c_layout.addWidget(sc_card)
 
         # Version
         from version import __version__
@@ -405,15 +414,23 @@ class SettingsPanel(QWidget):
         self._apply_btn.setEnabled(False)
         self._apply_btn.setProperty("state", "inactive")
         self._apply_btn.clicked.connect(self._on_apply)
-        f_layout.addWidget(self._apply_btn)
 
-        self._restart_btn = QPushButton("RESTART APP")
-        self._restart_btn.setObjectName("settings_restart")
-        self._restart_btn.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))  # +20% from 9pt
-        self._restart_btn.setFixedHeight(36)  # +20% from 30
-        self._restart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._restart_btn.clicked.connect(self._on_restart_clicked)
-        f_layout.addWidget(self._restart_btn)
+        # APPLY stays put; the ⋮ kebab to its right holds rarely-used,
+        # destructive actions (Restart App) — tucked away to prevent misclicks.
+        apply_row = QHBoxLayout()
+        apply_row.setSpacing(6)
+        apply_row.addWidget(self._apply_btn, stretch=1)
+
+        self._more_btn = QPushButton("⋮")  # ⋮ vertical ellipsis
+        self._more_btn.setObjectName("settings_more")
+        self._more_btn.setFont(QFont(FONT_PRIMARY, 16, QFont.Weight.Bold))
+        self._more_btn.setFixedSize(40, 40)
+        self._more_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._more_btn.setToolTip("ตัวเลือกเพิ่มเติม")
+        self._more_btn.clicked.connect(self._show_more_menu)
+        apply_row.addWidget(self._more_btn)
+
+        f_layout.addLayout(apply_row)
 
         main.addWidget(footer)
 
@@ -545,19 +562,27 @@ class SettingsPanel(QWidget):
 
         return container
 
-    def _make_shortcut_label(self, text):
-        lbl = QLabel(text)
-        lbl.setObjectName("settings_shortcut_key")
-        lbl.setFont(QFont(FONT_PRIMARY, 10))  # +20% from 8pt
-        return lbl
+    def _make_shortcut_info_row(self, label_text, value_text):
+        """One read-only shortcut row: description on the left, keycap-style
+        value on the right. Returns (row_layout, value_label) so the caller
+        keeps a ref for live updates. Nothing here is clickable."""
+        row = QHBoxLayout()
+        row.setSpacing(8)
 
-    def _make_shortcut_value(self, text):
-        lbl = QLabel(text)
-        lbl.setObjectName("settings_shortcut_val")
-        lbl.setFont(QFont(FONT_MONO, 10, QFont.Weight.Bold))  # +20% from 8pt
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setMinimumWidth(60)  # +20% from 50
-        return lbl
+        key_lbl = QLabel(label_text)
+        key_lbl.setObjectName("settings_shortcut_key")
+        key_lbl.setFont(QFont(FONT_PRIMARY, 10))
+        row.addWidget(key_lbl)
+        row.addStretch()
+
+        val_lbl = QLabel(value_text)
+        val_lbl.setObjectName("settings_shortcut_val")
+        val_lbl.setFont(QFont(FONT_MONO, 10, QFont.Weight.Bold))
+        val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        val_lbl.setMinimumWidth(64)
+        row.addWidget(val_lbl)
+
+        return row, val_lbl
 
     # ── Toggle Logic ──
 
@@ -626,14 +651,46 @@ class SettingsPanel(QWidget):
         self._update_apply_state()
         self._status_label.setText("")
 
-    # ── Restart ──
+    # ── Overflow menu + Restart (tucked behind the ⋮ to avoid misclicks) ──
+
+    def _show_more_menu(self):
+        """Overflow menu off the ⋮ kebab — currently just Restart App."""
+        p = self.palette
+        menu = QMenu(self)
+        menu.setObjectName("settings_more_menu")
+        menu.setCursor(Qt.CursorShape.PointingHandCursor)
+        menu.setStyleSheet(f"""
+            QMenu#settings_more_menu {{
+                background: {p['bg_titlebar']};
+                border: 1px solid {p['border_active']};
+                border-radius: 8px;
+                padding: 6px;
+            }}
+            QMenu#settings_more_menu::item {{
+                background: transparent;
+                color: {p['text']};
+                padding: 8px 18px;
+                border-radius: 5px;
+            }}
+            QMenu#settings_more_menu::item:selected {{
+                background: rgba(204, 68, 68, 0.18);
+                color: #ff6b6b;
+            }}
+        """)
+        act_restart = menu.addAction("\U0001F504  รีสตาร์ทโปรแกรม")
+        act_restart.triggered.connect(self._on_restart_clicked)
+        # Anchor the menu's bottom-right at the kebab's top-right so it opens
+        # upward (the kebab sits at the panel's bottom edge).
+        anchor = self._more_btn.mapToGlobal(QPoint(self._more_btn.width(), 0))
+        hint = menu.sizeHint()
+        menu.exec(QPoint(anchor.x() - hint.width(), anchor.y() - hint.height()))
 
     def _on_restart_clicked(self):
-        self._restart_btn.setEnabled(False)
+        self._more_btn.setEnabled(False)
+        self._apply_btn.setEnabled(False)
         self._restart_countdown = 3
-        self._restart_btn.setText(f"Restarting in {self._restart_countdown}...")
         self._status_label.setStyleSheet("color: #FF8C00; background: transparent;")
-        self._status_label.setText("Application will restart shortly...")
+        self._status_label.setText(f"กำลังรีสตาร์ทใน {self._restart_countdown}...")
         self._restart_timer = QTimer()
         self._restart_timer.timeout.connect(self._restart_tick)
         self._restart_timer.start(1000)
@@ -641,10 +698,10 @@ class SettingsPanel(QWidget):
     def _restart_tick(self):
         self._restart_countdown -= 1
         if self._restart_countdown > 0:
-            self._restart_btn.setText(f"Restarting in {self._restart_countdown}...")
+            self._status_label.setText(f"กำลังรีสตาร์ทใน {self._restart_countdown}...")
         else:
             self._restart_timer.stop()
-            self._restart_btn.setText("Restarting...")
+            self._status_label.setText("กำลังรีสตาร์ท...")
             if self.main_app and hasattr(self.main_app, 'restart_app'):
                 self.main_app.restart_app()
 
@@ -696,8 +753,15 @@ class SettingsPanel(QWidget):
     def _ensure_hotkey_panel(self):
         if not self._hotkey_panel:
             from pyqt_ui.hotkey_panel import HotkeyPanel
+            # Wrap the callback so saving a hotkey ALSO refreshes the read-only
+            # 'ปุ่มลัด' card here — otherwise it shows stale keys until Settings
+            # is reopened.
+            def _on_hotkeys_saved():
+                if self.update_hotkeys_callback:
+                    self.update_hotkeys_callback()
+                self._refresh_shortcut_display()
             self._hotkey_panel = HotkeyPanel(
-                self.settings, self.update_hotkeys_callback, self.am
+                self.settings, _on_hotkeys_saved, self.am
             )
 
     def _position_subpanel(self, panel):
@@ -821,9 +885,15 @@ class SettingsPanel(QWidget):
         self._update_apply_state()
 
         # Update shortcut display
+        self._refresh_shortcut_display()
+
+    def _refresh_shortcut_display(self):
+        """Update the read-only 'ปุ่มลัด' card to the current bindings — called
+        on open AND right after the Hotkey panel saves, so the displayed keys
+        never go stale."""
         if self._shortcut_toggle_lbl:
             self._shortcut_toggle_lbl.setText(
-                self.settings.get_shortcut("toggle_ui", "alt+l").upper()
+                self.settings.get_shortcut("toggle_ui", "alt+h").upper()
             )
         if self._shortcut_start_lbl:
             self._shortcut_start_lbl.setText(
@@ -855,6 +925,11 @@ class SettingsPanel(QWidget):
         text_override = self.am.get_theme_color("text_override")
         p = derive_palette(primary, secondary, surface=surface, text_override=text_override)
         self.palette = p
+
+        # Accent-tinted hover backgrounds (rgba from the theme accent) so every
+        # button's hover is clearly visible, not a faint ~5% lightness bump.
+        _ac = QColor(p['accent'])
+        accent_rgb = f"{_ac.red()}, {_ac.green()}, {_ac.blue()}"
 
         # Update toggle switch colors to match new theme (if rebuilt)
         for sw in self._toggles.values():
@@ -913,8 +988,12 @@ class SettingsPanel(QWidget):
                 font-family: '{FONT_PRIMARY}';
             }}
             QPushButton#settings_section_btn:hover {{
-                background: {p['bg_medium']};
-                border: 1px solid {p['border_active']};
+                background: rgba({accent_rgb}, 0.16);
+                border: 1px solid {p['accent']};
+                color: {p['accent_light']};
+            }}
+            QPushButton#settings_section_btn:pressed {{
+                background: rgba({accent_rgb}, 0.30);
             }}
             QPushButton#settings_test_btn {{
                 background: {p['btn_bg']};
@@ -923,23 +1002,33 @@ class SettingsPanel(QWidget):
                 border-radius: 4px;
             }}
             QPushButton#settings_test_btn:hover {{
-                background: {p['bg_medium']};
-                border: 1px solid {p['border_active']};
+                background: rgba({accent_rgb}, 0.16);
+                border: 1px solid {p['accent']};
+                color: {p['accent_light']};
+            }}
+            QPushButton#settings_test_btn:pressed {{
+                background: rgba({accent_rgb}, 0.30);
             }}
             QLabel#settings_test_subtitle {{
                 color: {p['text_dim']};
                 background: transparent;
+            }}
+            QWidget#settings_shortcut_card {{
+                background: {p['bg_titlebar']};
+                border: 1px solid {p['border_subtle']};
+                border-radius: 8px;
             }}
             QLabel#settings_shortcut_key {{
                 color: {p['text_dim']};
                 background: transparent;
             }}
             QLabel#settings_shortcut_val {{
-                color: {p['text']};
-                background: {p['bg_titlebar']};
-                border: 1px solid {p['border_subtle']};
-                border-radius: 3px;
-                padding: 2px 6px;
+                color: {p['accent']};
+                background: {p['bg_deeper']};
+                border: 1px solid {p['border_active']};
+                border-bottom: 2px solid {p['border_active']};
+                border-radius: 5px;
+                padding: 3px 10px;
             }}
             QLabel#settings_version {{
                 color: {p['text_dim']};
@@ -972,21 +1061,22 @@ class SettingsPanel(QWidget):
                 border: none;
                 border-radius: 6px;
             }}
-            QPushButton#settings_restart {{
-                background: transparent;
+            QPushButton#settings_more {{
+                background: {p['bg_titlebar']};
                 color: {p['text_dim']};
-                border: 1px solid {p['border_subtle']};
+                border: none;
                 border-radius: 6px;
             }}
-            QPushButton#settings_restart:hover {{
-                background: rgba(204, 68, 68, 0.15);
-                color: #ff6b6b;
-                border: 1px solid rgba(204, 68, 68, 0.5);
+            QPushButton#settings_more:hover {{
+                background: {p['bg_medium']};
+                color: {p['text']};
             }}
-            QPushButton#settings_restart:disabled {{
+            QPushButton#settings_more:pressed {{
+                background: rgba({accent_rgb}, 0.22);
+            }}
+            QPushButton#settings_more:disabled {{
                 background: {p['bg_titlebar']};
-                color: #FF8C00;
-                border: 1px solid rgba(255, 140, 0, 0.4);
+                color: {p['text_dim']};
             }}
         """
         self.setStyleSheet(qss)

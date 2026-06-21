@@ -545,12 +545,30 @@ class MagicBabelApp:
         self.last_cpu_check = time.time()
 
         # --- ส่วน Splash Screen ---
-        # Rounded corners + bright cyan version text at bottom-center.
-        # Supports both .png and .jpg (project ships MBBvisual.jpg as of 2026-05-19).
+        # PyQt6 translucent splash: square (sharp) edges + a modern, soft drop
+        # shadow + clean white version text. Migrated from Tk because Tk's
+        # -transparentcolor is a 1-bit colour key — a feathered drop shadow
+        # (partial alpha) is impossible there; Qt's WA_TranslucentBackground
+        # keeps per-pixel alpha so the shadow renders correctly.
+        # Supports both .png and .jpg (project ships MBBvisual.jpg).
         def show_splash():
-            splash = tk.Toplevel(root)
-            splash.overrideredirect(True)
-            splash.attributes("-topmost", True)
+            from PyQt6.QtWidgets import QWidget, QLabel
+            from PyQt6.QtCore import Qt
+            from PyQt6.QtGui import QImage, QPixmap
+
+            # Honour the "เริ่มโปรแกรมด้วยภาพ artwork" toggle. The splash is built
+            # BEFORE self.settings exists, so read settings.json directly (same
+            # relative path the Settings class uses; CWD is the app dir via the
+            # __main__ os.chdir). Missing/unreadable → default True = show.
+            try:
+                import json as _json
+                with open("settings.json", "r", encoding="utf-8") as _f:
+                    if not _json.load(_f).get("enable_starting_key_visual", True):
+                        print("[splash] skipped — enable_starting_key_visual=False")
+                        return None, None
+            except Exception:
+                pass
+
             try:
                 # ── Resolve splash image (try multiple extensions/fallbacks) ──
                 splash_candidates = [
@@ -588,41 +606,53 @@ class MagicBabelApp:
                     new_height = int(SPLASH_WIDTH / original_ratio)
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-                # ── Apply rounded corner mask ──
-                # Corner radius ~2% of width (~22px at 1080 wide — subtle).
-                # Halved from earlier max(28, w//24) ≈ 45px per prototype review.
-                corner_radius = max(14, new_width // 48)
-                mask = Image.new("L", (new_width, new_height), 0)
-                ImageDraw.Draw(mask).rounded_rectangle(
-                    [(0, 0), (new_width - 1, new_height - 1)],
-                    radius=corner_radius,
-                    fill=255,
-                )
-                # Composite onto opaque black bg using rounded mask
-                # (Outside the mask stays #000 → transparentcolor catches it)
-                rounded = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 255))
-                rounded.paste(image, (0, 0), mask)
+                # ── Oversized transparent canvas (room for the drop shadow) ──
+                SHADOW_PAD = 64
+                canvas_w = new_width + SHADOW_PAD * 2
+                canvas_h = new_height + SHADOW_PAD * 2
+                ox, oy = SHADOW_PAD, SHADOW_PAD  # image origin inside canvas
+                canvas = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+
+                # ── Modern drop shadow — two stacked feathered blurs: a wide
+                # ambient pool + a tighter contact shadow, offset slightly down
+                # (the Windows 11 / macOS floating-card look). ──
+                for blur_r, alpha, dy in [(34, 90, 14), (16, 110, 6)]:
+                    shadow = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+                    ImageDraw.Draw(shadow).rectangle(
+                        [(ox, oy + dy), (ox + new_width - 1, oy + new_height - 1 + dy)],
+                        fill=(0, 0, 0, alpha),
+                    )
+                    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=blur_r))
+                    canvas = Image.alpha_composite(canvas, shadow)
+
+                # ── Sharp, square-edged image (no rounded mask) ──
+                canvas.paste(image, (ox, oy), image)
 
                 # ── [meteor icon] [version text] group at bottom-center ──
-                # Layout matches docs/manual/prototype.html final spec (2026-05-20):
-                # icon height ≈ 3.7× font, 4px gap, no dark bar background —
-                # text relies on its own cyan glow + dark drop shadow stack.
-                CYAN = (0, 229, 255)  # #00e5ff — matches landing page / manual theme
+                WHITE = (255, 255, 255)
+                CYAN = (0, 229, 255)  # meteor halo only
 
                 version_text = f"v{__version__}"
                 font_size = max(22, new_width // 44)  # ~24px at 1080 wide
-                try:
-                    font = ImageFont.truetype(
-                        resource_path("fonts/Anuphan.ttf"), font_size
-                    )
-                except Exception:
+                # Modern thin face — Segoe UI Light first (native Win11 look),
+                # then bundled fallbacks.
+                font = None
+                for fp in (
+                    "C:/Windows/Fonts/segoeuil.ttf",   # Segoe UI Light
+                    "C:/Windows/Fonts/segoeuisl.ttf",  # Segoe UI Semilight
+                    resource_path("fonts/Google Sans 17pt Medium.ttf"),
+                    resource_path("fonts/Anuphan.ttf"),
+                ):
                     try:
-                        font = ImageFont.truetype("arial.ttf", font_size)
+                        font = ImageFont.truetype(fp, font_size)
+                        break
                     except Exception:
-                        font = ImageFont.load_default()
+                        continue
+                if font is None:
+                    font = ImageFont.load_default()
 
                 # Measure version text
-                tmp_draw = ImageDraw.Draw(rounded)
+                tmp_draw = ImageDraw.Draw(canvas)
                 bbox = tmp_draw.textbbox((0, 0), version_text, font=font)
                 text_w = bbox[2] - bbox[0]
                 text_h = bbox[3] - bbox[1]
@@ -642,12 +672,12 @@ class MagicBabelApp:
                 except Exception as ex:
                     print(f"[splash] meteor icon load failed: {ex} — text only")
 
-                # Group: [icon] [4px gap] [text] centered horizontally
-                gap_px = 4
+                # Group: [icon] [6px gap] [text] centered horizontally (image space)
+                gap_px = 6
                 icon_w = icon_img.width if icon_img is not None else 0
                 icon_h = icon_img.height if icon_img is not None else 0
                 group_w = icon_w + (gap_px if icon_img is not None else 0) + text_w
-                group_left = (new_width - group_w) // 2
+                group_left = ox + (new_width - group_w) // 2
 
                 # Text position — bottom-aligned, font-bbox offsets corrected
                 bottom_margin = max(36, int(new_height * 0.07))
@@ -657,128 +687,93 @@ class MagicBabelApp:
                     + (gap_px if icon_img is not None else 0)
                     - bbox[0]
                 )
-                text_y = new_height - bottom_margin - text_h - bbox[1]
+                text_y = oy + new_height - bottom_margin - text_h - bbox[1]
 
                 # Icon vertical-centered on text center (icon overflows top/bottom)
                 text_center_y = text_y + bbox[1] + text_h // 2
                 icon_y = text_center_y - icon_h // 2 if icon_img is not None else 0
 
-                # ── Composite meteor icon (halo + dark shadow + sharp) ──
+                # ── Composite meteor icon (cyan halo + dark shadow + sharp) ──
                 if icon_img is not None:
                     icon_alpha = icon_img.split()[3]
-                    # Cyan halo behind icon (tone-matches text glow)
-                    halo_solid = Image.new("RGBA", icon_img.size, (*CYAN, 140))
+                    halo_solid = Image.new("RGBA", icon_img.size, (*CYAN, 130))
                     halo_silhouette = Image.new("RGBA", icon_img.size, (0, 0, 0, 0))
                     halo_silhouette.paste(halo_solid, (0, 0), icon_alpha)
-                    halo_layer = Image.new(
-                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
-                    )
+                    halo_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
                     halo_layer.paste(halo_silhouette, (group_left, icon_y))
-                    halo_layer = halo_layer.filter(
-                        ImageFilter.GaussianBlur(radius=8)
-                    )
-                    rounded = Image.alpha_composite(rounded, halo_layer)
-                    # Dark drop shadow for legibility
+                    halo_layer = halo_layer.filter(ImageFilter.GaussianBlur(radius=8))
+                    canvas = Image.alpha_composite(canvas, halo_layer)
                     shadow_solid = Image.new("RGBA", icon_img.size, (0, 0, 0, 210))
-                    shadow_silhouette = Image.new(
-                        "RGBA", icon_img.size, (0, 0, 0, 0)
-                    )
+                    shadow_silhouette = Image.new("RGBA", icon_img.size, (0, 0, 0, 0))
                     shadow_silhouette.paste(shadow_solid, (0, 0), icon_alpha)
-                    shadow_layer = Image.new(
-                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
-                    )
-                    shadow_layer.paste(
-                        shadow_silhouette, (group_left + 1, icon_y + 2)
-                    )
-                    shadow_layer = shadow_layer.filter(
-                        ImageFilter.GaussianBlur(radius=4)
-                    )
-                    rounded = Image.alpha_composite(rounded, shadow_layer)
-                    # Sharp icon on top
-                    sharp_icon_layer = Image.new(
-                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
-                    )
+                    shadow_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+                    shadow_layer.paste(shadow_silhouette, (group_left + 1, icon_y + 2))
+                    shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=4))
+                    canvas = Image.alpha_composite(canvas, shadow_layer)
+                    sharp_icon_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
                     sharp_icon_layer.paste(icon_img, (group_left, icon_y), icon_img)
-                    rounded = Image.alpha_composite(rounded, sharp_icon_layer)
+                    canvas = Image.alpha_composite(canvas, sharp_icon_layer)
 
-                # ── Dark drop-shadow halo for version text (replaces removed bar) ──
-                for blur_r, alpha, offset in [(18, 150, (0, 0)), (6, 200, (0, 2))]:
-                    shadow_layer = Image.new(
-                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
-                    )
-                    ImageDraw.Draw(shadow_layer).text(
+                # ── Soft dark shadow under the version text (legibility on the
+                # bright sky) — no cyan glow, keeping the white text clean. ──
+                for blur_r, alpha, offset in [(7, 130, (0, 1)), (3, 170, (0, 1))]:
+                    sh = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+                    ImageDraw.Draw(sh).text(
                         (text_x + offset[0], text_y + offset[1]),
                         version_text,
                         font=font,
                         fill=(0, 0, 0, alpha),
                     )
-                    shadow_layer = shadow_layer.filter(
-                        ImageFilter.GaussianBlur(radius=blur_r)
-                    )
-                    rounded = Image.alpha_composite(rounded, shadow_layer)
+                    sh = sh.filter(ImageFilter.GaussianBlur(radius=blur_r))
+                    canvas = Image.alpha_composite(canvas, sh)
 
-                # ── Cyan glow halo for version text ──
-                for blur_r, alpha in [(12, 90), (6, 140), (2, 200)]:
-                    glow_layer = Image.new(
-                        "RGBA", (new_width, new_height), (0, 0, 0, 0)
-                    )
-                    ImageDraw.Draw(glow_layer).text(
-                        (text_x, text_y),
-                        version_text,
-                        font=font,
-                        fill=(*CYAN, alpha),
-                    )
-                    glow_layer = glow_layer.filter(
-                        ImageFilter.GaussianBlur(radius=blur_r)
-                    )
-                    rounded = Image.alpha_composite(rounded, glow_layer)
-
-                # ── Sharp version text on top (dark shadow + bright cyan) ──
-                sharp_draw = ImageDraw.Draw(rounded)
-                sharp_draw.text(
-                    (text_x + 1, text_y + 2),
-                    version_text,
-                    font=font,
-                    fill=(0, 0, 0, 230),
-                )
-                sharp_draw.text(
-                    (text_x, text_y),
-                    version_text,
-                    font=font,
-                    fill=(*CYAN, 255),
+                # ── Sharp white version text on top ──
+                ImageDraw.Draw(canvas).text(
+                    (text_x, text_y), version_text, font=font, fill=(*WHITE, 255)
                 )
 
-                photo = ImageTk.PhotoImage(rounded)
-                screen_width = splash.winfo_screenwidth()
-                screen_height = splash.winfo_screenheight()
-                x = (screen_width - new_width) // 2
-                y = (screen_height - new_height) // 2
-                splash.geometry(f"{new_width}x{new_height}+{x}+{y}")
-                splash.attributes("-transparentcolor", "black")
-                splash.configure(bg="black")
-                logo = tk.Label(splash, image=photo, bg="black", bd=0)
-                logo.photo = photo
-                logo.pack(fill="both", expand=True)
-                for i in range(0, 20):
-                    alpha = i / 20.0
-                    splash.attributes("-alpha", alpha)
-                    splash.update()
+                # ── PIL → QPixmap → translucent QWidget ──
+                buf = canvas.tobytes("raw", "RGBA")
+                qimg = QImage(buf, canvas_w, canvas_h, QImage.Format.Format_RGBA8888)
+                pixmap = QPixmap.fromImage(qimg.copy())  # detach from buf
+
+                widget = QWidget()
+                widget.setWindowFlags(
+                    Qt.WindowType.FramelessWindowHint
+                    | Qt.WindowType.WindowStaysOnTopHint
+                    | Qt.WindowType.Tool
+                )
+                widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+                widget.resize(canvas_w, canvas_h)
+                label = QLabel(widget)
+                label.setPixmap(pixmap)
+                label.resize(canvas_w, canvas_h)
+
+                screen = self.qt_app.primaryScreen().geometry()
+                widget.move(
+                    (screen.width() - canvas_w) // 2,
+                    (screen.height() - canvas_h) // 2,
+                )
+                widget.setWindowOpacity(0.0)
+                widget.show()
+                # Blocking fade-in — the Qt event loop isn't running yet at
+                # startup, so pump events manually (mirrors the old Tk loop).
+                for i in range(0, 21):
+                    widget.setWindowOpacity(i / 20.0)
+                    self.qt_app.processEvents()
                     time.sleep(0.02)
+
                 print(
                     f"[splash] Loaded {resolved_path} · "
-                    f"size={new_width}x{new_height} · "
-                    f"corner_r={corner_radius} · version=v{__version__}"
+                    f"size={new_width}x{new_height} · square edges · "
+                    f"version=v{__version__}"
                 )
-                return splash, photo
+                return widget, None
             except Exception as e:
                 print(f"Error loading splash screen: {e}")
-                if splash.winfo_exists():
-                    splash.destroy()
                 return None, None
 
-        # Splash screen — respects user preferences (enable_starting_key_visual
-        # toggle + splash_skip_date "ไม่แสดงอีกในวันนี้" — both checked inside
-        # show_splash() via direct json.load on settings.json).
+        # Splash screen (PyQt6 translucent widget — shows on every launch).
         self.splash, self.splash_photo = show_splash()
         # --- จบส่วน Splash Screen ---
 
@@ -953,14 +948,14 @@ class MagicBabelApp:
             # ปิด splash screen ด้วย non-blocking fade effect
             if hasattr(self, "splash") and self.splash:
                 try:
-                    if self.splash.winfo_exists():
+                    if self.splash.isVisible():
                         self._splash_fade_step = 10
                         self._fade_splash_step()
                         return  # _fade_splash_step will call _finish_startup_tasks when done
                 except Exception as e:
                     self.logging_manager.log_error(f"Error closing splash: {e}")
                     try:
-                        self.splash.destroy()
+                        self.splash.close()
                     except Exception:
                         pass
 
@@ -973,19 +968,19 @@ class MagicBabelApp:
         """Non-blocking splash fade-out using QTimer steps."""
         try:
             if self._splash_fade_step >= 0:
-                alpha = self._splash_fade_step / 10
-                self.splash.attributes("-alpha", alpha)
-                self.splash.update()
+                self.splash.setWindowOpacity(self._splash_fade_step / 10)
                 self._splash_fade_step -= 1
                 from PyQt6.QtCore import QTimer
-                QTimer.singleShot(20, self._fade_splash_step)
+                QTimer.singleShot(25, self._fade_splash_step)
             else:
-                self.splash.destroy()
+                self.splash.close()
+                self.splash.deleteLater()
+                self.splash = None
                 self._finish_startup_tasks()
         except Exception as e:
             self.logging_manager.log_error(f"Error in splash fade: {e}")
             try:
-                self.splash.destroy()
+                self.splash.close()
             except Exception:
                 pass
             self._finish_startup_tasks()
@@ -3523,17 +3518,23 @@ class MagicBabelApp:
             "previous_dialog_key", "f10"
         )
 
+        # keyboard hotkey callbacks fire on the `keyboard` listener thread.
+        # Touching any Tk/Qt widget from that thread is a GIL-fatal crash — it
+        # bit hard once use_qt_dialogue=True made the TUI a real Qt widget
+        # (pressing the start/stop key crashed instantly). Marshal every UI
+        # callback onto the main (Qt) thread via safe_after(0, ...) first.
         if self.settings.get("enable_ui_toggle"):
             if "toggle_ui" in self.hotkeys:
                 keyboard.remove_hotkey(self.hotkeys["toggle_ui"])
             self.hotkeys["toggle_ui"] = keyboard.add_hotkey(
-                toggle_ui_shortcut, self.toggle_ui
+                toggle_ui_shortcut, lambda: self.safe_after(0, self.toggle_ui)
             )
 
         if "start_stop_translate" in self.hotkeys:
             keyboard.remove_hotkey(self.hotkeys["start_stop_translate"])
         self.hotkeys["start_stop_translate"] = keyboard.add_hotkey(
-            start_stop_shortcut, self.toggle_translated_ui
+            start_stop_shortcut,
+            lambda: self.safe_after(0, self.toggle_translated_ui),
         )
 
         # Previous dialog hotkey functionality removed - replaced by right-click system
@@ -5405,40 +5406,13 @@ class MagicBabelApp:
         self._notify_translated_ui_status_change(False)
 
     def toggle_ui(self):
+        # ALT+H hotkey delegates to the EXACT handler the MINI button uses
+        # (toggle_mini_ui) so the two paths never diverge. The old inline logic
+        # snapped the mini UI to a stale last_mini_ui_pos → it popped up at
+        # screen-center instead of the left edge, and skipped the bottom-bar
+        # MINI highlight. Keep only the enable_ui_toggle gate.
         if self.settings.get("enable_ui_toggle"):
-            self.save_ui_positions()
-            qt_visible = self.qt_main_window and self.qt_main_window.isVisible()
-
-            if qt_visible:
-                # สลับจาก Main UI เป็น Mini UI
-                self.qt_main_window.hide()
-                self.mini_ui.mini_ui.deiconify()
-                self.mini_ui.mini_ui.lift()
-                self.mini_ui.mini_ui.attributes("-topmost", True)
-                if self.last_mini_ui_pos:
-                    self.mini_ui.mini_ui.geometry(self.last_mini_ui_pos)
-            else:
-                # สลับจาก Mini UI เป็น Main UI
-                if self.qt_main_window:
-                    self.qt_main_window.show()
-                    self.qt_main_window.raise_()
-                    if self.last_main_ui_pos:
-                        self._restore_qt_pos_from_geometry(self.last_main_ui_pos)
-                self.mini_ui.mini_ui.withdraw()
-
-            # ทำให้แน่ใจว่า Translated UI ยังคงแสดงอยู่ถ้ากำลังแปลอยู่
-            if self.is_translating and self.translated_ui_window.winfo_exists():
-                self.translated_ui_window.lift()
-                self.translated_ui_window.attributes("-topmost", True)
-
-            # อัพเดทสถานะของ Mini UI
-            if hasattr(self, "mini_ui"):
-                self.mini_ui.update_translation_status(self.is_translating)
-                # อัปเดตสถานะการแปลใน control_ui
-                if hasattr(self, "control_ui") and hasattr(
-                    self.control_ui, "update_translation_status"
-                ):
-                    self.control_ui.update_translation_status(self.is_translating)
+            self.toggle_mini_ui()
 
     def toggle_mini_ui(self):
         """Toggle between Main UI and Mini UI"""

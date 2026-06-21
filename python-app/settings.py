@@ -143,7 +143,7 @@ class Settings:
             "display_scale": None,
             "screen_size": "2560x1440",  # ขนาดหน้าจออ้างอิงเริ่มต้น
             "shortcuts": {  # ค่า default shortcuts
-                "toggle_ui": "alt+l",
+                "toggle_ui": "alt+h",
                 "start_stop_translate": "f9",
                 "previous_dialog": "r-click",  # Previous Dialog shortcut
                 "previous_dialog_key": "f10",  # Previous Dialog key
