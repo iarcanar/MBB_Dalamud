@@ -270,11 +270,16 @@ Used as Mini UI's `.mini_ui` and the dialogue's `.root`.
   `_tk_was_visible_before_*` memory survives overlay→overlay chains so the
   dialogue restores every time. Verified by a full mode-switch matrix.
 
-## Status
-Mini UI shipped (default). Dialogue behind the flag, **live-tested via Settings
-test buttons** (no errors) — real-game capture still pending. **Deferred:** remove
-the 16ms `tk_poll_timer` (MBB.py:7076-7078) — possible only once the dialogue flag
-is default AND Mini UI is Qt (only the transient splash stays Tk).
+## Status / enabling / revert
+Mini UI shipped (default). Dialogue behind the flag — **production-tested in the
+real app 2026-06-18 (user-confirmed working)**; real-FFXIV-game text capture still
+pending. **Enable:** `MBB_QT_DIALOGUE=1` (session) or `use_qt_dialogue: true` in
+settings.json (persistent — settings.json is **gitignored**, so the **repo default
+stays Tk**). **Revert:** `use_qt_dialogue: false`. **A packaged exe needs a rebuild
+to include the migration** (the changes live in the dev source; an old
+`dist_test/MBB.exe` won't have them). **Deferred:** remove the 16ms `tk_poll_timer`
+(MBB.py:7076-7078) once the flag is default AND Mini UI is Qt (only the transient
+splash stays Tk); ui_capture mini recipe tk→qt.
 
 ---
 
