@@ -13,15 +13,18 @@ def check_version_consistency():
     """Check that all version references are consistent"""
     base_path = Path(__file__).parent
 
-    # Files to check - แยกตาม development scope
-    # PYTHON SIDE FILES (py development)
-    mbb_file = base_path / "MBB.py"
-    settings_file = base_path / "settings.py"
-    readme_file = base_path / "README.md"
+    repo_root = base_path.parent  # python-app/ -> repo root
 
-    # PLUGIN SIDE FILES (C# development)
-    csproj_file = base_path / "DalamudMBBBridge" / "DalamudMBBBridge.csproj"
-    json_file = base_path / "DalamudMBBBridge" / "DalamudMBBBridge.json"
+    # Files to check — mirror exactly what bump_version.py maintains, so
+    # "consistent" == "bump_version did its job across both sides".
+    # PYTHON SIDE
+    version_file = base_path / "version.py"     # __version__ source of truth
+    readme_file = repo_root / "README.md"
+    claudemd_file = repo_root / "claude.md"
+
+    # PLUGIN SIDE (C#) — DalamudMBBBridge lives at repo root, not under python-app/
+    csproj_file = repo_root / "DalamudMBBBridge" / "DalamudMBBBridge.csproj"
+    json_file = repo_root / "DalamudMBBBridge" / "DalamudMBBBridge.json"
 
     errors = []
     py_versions = {}  # Python side versions
@@ -47,17 +50,11 @@ def check_version_consistency():
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                name = data.get('Name', '')
                 assembly_version = data.get('AssemblyVersion', '')
 
-                # Extract version from Name field
-                name_match = re.search(r'v(\d+\.\d+\.\d+(?:\.\d+)?)', name)
-                if name_match:
-                    cs_versions['json_name'] = name_match.group(1)
-                else:
-                    errors.append(f"❌ [PLUGIN] Version not found in JSON Name field: '{name}'")
-
-                # Extract version from AssemblyVersion
+                # AssemblyVersion is the C# version source. The Name field is a
+                # display name ("Magicite Babel Bridge") and no longer carries a
+                # version, so we don't parse it.
                 if assembly_version:
                     cs_versions['json_assembly'] = assembly_version
                 else:
@@ -68,44 +65,72 @@ def check_version_consistency():
     else:
         errors.append("❌ [PLUGIN] DalamudMBBBridge.json not found")
 
+    # Check DalamudApiLevel consistency (source manifest vs served pluginmaster).
+    # Resolved from repo root explicitly so it's correct regardless of cwd.
+    # Real incident: manifest=15, pluginmaster=14, repo-structure=13 all drifted →
+    # Dalamud can refuse to load/update on a mismatched API level.
+    print("🔌 CHECKING DalamudApiLevel...")
+    repo_root = base_path.parent
+    api_levels = {}
+    dal_json = repo_root / "DalamudMBBBridge" / "DalamudMBBBridge.json"
+    pluginmaster = repo_root / "pluginmaster.json"
+    if dal_json.exists():
+        try:
+            with open(dal_json, 'r', encoding='utf-8') as f:
+                api_levels['manifest'] = json.load(f).get('DalamudApiLevel')
+        except Exception as e:
+            errors.append(f"❌ [API] Error reading DalamudMBBBridge.json: {e}")
+    if pluginmaster.exists():
+        try:
+            with open(pluginmaster, 'r', encoding='utf-8') as f:
+                pm = json.load(f)
+                if isinstance(pm, list) and pm:  # pluginmaster.json is a list of entries
+                    api_levels['pluginmaster'] = pm[0].get('DalamudApiLevel')
+        except Exception as e:
+            errors.append(f"❌ [API] Error reading pluginmaster.json: {e}")
+    for k, v in api_levels.items():
+        print(f"   {k}: DalamudApiLevel={v}")
+    if len(set(api_levels.values())) > 1:
+        errors.append(f"❌ DalamudApiLevel MISMATCH: {api_levels}")
+
     # Check PYTHON SIDE FILES
     print("🐍 CHECKING PYTHON SIDE...")
 
-    # Check MBB.py version
-    if mbb_file.exists():
-        with open(mbb_file, 'r', encoding='utf-8') as f:
+    # Check version.py (__version__ — Python source of truth)
+    if version_file.exists():
+        with open(version_file, 'r', encoding='utf-8') as f:
             content = f.read()
             match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
             if match:
-                py_versions['mbb_py'] = match.group(1)
+                py_versions['version_py'] = match.group(1)
             else:
-                errors.append("❌ [PYTHON] __version__ not found in MBB.py")
+                errors.append("❌ [PYTHON] __version__ not found in version.py")
     else:
-        errors.append("❌ [PYTHON] MBB.py not found")
+        errors.append("❌ [PYTHON] version.py not found")
 
-    # Check settings.py version
-    if settings_file.exists():
-        with open(settings_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-            match = re.search(r'MagicBabel Dalamud v([0-9\.]+)', content)
-            if match:
-                py_versions['settings_py'] = match.group(1)
-            else:
-                errors.append("❌ [PYTHON] Version not found in settings.py")
-    else:
-        errors.append("❌ [PYTHON] settings.py not found")
-
-    # Check README.md version
+    # Check README.md badge (**Version:** X.Y.Z)
     if readme_file.exists():
         with open(readme_file, 'r', encoding='utf-8') as f:
             content = f.read()
-            match = re.search(r'# MBB Dalamud Bridge v([0-9\.]+)', content)
+            match = re.search(r'\*\*Version:\*\*\s*([0-9]+\.[0-9]+\.[0-9]+)', content)
             if match:
                 py_versions['readme_md'] = match.group(1)
             else:
-                errors.append("❌ [PYTHON] Version not found in README.md")
+                errors.append("❌ [PYTHON] **Version:** badge not found in README.md")
     else:
         errors.append("❌ [PYTHON] README.md not found")
+
+    # Check claude.md header (**Version:** X.Y.Z)
+    if claudemd_file.exists():
+        with open(claudemd_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            match = re.search(r'\*\*Version:\*\*\s*([0-9]+\.[0-9]+\.[0-9]+)', content)
+            if match:
+                py_versions['claude_md'] = match.group(1)
+            else:
+                errors.append("❌ [PYTHON] **Version:** header not found in claude.md")
+    else:
+        errors.append("❌ [PYTHON] claude.md not found")
 
     # Check consistency within each side
     py_consistent = len(set(py_versions.values())) <= 1 if py_versions else True

@@ -8,6 +8,10 @@
 !.env.example
 python-app/.env
 
+# Dev → dashboard notify hook config (local secret — NEVER commit)
+.dev_hook
+!.dev_hook.example
+
 # Python cache
 __pycache__/
 *.py[cod]

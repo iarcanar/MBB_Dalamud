@@ -46,20 +46,26 @@ ls -lh DalamudMBBBridge/bin/Release/DalamudMBBBridge.dll
 
 ### Package for Custom Repository
 ```bash
-# ทำ zip สำหรับ Dalamud Custom Repo
-cd DalamudMBBBridge/bin/Release
-zip -r ../../../plugins/DalamudMBBBridge/latest.zip \
-    DalamudMBBBridge.dll DalamudMBBBridge.json icon.png
+# Repack latest.zip with the FULL required set (incl. WMI runtime deps) and
+# refresh pluginmaster.json LastUpdated in one step:
+python scripts/pack_plugin.py
 
 # verify
 ls -lh c:/MBB_Dalamud/plugins/DalamudMBBBridge/latest.zip   # ~600-700KB expected
 ```
 
-### Update pluginmaster.json
-```json
-"AssemblyVersion": "X.Y.Z",
-"LastUpdated": "1735000000",   // unix timestamp
-```
+> ⚠️ **Do NOT hand-zip only `DalamudMBBBridge.dll + .json + icon.png`.** The plugin
+> needs `System.Management.dll` + `System.CodeDom.dll` (WMI process-check) bundled
+> too — Dalamud does not resolve NuGet deps. `pack_plugin.py` includes all 5 files;
+> the old 3-file `zip` command shipped a plugin that throws at runtime.
+
+### pluginmaster.json — version + freshness + API level
+- `AssemblyVersion` + `LastUpdated` are now handled automatically by
+  `bump_version.py` (and `pack_plugin.py` re-stamps `LastUpdated`). No manual edit.
+- `DalamudApiLevel` **must match the built manifest** in
+  `DalamudMBBBridge/bin/Release/DalamudMBBBridge.json` (currently **15**). It is
+  NOT touched by `bump_version.py` — verify with
+  `python check_version_consistency.py` (now cross-checks this field).
 
 ---
 
@@ -186,15 +192,17 @@ better: smoke-test in a copy of the dist folder.
 
 ### Console vs Windowed
 
-ใน [mbb.spec](python-app/mbb.spec):
+[mbb.spec](python-app/mbb.spec) now derives `console` from an env flag — no manual
+edit needed:
 ```python
-console=True,   # debug build — เห็น stdout/stderr
-console=False,  # release build — ไม่มีหน้า cmd
+_release_build = os.environ.get("MBB_RELEASE") == "1"
+console = not _release_build      # dev=True (see stdout) · release=False
 ```
 
 แนะนำ:
-- **Internal testing:** `console=True` เห็น log ทันที
-- **End-user release:** `console=False` UI สะอาด
+- **Internal testing:** build ปกติ → `console=True` เห็น log ทันที
+- **End-user release:** ตั้ง env `MBB_RELEASE=1` ก่อน build → `console=False` UI สะอาด
+  (bash: `MBB_RELEASE=1 pyinstaller mbb.spec ...` · PowerShell: `$env:MBB_RELEASE=1`)
 
 ---
 
@@ -353,12 +361,11 @@ gh release create v1.8.2 \
 # 1. C# plugin
 cd c:/MBB_Dalamud
 dotnet build DalamudMBBBridge/DalamudMBBBridge.csproj -c Release
-cd DalamudMBBBridge/bin/Release
-zip -r ../../../plugins/DalamudMBBBridge/latest.zip DalamudMBBBridge.dll DalamudMBBBridge.json icon.png
+python scripts/pack_plugin.py            # zip incl. WMI dlls + stamp LastUpdated
 
-# 2. Python EXE
+# 2. Python EXE  (MBB_RELEASE=1 → windowed/no-console build)
 cd c:/MBB_Dalamud/python-app
-pyinstaller mbb.spec --clean --noconfirm --distpath ../dist_test --workpath ../dist_test/build_work
+MBB_RELEASE=1 pyinstaller mbb.spec --clean --noconfirm --distpath ../dist_test --workpath ../dist_test/build_work
 
 # 3. Smoke test
 cd c:/MBB_Dalamud/dist_test/MBB && timeout 8 ./MBB.exe 2>&1 | head -50

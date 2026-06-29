@@ -41,16 +41,10 @@ VERSION_LOCATIONS = [
             (r"<Version>[^<]*</Version>", "<Version>{version}</Version>"),
         ],
     },
-    # Dalamud custom repo manifest
+    # Dalamud custom repo manifest (root = the file Dalamud actually serves).
+    # NOTE: LastUpdated is bumped separately in main() (timestamp, not version).
     {
         "file": "pluginmaster.json",
-        "patterns": [
-            (r'"AssemblyVersion":\s*"[^"]*"', '"AssemblyVersion": "{version}"'),
-        ],
-    },
-    # Dalamud repo-structure manifest
-    {
-        "file": "repo-structure/pluginmaster.json",
         "patterns": [
             (r'"AssemblyVersion":\s*"[^"]*"', '"AssemblyVersion": "{version}"'),
         ],
@@ -160,11 +154,29 @@ def main():
         if update_file(location, new_version):
             changed += 1
 
+    # ── pluginmaster.json LastUpdated (Dalamud freshness signal) ──
+    # Not version-based (it's a unix timestamp), so it lives outside the regex
+    # table above. Without bumping it, the served manifest's mtime never changes
+    # and the DLL release can look stale to Dalamud's repo poller.
+    import time
+    pm_path = os.path.join(PROJECT_ROOT, "pluginmaster.json")
+    if os.path.exists(pm_path):
+        with open(pm_path, "r", encoding="utf-8") as f:
+            pm_content = f.read()
+        ts = str(int(time.time()))
+        new_pm = re.sub(r'"LastUpdated":\s*"[^"]*"', f'"LastUpdated": "{ts}"', pm_content)
+        if new_pm != pm_content:
+            with open(pm_path, "w", encoding="utf-8") as f:
+                f.write(new_pm)
+            print(f"  OK    pluginmaster.json LastUpdated → {ts}")
+            changed += 1
+
     print(f"\nDone! Updated {changed} file(s) to v{new_version}")
     print(f"\nNext steps:")
     print(f"  1. cd DalamudMBBBridge && dotnet build -c Release")
-    print(f"  2. Test in game")
-    print(f"  3. git add -A && git commit")
+    print(f"  2. python scripts/pack_plugin.py   # repack latest.zip (incl. WMI dlls)")
+    print(f"  3. Test in game")
+    print(f"  4. git add -A && git commit")
 
 
 if __name__ == "__main__":

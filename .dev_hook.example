@@ -1,0 +1,16 @@
+# MBB dev → dashboard notify config.
+# Copy this file to `.dev_hook` (same folder) and fill in the values.
+# `.dev_hook` is gitignored — NEVER commit the real secret.
+#
+# After each commit, scripts/notify_dashboard.py (run by .git/hooks/post-commit)
+# POSTs the commit's version + metadata to the admin dashboard.
+
+# Where to send. For local dev point at the running Next.js dev server;
+# for the live dashboard use the Vercel URL.
+#   dev:  http://localhost:3000
+#   prod: https://mbb-ffxiv.vercel.app
+MBB_DASHBOARD_URL=http://localhost:3000
+
+# Shared secret. Must equal DEV_STATUS_SECRET (preferred) or ADMIN_SECRET
+# configured on the web (.env.local locally / Vercel env in prod).
+MBB_DASHBOARD_SECRET=put-your-secret-here

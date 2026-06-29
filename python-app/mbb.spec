@@ -118,6 +118,9 @@ hiddenimports = [
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
     'PyQt6.sip',
+    # QtSvg — qt_icons.py renders SVG icons via QSvgRenderer (NOT auto-detected)
+    'PyQt6.QtSvg',
+    'PyQt6.QtSvgWidgets',
 
     # ---- MBB core modules (imported lazily / conditionally) ----
     'version',
@@ -149,6 +152,10 @@ hiddenimports = [
     'trial_config',
     'ui_config',
 
+    # ---- PyQt6 TUI migration + cloud sync (dynamic / conditional imports) ----
+    'mini_ui_qt',          # default-on Qt Mini UI (MBB.py imports it)
+    'npc_cloud_sync',      # NPC Manager cloud sync
+
     # ---- ui_components (Tkinter helper widgets) ----
     'ui_components',
     'ui_components.bottom_bar',
@@ -172,6 +179,13 @@ hiddenimports = [
     'pyqt_ui.styles',
     'pyqt_ui.theme_panel',
     'pyqt_ui.translated_logs',
+    # ---- Qt TUI migration (opt-in dialogue + choice overlay + helpers) ----
+    'pyqt_ui.translated_ui_qt',   # Qt dialogue TUI (MBB_QT_DIALOGUE flag)
+    'pyqt_ui.choice_overlay',     # choice-mode overlay (ChatType 70)
+    'pyqt_ui.choice_parser',      # choice text parser
+    'pyqt_ui.screenshot_tool',    # avatar screenshot capture
+    'pyqt_ui.tk_compat',          # TkWindowShim shared by Qt Mini/dialogue
+    'pyqt_ui.qt_icons',           # SVG icon infra (needs PyQt6.QtSvg)
 ]
 
 # ============================================================
@@ -217,6 +231,16 @@ a = Analysis(
 # ============================================================
 pyz = PYZ(a.pure)
 
+# Console window: ON for dev (see stdout/stderr), OFF for end-user release.
+# Set MBB_RELEASE=1 in the environment to produce a windowed (no-console) build,
+# so a release build can't accidentally ship with the debug console attached.
+_release_build = os.environ.get("MBB_RELEASE") == "1"
+_console = not _release_build
+if _console:
+    print("[spec] console=True (DEBUG build). Set MBB_RELEASE=1 for a windowed RELEASE build.")
+else:
+    print("[spec] console=False (RELEASE build, MBB_RELEASE=1).")
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -227,7 +251,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # Console enabled for debugging - flip to False for prod release
+    console=_console,  # dev=True; release build sets MBB_RELEASE=1 → False (see above)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -285,20 +309,26 @@ if os.path.exists(_imgs_internal):
 # so the dev notices instead of shipping an EXE without its plugin.
 _plugin_src_dir = os.path.join(os.path.dirname(spec_root), 'DalamudMBBBridge', 'bin', 'Release')
 _plugin_dst_dir = os.path.join(_dist_root, 'plugin')
-_plugin_files = ['DalamudMBBBridge.dll', 'DalamudMBBBridge.json', 'icon.png']
-if all(os.path.exists(os.path.join(_plugin_src_dir, f)) for f in _plugin_files):
+# Files that prove the plugin was actually built (abort if any is missing).
+_plugin_required = ['DalamudMBBBridge.dll', 'DalamudMBBBridge.json', 'icon.png']
+# Runtime deps that MUST ship alongside the DLL — Dalamud does NOT resolve NuGet
+# deps automatically. System.Management (+ its transitive System.CodeDom) backs
+# the WMI process-check; without them the plugin throws at runtime.
+_plugin_runtime_deps = ['System.Management.dll', 'System.CodeDom.dll']
+if all(os.path.exists(os.path.join(_plugin_src_dir, f)) for f in _plugin_required):
     os.makedirs(_plugin_dst_dir, exist_ok=True)
-    for fname in _plugin_files:
+    for fname in _plugin_required + _plugin_runtime_deps:
+        src = os.path.join(_plugin_src_dir, fname)
+        if not os.path.exists(src):
+            print(f"[post-build] WARN: plugin dep missing, NOT bundled: {fname}")
+            continue
         try:
-            shutil.copyfile(
-                os.path.join(_plugin_src_dir, fname),
-                os.path.join(_plugin_dst_dir, fname),
-            )
+            shutil.copyfile(src, os.path.join(_plugin_dst_dir, fname))
         except Exception as e:
             print(f"[post-build] WARN: failed to copy plugin/{fname}: {e}")
     print(f"[post-build] Bundled Dalamud plugin -> {_plugin_dst_dir}")
 else:
-    missing = [f for f in _plugin_files
+    missing = [f for f in _plugin_required
                if not os.path.exists(os.path.join(_plugin_src_dir, f))]
     raise SystemExit(
         f"\n[post-build] BUILD ABORTED — Dalamud plugin DLL not found.\n"
