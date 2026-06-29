@@ -1,12 +1,12 @@
 # Magicite Babel — Dalamud Edition
 
-[![MBB Banner](docs/Splash.png)](https://iarcanar.github.io/MBB_Dalamud/)
+[![MBB Banner](docs/Splash.png)](https://mbb-ffxiv.vercel.app/)
 
 **Real-time Thai translation overlay for Final Fantasy XIV**
 
 MBB hooks into FFXIV's text system via [Dalamud](https://github.com/goatcorp/Dalamud) plugin and translates dialogue, cutscenes, and battle text into Thai in real-time using Google Gemini AI.
 
-> **Version:** 1.8.21 &nbsp;|&nbsp; **Build:** 04032026-01 &nbsp;|&nbsp; [**Website**](https://iarcanar.github.io/MBB_Dalamud/)
+> **Version:** 1.8.21 &nbsp;|&nbsp; **Build:** 04032026-02 &nbsp;|&nbsp; [**Website**](https://mbb-ffxiv.vercel.app/) &nbsp;|&nbsp; [**Download (Releases)**](https://github.com/iarcanar/MBB_Dalamud/releases/latest)
 
 ---
 
@@ -21,7 +21,7 @@ FFXIV Game  ──>  Dalamud Plugin (C#)  ──>  Named Pipe  ──>  Python A
 
 1. **Dalamud Plugin** hooks into FFXIV's chat system and captures dialogue text
 2. Text is sent to the **Python app** via named pipe (IPC)
-3. **Gemini 2.0 Flash** translates with character-aware context
+3. **Gemini 3.1 Flash-Lite** translates with character-aware context
 4. Translation appears on the **TUI overlay** directly on top of the game
 
 ---
@@ -70,12 +70,12 @@ MBB_Dalamud/
 |   |-- index.html                    Single-file website
 |   +-- screenshots/                  UI screenshots
 |
+|-- pluginmaster.json                 Dalamud plugin discovery manifest (served)
 |-- plugins/                          Dalamud custom repository
 |   +-- DalamudMBBBridge/
-|       +-- latest.zip                Pre-built plugin package
+|       +-- latest.zip                Pre-built plugin package (incl. WMI dlls)
 |
-|-- repo-structure/
-|   +-- pluginmaster.json             Dalamud plugin discovery manifest
+|-- scripts/                          Build & release automation (build_release.ps1, ...)
 |
 +-- claude.md                         Project documentation
 ```
@@ -85,7 +85,7 @@ MBB_Dalamud/
 ## Features
 
 - **Text Hook** -- Direct memory-based text extraction via Dalamud (no OCR)
-- **Gemini 2.0 Flash** -- Fast, context-aware Thai translation
+- **Gemini 3.1 Flash-Lite** -- Fast, context-aware Thai translation (model selectable)
 - **Wide-Context Translation** -- Remembers recent dialogue for consistent pronouns and honorifics
 - **NPC Database** -- 290+ named characters with customizable tone/personality
 - **TUI Overlay** -- Transparent translation overlay with rich text formatting
@@ -107,12 +107,12 @@ MBB_Dalamud/
 
 ### Steps
 
-1. Download and install [XIVLauncher](https://github.com/goatcorp/FFXIVQuickLauncher/releases/latest/download/XIVLauncher-win-Setup.exe)
-2. Download the MBB application (Python app executable)
-3. In Dalamud Plugin Settings, add the MBB custom repository URL
-4. Install "Magicite Babel Bridge" from the plugin installer
-5. Set the MBB application path in plugin settings
-6. Enter your Gemini API key on first launch -- ready to play!
+1. Install [XIVLauncher](https://github.com/goatcorp/FFXIVQuickLauncher/releases/latest/download/XIVLauncher-win-Setup.exe) (Dalamud is bundled)
+2. Download **[MBB-v1.8.21.zip](https://github.com/iarcanar/MBB_Dalamud/releases/latest)** from Releases and extract it somewhere outside `Program Files` (the plugin ships inside, in `MBB\plugin\`)
+3. In Dalamud → Settings → **Experimental → Dev Plugin Locations**, add `MBB\plugin\DalamudMBBBridge.dll`
+4. Run **MBB.exe** (Run as Administrator), enter your Gemini API key -- ready to play!
+
+> 📘 Full illustrated step-by-step guide: **[mbb-ffxiv.vercel.app](https://mbb-ffxiv.vercel.app/)** &nbsp;·&nbsp; A Google Drive mirror is offered there as a download fallback.
 
 ---
 
@@ -160,7 +160,7 @@ The Python translation application (everything under `python-app/`) is an origin
 
 - **[XIVLauncher / Dalamud](https://github.com/goatcorp/FFXIVQuickLauncher)** -- The custom game launcher and plugin framework that makes this project possible. Provides the plugin API, text hook services (`IChatGui`, `IClientState`), and the custom repository system.
 
-- **[Google Gemini](https://ai.google.dev/)** -- AI model powering the translation engine (Gemini 2.0 Flash).
+- **[Google Gemini](https://ai.google.dev/)** -- AI model powering the translation engine (default Gemini 3.1 Flash-Lite; model is selectable in-app).
 
 ---
 
