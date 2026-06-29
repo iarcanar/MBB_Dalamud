@@ -13,9 +13,10 @@ import webbrowser
 from PyQt6.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGraphicsDropShadowEffect, QComboBox, QSlider, QProgressBar, QLineEdit,
+    QStyle, QStyleOptionSlider,
 )
-from PyQt6.QtGui import QColor, QFont
-from PyQt6.QtCore import Qt, QPoint, QTimer
+from PyQt6.QtGui import QColor, QFont, QPainter, QIcon
+from PyQt6.QtCore import Qt, QEvent, QPoint, QPointF, QRectF, QSize, QTimer
 
 from pyqt_ui.styles import FONT_PRIMARY, FONT_MONO, derive_palette
 from api_key_manager import get_current_key, mask_key, validate_format, save_key
@@ -31,7 +32,7 @@ except Exception:
 log = logging.getLogger("mbb-qt")
 
 WIDTH = 420
-HEIGHT = 620
+HEIGHT = 772   # settings-panel scale (bigger text + slider pip markers + hints)
 
 AVAILABLE_MODELS = [
     "gemini-2.5-flash-lite",
@@ -45,11 +46,107 @@ _MODEL_LABELS = {
     "gemini-2.5-flash": "Gemini 2.5 Flash",
 }
 
-PARAM_HINTS = {
-    "max_tokens": "จำนวนคำตอบสูงสุด — ยิ่งมากยิ่งแปลได้ยาว  แนะนำ 500-1000",
-    "temperature": "ความสร้างสรรค์ — ต่ำ=แปลตรง สูง=หลากหลาย  แนะนำ 0.70-0.80",
-    "top_p": "ช่วงคำที่เลือกใช้ — ต่ำ=เฉพาะเจาะจง สูง=กว้าง  แนะนำ 0.90-0.95",
+# ── Parameter specs (REAL units) — UI range is intentionally NARROWER than the
+# backend validators (settings.set_api_parameters: max_tokens 100-2000, temp/
+# top_p 0.0-1.0). The slider only exposes the band that keeps translation
+# quality good, so a user can't drag into a degrading value. `rec` = the
+# recommended value (matches FORCED_PARAMS) the marker + RESET point to. Each
+# slider runs in STEP-INDEX units (0..n) so every integer position is a snap
+# stop → inherent "magnet" feel. ──
+PARAM_SPECS = {
+    "max_tokens":  {"lo": 400,  "hi": 1200, "step": 100,  "rec": 500,  "fmt": "{:.0f}", "label": "Max Tokens"},
+    "temperature": {"lo": 0.50, "hi": 1.00, "step": 0.05, "rec": 0.80, "fmt": "{:.2f}", "label": "Temperature"},
+    "top_p":       {"lo": 0.80, "hi": 1.00, "step": 0.05, "rec": 0.90, "fmt": "{:.2f}", "label": "Top P"},
 }
+
+PARAM_HINTS = {
+    "max_tokens": "ความยาวคำแปลสูงสุด — สั้นไปจะตัดประโยคยาว  ·  แนะนำ 500",
+    "temperature": "ความสร้างสรรค์ของคำแปล — ต่ำ=ตรงตัว สูง=หลากหลาย  ·  แนะนำ 0.80",
+    "top_p": "ความหลากหลายของคำที่เลือกใช้  ·  แนะนำ 0.90",
+}
+
+
+def _spec_n(spec):
+    """Number of snap steps (slider runs 0..n)."""
+    return round((spec["hi"] - spec["lo"]) / spec["step"])
+
+
+def _idx_to_real(spec, idx):
+    """Step-index → real parameter value."""
+    return spec["lo"] + idx * spec["step"]
+
+
+def _real_to_idx(spec, real):
+    """Real value → nearest in-range step-index (clamps out-of-band saved values)."""
+    return max(0, min(_spec_n(spec), round((real - spec["lo"]) / spec["step"])))
+
+
+class _MagnetSlider(QSlider):
+    """Horizontal slider that runs in step-index units (each integer = one snap
+    stop). FULLY self-painted — we deliberately do NOT call super().paintEvent
+    so Qt never draws its default groove/sub-page/add-page subcontrols (those
+    render as a tall grey block, and a QSS `background: transparent` won't
+    suppress them). We draw a thin track + snap pips + an accent handle, with
+    the recommended stop highlighted. Pairs with PARAM_SPECS."""
+
+    def __init__(self, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self._rec_index = None
+        self._pip_color = QColor("#555555")
+        self._rec_color = QColor("#58a6ff")
+        self._track_color = QColor("#222222")
+        self._handle_color = QColor("#58a6ff")
+        self.setMinimumHeight(30)
+
+    def set_recommended(self, index):
+        self._rec_index = index
+        self.update()
+
+    def set_marker_colors(self, accent_hex, pip_hex, track_hex):
+        self._rec_color = QColor(accent_hex)
+        self._handle_color = QColor(accent_hex)
+        self._pip_color = QColor(pip_hex)
+        self._track_color = QColor(track_hex)
+        self.update()
+
+    def paintEvent(self, event):
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove = self.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider, opt,
+            QStyle.SubControl.SC_SliderGroove, self)
+        handle = self.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider, opt,
+            QStyle.SubControl.SC_SliderHandle, self)
+        span = groove.width() - handle.width()
+        if span <= 0:
+            return
+        x0 = groove.x() + handle.width() // 2
+        cy = float(groove.center().y())
+        lo, hi = self.minimum(), self.maximum()
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+
+        # Thin track (blends with the theme — no grey block)
+        p.setBrush(self._track_color)
+        p.drawRoundedRect(QRectF(x0, cy - 2, span, 4), 2, 2)
+
+        # Snap pips below the track — ALL the same small size; the recommended
+        # stop is distinguished by colour (accent) only, not size.
+        pip_y = cy + 10
+        pip_r = 1.6
+        for idx in range(lo, hi + 1):
+            x = x0 + QStyle.sliderPositionFromValue(lo, hi, idx, span)
+            p.setBrush(self._rec_color if idx == self._rec_index else self._pip_color)
+            p.drawEllipse(QPointF(float(x), float(pip_y)), pip_r, pip_r)
+
+        # Handle
+        hx = x0 + QStyle.sliderPositionFromValue(lo, hi, self.value(), span)
+        p.setBrush(self._handle_color if self.isEnabled() else self._pip_color)
+        p.drawEllipse(QPointF(float(hx), cy), 7.0, 7.0)
+        p.end()
 
 
 class ModelPanel(QWidget):
@@ -65,7 +162,7 @@ class ModelPanel(QWidget):
         self.bg = None
         self.shadow = None
         self._model_combo = None
-        self._sliders = {}       # key -> (QSlider, QLabel, display_scale)
+        self._sliders = {}       # key -> (_MagnetSlider, QLabel value, PARAM_SPECS spec)
         self._apply_btn = None
         self._status_label = None
         self._usage_label = None
@@ -122,19 +219,19 @@ class ModelPanel(QWidget):
         # Header
         header = QWidget()
         header.setObjectName("model_header")
-        header.setFixedHeight(44)
+        header.setFixedHeight(52)
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(16, 0, 6, 0)
 
         title = QLabel("AI Model Configuration")
         title.setObjectName("model_title")
-        title.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
+        title.setFont(QFont(FONT_PRIMARY, 13, QFont.Weight.Bold))
         h_layout.addWidget(title)
         h_layout.addStretch()
 
         btn_close = QPushButton("✕")
         btn_close.setObjectName("model_close")
-        btn_close.setFixedSize(28, 28)
+        btn_close.setFixedSize(34, 34)
         btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.clicked.connect(self.close)
         h_layout.addWidget(btn_close)
@@ -169,7 +266,7 @@ class ModelPanel(QWidget):
         v.setSpacing(7)
         lbl = QLabel(title)
         lbl.setObjectName("model_section")
-        lbl.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
+        lbl.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
         v.addWidget(lbl)
         parent_layout.addWidget(card)
         return v
@@ -183,13 +280,13 @@ class ModelPanel(QWidget):
         self._key_field = QLineEdit()
         self._key_field.setObjectName("model_key_field")
         self._key_field.setReadOnly(True)
-        self._key_field.setFont(QFont(FONT_MONO, 9))
+        self._key_field.setFont(QFont(FONT_MONO, 10))
         self._key_field.returnPressed.connect(self._save_key)
         row.addWidget(self._key_field, stretch=1)
 
         self._key_eye = QPushButton("👁")
         self._key_eye.setObjectName("model_icon_btn")
-        self._key_eye.setFixedSize(30, 28)
+        self._key_eye.setFixedSize(34, 30)
         self._key_eye.setCursor(Qt.CursorShape.PointingHandCursor)
         self._key_eye.setToolTip("แสดง / ซ่อน API Key")
         self._key_eye.clicked.connect(self._toggle_key_reveal)
@@ -197,7 +294,7 @@ class ModelPanel(QWidget):
 
         self._key_action = QPushButton("✎")
         self._key_action.setObjectName("model_icon_btn")
-        self._key_action.setFixedSize(30, 28)
+        self._key_action.setFixedSize(34, 30)
         self._key_action.setCursor(Qt.CursorShape.PointingHandCursor)
         self._key_action.setToolTip("แก้ไข API Key")
         self._key_action.clicked.connect(self._on_key_action)
@@ -212,12 +309,12 @@ class ModelPanel(QWidget):
         bottom.addWidget(self._key_dot)
         self._key_status = QLabel("")
         self._key_status.setObjectName("model_key_status")
-        self._key_status.setFont(QFont(FONT_PRIMARY, 8))
+        self._key_status.setFont(QFont(FONT_PRIMARY, 9))
         bottom.addWidget(self._key_status, stretch=1)
 
         link = QPushButton("เปิด Google AI Studio")
         link.setObjectName("model_link")
-        link.setFont(QFont(FONT_PRIMARY, 8))
+        link.setFont(QFont(FONT_PRIMARY, 9))
         link.setCursor(Qt.CursorShape.PointingHandCursor)
         link.clicked.connect(lambda: webbrowser.open("https://aistudio.google.com/app/apikey"))
         bottom.addWidget(link)
@@ -229,14 +326,23 @@ class ModelPanel(QWidget):
         if LOCK_MODEL:
             pill = QLabel(f"{_MODEL_LABELS.get(FORCED_MODEL, FORCED_MODEL)}   ✓ แนะนำ")
             pill.setObjectName("model_pill")
-            pill.setFont(QFont(FONT_PRIMARY, 10, QFont.Weight.Bold))
+            pill.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
             v.addWidget(pill)
         else:
             self._model_combo = QComboBox()
             self._model_combo.setObjectName("model_combo")
-            self._model_combo.setFont(QFont(FONT_PRIMARY, 10))
+            self._model_combo.setFont(QFont(FONT_PRIMARY, 12, QFont.Weight.Bold))
             self._model_combo.addItems(AVAILABLE_MODELS)
-            self._model_combo.setFixedHeight(30)
+            self._model_combo.setFixedHeight(36)
+            # Editable + read-only line edit → lets us centre the selected model
+            # name prominently (a plain QComboBox can't centre its display text).
+            self._model_combo.setEditable(True)
+            le = self._model_combo.lineEdit()
+            le.setReadOnly(True)
+            le.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            le.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            le.setCursor(Qt.CursorShape.PointingHandCursor)
+            le.installEventFilter(self)  # click the text (not just arrow) → open popup
             v.addWidget(self._model_combo)
 
     def _build_parameters_card(self, parent_layout):
@@ -244,11 +350,9 @@ class ModelPanel(QWidget):
         if LOCK_PARAMETERS:
             title = "PARAMETERS   🔒 ล็อก (แสดงอย่างเดียว)"
         v = self._card(parent_layout, title)
-        self._add_slider(v, "max_tokens", "Max Tokens", 100, 2000, 50, 500, fmt="{:.0f}")
-        self._add_slider(v, "temperature", "Temperature", 0, 100, 5, 80,
-                         display_scale=0.01, fmt="{:.2f}")
-        self._add_slider(v, "top_p", "Top P", 0, 100, 5, 90,
-                         display_scale=0.01, fmt="{:.2f}")
+        self._add_slider(v, "max_tokens")
+        self._add_slider(v, "temperature")
+        self._add_slider(v, "top_p")
         if LOCK_PARAMETERS:
             # View-only: keep values visible but block dragging (dev/full build can edit).
             for slider, _, _ in self._sliders.values():
@@ -259,18 +363,18 @@ class ModelPanel(QWidget):
 
         self._usage_label = QLabel("—")
         self._usage_label.setObjectName("model_usage_label")
-        self._usage_label.setFont(QFont(FONT_MONO, 9))
+        self._usage_label.setFont(QFont(FONT_MONO, 10))
         v.addWidget(self._usage_label)
 
         self._usage_bar = QProgressBar()
         self._usage_bar.setObjectName("model_usage_bar")
         self._usage_bar.setTextVisible(False)
-        self._usage_bar.setFixedHeight(8)
+        self._usage_bar.setFixedHeight(10)
         v.addWidget(self._usage_bar)
 
         self._usage_models_label = QLabel("")
         self._usage_models_label.setObjectName("model_usage_models")
-        self._usage_models_label.setFont(QFont(FONT_PRIMARY, 8))
+        self._usage_models_label.setFont(QFont(FONT_PRIMARY, 9))
         self._usage_models_label.setWordWrap(True)
         v.addWidget(self._usage_models_label)
 
@@ -283,22 +387,25 @@ class ModelPanel(QWidget):
 
         btn_reset = QPushButton("RESET")
         btn_reset.setObjectName("model_btn")
-        btn_reset.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
-        btn_reset.setFixedHeight(32)
+        btn_reset.setFont(QFont(FONT_PRIMARY, 10, QFont.Weight.Bold))
+        btn_reset.setFixedHeight(36)
+        btn_reset.setMinimumWidth(96)
         btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_reset.setToolTip("คืนค่าแนะนำ (500 · 0.80 · 0.90)")
         btn_reset.clicked.connect(self._reset_defaults)
         f.addWidget(btn_reset)
 
         self._status_label = QLabel("")
         self._status_label.setObjectName("model_status")
-        self._status_label.setFont(QFont(FONT_PRIMARY, 8))
+        self._status_label.setFont(QFont(FONT_PRIMARY, 9))
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         f.addWidget(self._status_label, stretch=1)
 
         self._apply_btn = QPushButton("APPLY")
         self._apply_btn.setObjectName("model_apply")
-        self._apply_btn.setFont(QFont(FONT_PRIMARY, 9, QFont.Weight.Bold))
-        self._apply_btn.setFixedHeight(32)
+        self._apply_btn.setFont(QFont(FONT_PRIMARY, 10, QFont.Weight.Bold))
+        self._apply_btn.setFixedHeight(36)
+        self._apply_btn.setMinimumWidth(96)
         self._apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_btn.clicked.connect(self._on_apply)
         f.addWidget(self._apply_btn)
@@ -307,34 +414,40 @@ class ModelPanel(QWidget):
 
     # ── Helpers ──
 
-    def _add_slider(self, layout, key, label, min_v, max_v, step, default,
-                    display_scale=1.0, fmt="{}"):
+    def _add_slider(self, layout, key):
+        """Magnet slider for one PARAM_SPECS entry. Runs in step-index units so
+        every position snaps; paints snap pips + a recommended marker."""
+        spec = PARAM_SPECS[key]
+        fmt = spec["fmt"]
+
         row = QHBoxLayout()
         row.setSpacing(6)
 
-        lbl = QLabel(label)
+        lbl = QLabel(spec["label"])
         lbl.setObjectName("model_param_label")
-        lbl.setFont(QFont(FONT_PRIMARY, 9))
-        lbl.setMinimumWidth(80)
+        lbl.setFont(QFont(FONT_PRIMARY, 10))
+        lbl.setMinimumWidth(84)
         row.addWidget(lbl)
 
-        slider = QSlider(Qt.Orientation.Horizontal)
+        slider = _MagnetSlider()
         slider.setObjectName("model_slider")
-        slider.setMinimum(min_v)
-        slider.setMaximum(max_v)
-        slider.setSingleStep(step)
-        slider.setValue(default)
+        slider.setMinimum(0)
+        slider.setMaximum(_spec_n(spec))
+        slider.setSingleStep(1)
+        slider.setPageStep(1)
+        slider.set_recommended(_real_to_idx(spec, spec["rec"]))
+        slider.setValue(_real_to_idx(spec, spec["rec"]))
         row.addWidget(slider, stretch=1)
 
-        val_lbl = QLabel(fmt.format(default * display_scale))
+        val_lbl = QLabel(fmt.format(spec["rec"]))
         val_lbl.setObjectName("model_param_value")
-        val_lbl.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
-        val_lbl.setMinimumWidth(44)
+        val_lbl.setFont(QFont(FONT_MONO, 10, QFont.Weight.Bold))
+        val_lbl.setMinimumWidth(46)
         val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(val_lbl)
 
         slider.valueChanged.connect(
-            lambda v: val_lbl.setText(fmt.format(v * display_scale))
+            lambda idx, s=spec, vl=val_lbl: vl.setText(s["fmt"].format(_idx_to_real(s, idx)))
         )
 
         layout.addLayout(row)
@@ -343,11 +456,11 @@ class ModelPanel(QWidget):
         if hint:
             hint_lbl = QLabel(hint)
             hint_lbl.setObjectName("model_hint")
-            hint_lbl.setFont(QFont(FONT_PRIMARY, 8))
+            hint_lbl.setFont(QFont(FONT_PRIMARY, 9))
             hint_lbl.setWordWrap(True)
             layout.addWidget(hint_lbl)
 
-        self._sliders[key] = (slider, val_lbl, display_scale)
+        self._sliders[key] = (slider, val_lbl, spec)
 
     # ── API key ──
 
@@ -362,6 +475,7 @@ class ModelPanel(QWidget):
         self._key_action.setText("✎")
         self._key_action.setToolTip("แก้ไข API Key")
         self._key_eye.setEnabled(bool(key))
+        self._update_key_icons()
 
         ok = bool(key) and validate_format(key)[0]
         self._key_dot.setStyleSheet(
@@ -380,6 +494,7 @@ class ModelPanel(QWidget):
             key = get_current_key()
             if key:
                 self._key_field.setText(key if self._key_revealed else mask_key(key))
+        self._update_key_icons()
 
     def _on_key_action(self):
         if not self._key_editing:
@@ -392,9 +507,9 @@ class ModelPanel(QWidget):
             self._key_field.setPlaceholderText("วาง API Key ใหม่ที่นี่")
             self._key_field.setFocus()
             self._key_eye.setEnabled(True)
-            self._key_action.setText("💾")
             self._key_action.setToolTip("บันทึก API Key")
-            self._set_key_status("วาง key แล้วกด 💾 หรือ Enter", ok=True)
+            self._update_key_icons()
+            self._set_key_status("วาง key แล้วกดบันทึก หรือ Enter", ok=True)
         else:
             self._save_key()
 
@@ -424,6 +539,39 @@ class ModelPanel(QWidget):
             )
             self._key_status.setText(msg)
 
+    def _update_key_icons(self):
+        """Apply SVG icons (tinted to the theme text colour) to the API-key
+        eye + action buttons. Eye = open when masked (tap to reveal) / slashed
+        when revealed (tap to hide); action = save while editing, else edit
+        (pencil). Each falls back to its emoji glyph if the SVG is missing."""
+        from pyqt_ui.qt_icons import load_icon
+        color = getattr(self, "_icon_color", "#e6edf3")
+
+        eye = load_icon("eye_close" if self._key_revealed else "eye_open", color)
+        if eye is not None:
+            self._key_eye.setIcon(eye)
+            self._key_eye.setIconSize(QSize(18, 18))
+            self._key_eye.setText("")
+
+        if self._key_editing:
+            save = load_icon("save", color)
+            if save is not None:
+                self._key_action.setIcon(save)
+                self._key_action.setIconSize(QSize(18, 18))
+                self._key_action.setText("")
+            else:
+                self._key_action.setIcon(QIcon())
+                self._key_action.setText("💾")
+        else:
+            edit = load_icon("edit", color)
+            if edit is not None:
+                self._key_action.setIcon(edit)
+                self._key_action.setIconSize(QSize(18, 18))
+                self._key_action.setText("")
+            else:
+                self._key_action.setIcon(QIcon())
+                self._key_action.setText("✎")
+
     # ── Data ──
 
     def _load_current(self):
@@ -437,16 +585,16 @@ class ModelPanel(QWidget):
 
         if self._sliders:
             src = FORCED_PARAMS if LOCK_PARAMETERS else params
-            self._set_slider("max_tokens", src.get("max_tokens", 500))
-            self._set_slider("temperature", src.get("temperature", 0.8), scale=100)
-            self._set_slider("top_p", src.get("top_p", 0.9), scale=100)
+            for key, spec in PARAM_SPECS.items():
+                self._set_slider(key, src.get(key, spec["rec"]))
 
         self._refresh_key_display()
 
-    def _set_slider(self, key, value, scale=1):
+    def _set_slider(self, key, real_value):
+        """Snap a real parameter value onto the slider (clamps out-of-band)."""
         if key in self._sliders:
-            slider, _, _ = self._sliders[key]
-            slider.setValue(int(value * scale))
+            slider, _, spec = self._sliders[key]
+            slider.setValue(_real_to_idx(spec, real_value))
 
     # ── Usage ──
 
@@ -542,9 +690,12 @@ class ModelPanel(QWidget):
             model = self._model_combo.currentText() if self._model_combo else FORCED_MODEL
 
             if self._sliders:
-                max_tokens = self._sliders["max_tokens"][0].value()
-                temperature = self._sliders["temperature"][0].value() * self._sliders["temperature"][2]
-                top_p = self._sliders["top_p"][0].value() * self._sliders["top_p"][2]
+                s_mt, _, sp_mt = self._sliders["max_tokens"]
+                s_t, _, sp_t = self._sliders["temperature"]
+                s_p, _, sp_p = self._sliders["top_p"]
+                max_tokens = int(round(_idx_to_real(sp_mt, s_mt.value())))
+                temperature = round(_idx_to_real(sp_t, s_t.value()), 2)
+                top_p = round(_idx_to_real(sp_p, s_p.value()), 2)
             else:
                 max_tokens = FORCED_PARAMS["max_tokens"]
                 temperature = FORCED_PARAMS["temperature"]
@@ -586,10 +737,9 @@ class ModelPanel(QWidget):
             idx = self._model_combo.findText(FORCED_MODEL)
             if idx >= 0:
                 self._model_combo.setCurrentIndex(idx)
-        self._set_slider("max_tokens", FORCED_PARAMS["max_tokens"])
-        self._set_slider("temperature", FORCED_PARAMS["temperature"], scale=100)
-        self._set_slider("top_p", FORCED_PARAMS["top_p"], scale=100)
-        self._show_status("Reset to defaults")
+        for key, spec in PARAM_SPECS.items():
+            self._set_slider(key, spec["rec"])
+        self._show_status("คืนค่าแนะนำแล้ว")
 
     def _show_status(self, text, error=False):
         if self._status_label:
@@ -604,6 +754,25 @@ class ModelPanel(QWidget):
         primary = self.am.get_accent_color()
         secondary = self.am.get_theme_color("secondary", "#888888")
         p = derive_palette(primary, secondary)
+
+        # Accent-tinted hover (rgba from theme accent) — matches the settings
+        # panel so every button has a clearly-visible hover, not a faint bump.
+        _ac = QColor(p['accent'])
+        accent_rgb = f"{_ac.red()}, {_ac.green()}, {_ac.blue()}"
+
+        # Bake a theme-tinted chevron PNG for the combo down-arrow (QSS
+        # image:url can't tint a raw asset). Fall back to a CSS triangle.
+        import os, tempfile
+        from pyqt_ui.qt_icons import save_tinted_png
+        _chevron = os.path.join(tempfile.gettempdir(), "mbb_chevron_down.png")
+        if save_tinted_png("chevron", p['text'], _chevron, px=28):
+            arrow_rule = (f"image: url({_chevron.replace(os.sep, '/')});"
+                          f" width: 13px; height: 13px;")
+        else:
+            arrow_rule = (f"width: 0px; height: 0px;"
+                          f" border-left: 5px solid transparent;"
+                          f" border-right: 5px solid transparent;"
+                          f" border-top: 5px solid {p['text']};")
 
         qss = f"""
             QWidget#model_bg {{
@@ -667,8 +836,12 @@ class ModelPanel(QWidget):
                 font-size: 13px;
             }}
             QPushButton#model_icon_btn:hover {{
-                background: {p['bg_medium']};
-                border: 1px solid {p['border_active']};
+                background: rgba({accent_rgb}, 0.16);
+                border: 1px solid {p['accent']};
+                color: {p['accent_light']};
+            }}
+            QPushButton#model_icon_btn:pressed {{
+                background: rgba({accent_rgb}, 0.30);
             }}
             QLabel#model_key_dot {{
                 background: transparent;
@@ -691,24 +864,32 @@ class ModelPanel(QWidget):
                 background: {p['bg']};
                 color: {p['text']};
                 border: 1px solid {p['border_subtle']};
-                border-radius: 4px;
+                border-radius: 6px;
                 padding: 4px 8px;
+            }}
+            QComboBox#model_combo:hover {{
+                border: 1px solid {p['border_active']};
+            }}
+            QComboBox#model_combo QLineEdit {{
+                background: transparent;
+                border: none;
+                color: {p['text']};
+                selection-background-color: transparent;
+                selection-color: {p['text']};
             }}
             QComboBox#model_combo::drop-down {{
                 border: none;
-                width: 24px;
+                width: 30px;
             }}
             QComboBox#model_combo::down-arrow {{
-                width: 0px; height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid {p['text']};
+                {arrow_rule}
             }}
             QComboBox#model_combo QAbstractItemView {{
                 background: {p['bg_titlebar']};
                 color: {p['text']};
                 selection-background-color: {p['bg_medium']};
                 border: 1px solid {p['border_subtle']};
+                outline: none;
             }}
             QLabel#model_param_label {{
                 color: {p['text']};
@@ -741,28 +922,9 @@ class ModelPanel(QWidget):
                 background: {p['accent']};
                 border-radius: 4px;
             }}
-            QSlider#model_slider::groove:horizontal {{
+            QSlider#model_slider {{
+                background: transparent;
                 border: none;
-                height: 4px;
-                background: {p['bg']};
-                border-radius: 2px;
-            }}
-            QSlider#model_slider::handle:horizontal {{
-                background: {p['accent']};
-                border: none;
-                width: 14px; height: 14px;
-                margin: -5px 0;
-                border-radius: 7px;
-            }}
-            QSlider#model_slider::sub-page:horizontal {{
-                background: {p['accent']};
-                border-radius: 2px;
-            }}
-            QSlider#model_slider:disabled::handle:horizontal {{
-                background: {p['text_dim']};
-            }}
-            QSlider#model_slider:disabled::sub-page:horizontal {{
-                background: {p['border_active']};
             }}
             QWidget#model_footer {{
                 background: transparent;
@@ -771,17 +933,23 @@ class ModelPanel(QWidget):
                 background: {p['btn_bg']};
                 color: {p['text']};
                 border: 1px solid {p['border_subtle']};
-                border-radius: 4px;
+                border-radius: 6px;
+                padding: 0px 22px;
             }}
             QPushButton#model_btn:hover {{
-                background: {p['bg_medium']};
-                border: 1px solid {p['border_active']};
+                background: rgba({accent_rgb}, 0.16);
+                border: 1px solid {p['accent']};
+                color: {p['accent_light']};
+            }}
+            QPushButton#model_btn:pressed {{
+                background: rgba({accent_rgb}, 0.30);
             }}
             QPushButton#model_apply {{
                 background: {p['accent']};
                 color: {p['toggled_text']};
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
+                padding: 0px 22px;
             }}
             QPushButton#model_apply:hover {{
                 background: {p['accent_light']};
@@ -791,6 +959,26 @@ class ModelPanel(QWidget):
             }}
         """
         self.setStyleSheet(qss)
+
+        # Recolor magnet-slider markers to match the theme (accent recommended
+        # pip, dim for the other snap stops).
+        for slider, _, _ in self._sliders.values():
+            if hasattr(slider, "set_marker_colors"):
+                slider.set_marker_colors(p['accent'], p['text_dim'], p['bg_deeper'])
+
+        # Re-tint the API-key SVG icons to the new theme text colour.
+        self._icon_color = p['text']
+        self._update_key_icons()
+
+    def eventFilter(self, obj, event):
+        # Read-only model combo: clicking the centred text (not just the arrow)
+        # opens the dropdown.
+        if (self._model_combo is not None
+                and obj is self._model_combo.lineEdit()
+                and event.type() == QEvent.Type.MouseButtonPress):
+            self._model_combo.showPopup()
+            return True
+        return super().eventFilter(obj, event)
 
     # ── Drag ──
 

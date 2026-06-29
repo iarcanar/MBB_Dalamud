@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QCheckBox, QScrollArea, QFrame,
     QSizePolicy, QMenu,
 )
-from PyQt6.QtGui import QColor, QFont, QPainter, QBrush, QPen
+from PyQt6.QtGui import QColor, QFont, QPainter, QBrush, QPen, QIcon
 from PyQt6.QtCore import (
     Qt, QPoint, QTimer, QPropertyAnimation, QEasingCurve,
     pyqtProperty, pyqtSignal, QRectF, QSize,
@@ -21,7 +21,7 @@ from pyqt_ui.styles import FONT_PRIMARY, FONT_MONO, derive_palette
 log = logging.getLogger("mbb-qt")
 
 WIDTH = 360    # bumped from 300 (+20%) for easier reading
-HEIGHT = 676   # +52 over 624 for the taller two-row shortcut info card
+HEIGHT = 708   # +32 over 676 for the dashed test-injection card + caption
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -209,6 +209,7 @@ class SettingsPanel(QWidget):
         self._status_label = None
         self._shortcut_toggle_lbl = None
         self._shortcut_start_lbl = None
+        self._log_open_btn = None
 
         # Callbacks
         self.on_close_callback = None
@@ -335,11 +336,19 @@ class SettingsPanel(QWidget):
         c_layout.addLayout(adv_row)
         c_layout.addSpacing(4)
 
-        # Section: Test Hook → "ทดสอบการแปลรูปแบบต่างๆ"
+        # Section: Test Hook → "ทดสอบการแปลรูปแบบต่างๆ" — wrapped in a distinct
+        # dashed card so these (dev/test) injection buttons read as a separate
+        # zone from the real settings above.
         self._add_section_label(c_layout, "ทดสอบการแปลรูปแบบต่างๆ")
+
+        test_card = QWidget()
+        test_card.setObjectName("settings_test_card")
+        tc = QVBoxLayout(test_card)
+        tc.setContentsMargins(10, 9, 10, 9)
+        tc.setSpacing(7)
+
         test_row = QHBoxLayout()
         test_row.setSpacing(6)
-
         for label, subtitle, handler in [
             ("Dialog", "ChatType 61", self._inject_test_dialog),
             ("Battle", "ChatType 68", self._inject_test_battle),
@@ -347,8 +356,15 @@ class SettingsPanel(QWidget):
             ("Choice", "pipe-separated", self._inject_test_choice),
         ]:
             test_row.addWidget(self._make_test_btn(label, subtitle, handler))
+        tc.addLayout(test_row)
 
-        c_layout.addLayout(test_row)
+        test_caption = QLabel("ส่งข้อความจำลองเข้าระบบแปลเพื่อดูผลลัพธ์")
+        test_caption.setObjectName("settings_test_caption")
+        test_caption.setFont(QFont(FONT_PRIMARY, 9))
+        test_caption.setWordWrap(True)
+        tc.addWidget(test_caption)
+
+        c_layout.addWidget(test_card)
         c_layout.addSpacing(4)
 
         # Section: Shortcuts → "ปุ่มลัด" — READ-ONLY info display (not buttons).
@@ -487,23 +503,24 @@ class SettingsPanel(QWidget):
 
         # Compact path label — full path lives in the tooltip. Sized so it
         # never forces the panel wider than its parent scroll area.
-        path_lbl = QLabel("\U0001F4C1 ...\\conversation_logs")
+        path_lbl = QLabel("...\\conversation_logs")
         path_lbl.setObjectName("settings_log_path")
-        path_lbl.setFont(QFont(FONT_MONO, 8))
-        path_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.45);")
+        path_lbl.setFont(QFont(FONT_MONO, 9))
         path_lbl.setToolTip(f"บันทึกที่:\n{log_dir}")
         path_lbl.setMinimumWidth(0)
         path_lbl.setSizePolicy(QSizePolicy.Policy.Preferred,
                                QSizePolicy.Policy.Preferred)
         row.addWidget(path_lbl, stretch=1)
 
-        # Open-folder button (compact, fixed width — doesn't grow)
+        # Open-folder button (compact, fixed width — doesn't grow). Folder icon
+        # is applied in _apply_theme (tinted to the theme text colour).
         btn = QPushButton("เปิดโฟลเดอร์")
         btn.setObjectName("settings_log_open_btn")
         btn.setFont(QFont(FONT_PRIMARY, 9))
-        btn.setFixedHeight(22)
+        btn.setFixedHeight(24)
         btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._log_open_btn = btn
         btn.setStyleSheet(
             "QPushButton#settings_log_open_btn {"
             f"  background: {self.palette['btn_bg']};"
@@ -677,7 +694,12 @@ class SettingsPanel(QWidget):
                 color: #ff6b6b;
             }}
         """)
-        act_restart = menu.addAction("\U0001F504  รีสตาร์ทโปรแกรม")
+        from pyqt_ui.qt_icons import load_icon
+        reload_icon = load_icon("reload", p['text'])
+        if reload_icon is not None:
+            act_restart = menu.addAction(reload_icon, "  รีสตาร์ทโปรแกรม")
+        else:
+            act_restart = menu.addAction("\U0001F504  รีสตาร์ทโปรแกรม")
         act_restart.triggered.connect(self._on_restart_clicked)
         # Anchor the menu's bottom-right at the kebab's top-right so it opens
         # upward (the kebab sits at the panel's bottom edge).
@@ -1013,6 +1035,19 @@ class SettingsPanel(QWidget):
                 color: {p['text_dim']};
                 background: transparent;
             }}
+            QLabel#settings_log_path {{
+                color: {p['text_dim']};
+                background: transparent;
+            }}
+            QWidget#settings_test_card {{
+                background: {p['bg_deeper']};
+                border: 1px dashed {p['border_active']};
+                border-radius: 8px;
+            }}
+            QLabel#settings_test_caption {{
+                color: {p['text_dim']};
+                background: transparent;
+            }}
             QWidget#settings_shortcut_card {{
                 background: {p['bg_titlebar']};
                 border: 1px solid {p['border_subtle']};
@@ -1080,6 +1115,14 @@ class SettingsPanel(QWidget):
             }}
         """
         self.setStyleSheet(qss)
+
+        # Folder icon on the open-log button (tinted to theme text colour).
+        if self._log_open_btn is not None:
+            from pyqt_ui.qt_icons import load_icon
+            fic = load_icon("folder", p['text'])
+            if fic is not None:
+                self._log_open_btn.setIcon(fic)
+                self._log_open_btn.setIconSize(QSize(15, 15))
 
     def update_theme(self):
         """Re-apply theme to this panel and all open sub-panels."""

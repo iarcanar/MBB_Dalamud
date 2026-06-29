@@ -6,7 +6,7 @@
 
 MBB hooks into FFXIV's text system via [Dalamud](https://github.com/goatcorp/Dalamud) plugin and translates dialogue, cutscenes, and battle text into Thai in real-time using Google Gemini AI.
 
-> **Version:** 1.8.20 &nbsp;|&nbsp; **Build:** 04032026-01 &nbsp;|&nbsp; [**Website**](https://iarcanar.github.io/MBB_Dalamud/)
+> **Version:** 1.8.21 &nbsp;|&nbsp; **Build:** 04032026-01 &nbsp;|&nbsp; [**Website**](https://iarcanar.github.io/MBB_Dalamud/)
 
 ---
 
