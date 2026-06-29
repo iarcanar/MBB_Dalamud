@@ -305,15 +305,23 @@ Used as Mini UI's `.mini_ui` and the dialogue's `.root`.
   dialogue restores every time. Verified by a full mode-switch matrix.
 
 ## Status / enabling / revert
-Mini UI shipped (default). Dialogue behind the flag — **production-tested in the
-real app 2026-06-18 (user-confirmed working)**; real-FFXIV-game text capture still
-pending. **Enable:** `MBB_QT_DIALOGUE=1` (session) or `use_qt_dialogue: true` in
-settings.json (persistent — settings.json is **gitignored**, so the **repo default
-stays Tk**). **Revert:** `use_qt_dialogue: false`. **A packaged exe needs a rebuild
-to include the migration** (the changes live in the dev source; an old
-`dist_test/MBB.exe` won't have them). **Deferred:** remove the 16ms `tk_poll_timer`
-(MBB.py:7076-7078) once the flag is default AND Mini UI is Qt (only the transient
-splash stays Tk); ui_capture mini recipe tk→qt.
+Mini UI shipped (default). **Dialogue TUI now DEFAULTS to Qt (`TranslatedUIQt`),
+flipped Tk→Qt 2026-06-29** — the frozen exe's settings.json has no `use_qt_dialogue`
+key, so the old `False` default silently shipped the legacy Tk dialogue even though
+dev (which had `use_qt_dialogue: true`) showed Qt. Default now lives in BOTH
+`settings.py default_settings` (`use_qt_dialogue: True`) AND MBB.py
+`create_translated_ui` (`.get(..., True)`; `force_qt` param bypasses env/settings).
+- **Live switch in Settings** — `pyqt_ui/settings_panel.py` → section "รูปแบบกล่องบทสนทนา":
+  **UI ขอบนุ่ม** (Qt) / **UI ขอบเรียบ** (Tk), prominent segmented buttons + small real
+  name beneath. Selecting one calls `MBB.apply_dialogue_backend(use_qt)` → live
+  teardown+rebuild (NO restart) + persists `use_qt_dialogue` + fires the dialog test
+  injection for an instant preview. Safe: the dalamud handler re-fetches
+  `translated_ui` every call (never caches); Qt teardown = `close()+deleteLater()`,
+  Tk teardown cancels `fade/window_hide` timers before `destroy()`.
+- **Revert to Tk:** `use_qt_dialogue: false` or env `MBB_QT_DIALOGUE=0`. real-FFXIV
+  in-game text capture on Qt still wants wider testing (works via injection).
+- **Deferred:** remove the 16ms `tk_poll_timer` once the splash/Mini UI is fully Qt;
+  ui_capture mini recipe tk→qt. **A packaged exe must be rebuilt to pick up changes.**
 
 ---
 
@@ -1377,10 +1385,10 @@ def _inject_test_dialog(self):
 
 ## PyInstaller
 
-- `python-app/mbb.spec` (main)
-- `python-app/updater/updater.spec` (updater)
-- Build dir: `dist_test/` (NOT `python-app/dist/`)
-- Uses system Python 3.11
+- `python-app/mbb.spec` (main) · `python-app/updater/updater.spec` (updater)
+- Build dir: `dist_test/` (NOT `python-app/dist/`). System Python 3.11 (the `pyinstaller` on PATH binds 3.11 even when `python` is 3.13).
+- **Console is env-driven:** `console = (MBB_RELEASE != "1")` — build a windowed/no-console release by setting `MBB_RELEASE=1`.
+- **One-shot release:** `powershell scripts/build_release.ps1 [-Version X.Y.Z] [-Publish] [-Mirror]` — bump→`check_version_consistency`→dotnet build→`pack_plugin`→updater→main(`MBB_RELEASE=1`)→zip→`.sha256.txt` sidecar→(optional) `gh release create`. Order matters (updater BEFORE main, else it's silently absent).
 
 ## Post-Build Copy (mbb.spec)
 
@@ -1419,7 +1427,14 @@ Bug history: `text_corrector.load_npc_data()` used `resource_path()` → after N
 
 ## Version Bump
 
-`python bump_version.py patch|minor|major|X.Y.Z` updates 8 files. **Never edit version strings by hand.**
+`python bump_version.py patch|minor|major|X.Y.Z` updates the version files **+ stamps `pluginmaster.json` LastUpdated**. **Never edit version strings by hand.** `DalamudApiLevel` (currently **15** — must match the SDK-built `DalamudMBBBridge/bin/Release/DalamudMBBBridge.json`) is NOT bumped by the script; sync it manually + verify with `python check_version_consistency.py` (cross-checks the Python group, the C# group, AND DalamudApiLevel across manifest↔pluginmaster). Stale `repo-structure/pluginmaster.json` deleted 2026-06-29.
+
+## Release channels + scripts
+
+- **App download = GitHub Releases** (`iarcanar/MBB_Dalamud/releases/latest`) — canonical, the same source the in-app updater (`updater/updater.py`) polls. **Google Drive = mirror** (`scripts/upload_release.ps1`, rclone). Release zip ships a `MBB-vX.Y.Z.zip.sha256.txt` sidecar (updater verifies it; first whitespace token = hash).
+- **Plugin (Dalamud):** `scripts/pack_plugin.py` builds `plugins/DalamudMBBBridge/latest.zip` with the FULL runtime set incl. `System.Management.dll` + `System.CodeDom.dll` (WMI process-check at `DalamudMBBBridge.cs:989`; Dalamud does NOT resolve NuGet deps) + re-stamps pluginmaster. Served via the root `pluginmaster.json` raw URL.
+- **Web** (separate repo `D:\MBB_Web` → https://mbb-ffxiv.vercel.app): landing + **admin dashboard** — `/admin/release` (release-status board: GitHub/plugin/NPC/web version + drift), `/admin/runbook` (paths + build/upload steps), Dev/Commit status card. **Deploys via `vercel --prod` CLI, NOT git-push.** Each MBB_Dalamud commit posts version/status to the dashboard via a git post-commit hook (`scripts/notify_dashboard.py` → `/api/dev-status`; secret in gitignored `.dev_hook`). Detail: memory [[project-release-dashboard]] + [[feedback-mbb-web-deploy-every-change]] + [[feedback-commit-to-dashboard]].
+- Full step-by-step: `BUILD_PROTOCOL.md`.
 
 ---
 
