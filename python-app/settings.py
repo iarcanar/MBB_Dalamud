@@ -104,6 +104,7 @@ class Settings:
             "enable_wasd_auto_hide": True,
             "enable_tui_auto_show": True,  # เปิดใช้งาน TUI auto-show เมื่อพบข้อความ text hook
             "enable_ui_toggle": True,  # อาจไม่ใช้ แต่คงไว้
+            "use_qt_dialogue": True,  # PyQt6 dialogue TUI (default); false = legacy Tk
             # enable_auto_area_switch + enable_click_translate removed 2026-04-25 (OCR-era dead features)
             "dalamud_enabled": False,  # เพิ่มการตั้งค่าสำหรับ Dalamud Bridge mode
             "auto_start_translation": False,  # เปิด/ปิด auto-start translation

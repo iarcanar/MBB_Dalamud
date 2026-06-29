@@ -3229,11 +3229,23 @@ class MagicBabelApp:
         if hasattr(self, "bottom_bar") and self.bottom_bar:
             self.bottom_bar.set_toggle_state("mini", False)
 
-    def create_translated_ui(self):
-        # Dialogue TUI backend: PyQt6 (TranslatedUIQt) when the flag/env is set,
-        # otherwise the legacy Tkinter Translated_UI (default — safe revert).
-        _use_qt_dialogue = (os.environ.get("MBB_QT_DIALOGUE") == "1"
-                            or bool(self.settings.get("use_qt_dialogue", False)))
+    def create_translated_ui(self, force_qt=None):
+        # Dialogue TUI backend: PyQt6 (TranslatedUIQt) is now the DEFAULT
+        # (production-tested; the feathered diffuse bg the Tk renderer can't do).
+        # Revert to the legacy Tkinter Translated_UI via use_qt_dialogue: false
+        # in settings.json, or env MBB_QT_DIALOGUE=0.
+        # force_qt (bool) bypasses env/settings — used by the live backend swap
+        # (apply_dialogue_backend) so the Settings switch is honoured exactly.
+        if force_qt is not None:
+            _use_qt_dialogue = bool(force_qt)
+        else:
+            _qt_env = os.environ.get("MBB_QT_DIALOGUE")
+            if _qt_env == "1":
+                _use_qt_dialogue = True
+            elif _qt_env == "0":
+                _use_qt_dialogue = False
+            else:
+                _use_qt_dialogue = bool(self.settings.get("use_qt_dialogue", True))
 
         # *** ปรับปรุงส่วนนี้ทั้งหมด ***
 
@@ -3308,6 +3320,60 @@ class MagicBabelApp:
 
         self.translated_ui_window.geometry(f"+{x}+{y}")
         self.translated_ui_window.withdraw()
+
+    def apply_dialogue_backend(self, use_qt):
+        """Live-swap the dialogue TUI backend (Qt <-> Tk) + persist the choice.
+        Safe because dalamud_immediate_handler re-fetches self.translated_ui on
+        every call (never caches), so reassigning it here is picked up
+        automatically. Driven by the Settings panel switch (runs on main thread).
+        The caller fires a test-dialog injection afterwards for an instant preview."""
+        use_qt = bool(use_qt)
+        current_is_qt = self.translated_ui.__class__.__name__ == "TranslatedUIQt"
+        try:
+            self.settings.set("use_qt_dialogue", use_qt)
+        except Exception as e:
+            self.logging_manager.log_error(f"[backend-swap] persist failed: {e}")
+        if current_is_qt == use_qt:
+            return  # already on the requested backend — caller drives the preview
+
+        # Tear down the old backend cleanly.
+        try:
+            old_ui = self.translated_ui
+            old_win = self.translated_ui_window
+            if current_is_qt:
+                try:
+                    old_ui.close_window()
+                except Exception:
+                    pass
+                try:
+                    old_ui.close()
+                    old_ui.deleteLater()
+                except Exception:
+                    pass
+            else:
+                # Cancel pending Tk after() timers so they can't fire on a
+                # destroyed widget (TclError) after the swap.
+                st = getattr(old_ui, "state", None)
+                if st is not None:
+                    for tid in ("fade_timer_id", "window_hide_timer_id"):
+                        t = getattr(st, tid, None)
+                        if t:
+                            try:
+                                old_win.after_cancel(t)
+                            except Exception:
+                                pass
+                            setattr(st, tid, None)
+                try:
+                    old_win.destroy()
+                except Exception:
+                    pass
+        except Exception as e:
+            self.logging_manager.log_error(f"[backend-swap] teardown: {e}")
+
+        # Rebuild with the explicit choice (bypass env/settings re-read).
+        self.create_translated_ui(force_qt=use_qt)
+        self.logging_manager.log_info(
+            f"[backend-swap] dialogue backend -> {'Qt' if use_qt else 'Tk'}")
 
     def create_settings_ui(self):
         from appearance import appearance_manager

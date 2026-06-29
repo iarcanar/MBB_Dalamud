@@ -336,6 +336,12 @@ class SettingsPanel(QWidget):
         c_layout.addLayout(adv_row)
         c_layout.addSpacing(4)
 
+        # Section: Dialogue TUI backend switch (Qt new / Tk legacy) — prominent
+        # segmented buttons; selecting one live-swaps the backend then fires the
+        # dialog test injection so the result shows immediately.
+        self._make_backend_switch(c_layout)
+        c_layout.addSpacing(4)
+
         # Section: Test Hook → "ทดสอบการแปลรูปแบบต่างๆ" — wrapped in a distinct
         # dashed card so these (dev/test) injection buttons read as a separate
         # zone from the real settings above.
@@ -548,6 +554,100 @@ class SettingsPanel(QWidget):
             subprocess.Popen(['explorer', path])
         except Exception as e:
             log.error(f"Failed to open log folder '{path}': {e}")
+
+    def _make_backend_switch(self, layout):
+        """Prominent segmented switch for the dialogue TUI backend (Qt vs Tk).
+        Selecting one calls main_app.apply_dialogue_backend (live-swap) then
+        fires the dialog test injection so the result shows immediately."""
+        self._add_section_label(layout, "รูปแบบกล่องบทสนทนา (Dialogue)")
+        card = QWidget()
+        card.setObjectName("settings_backend_card")
+        cv = QVBoxLayout(card)
+        cv.setContentsMargins(10, 10, 10, 10)
+        cv.setSpacing(8)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._backend_btns = {}
+        p = self.palette
+        # (key, friendly name, real/technical name shown small underneath)
+        for key, name, real in (("qt", "UI ขอบนุ่ม", "PyQt6"),
+                                ("tk", "UI ขอบเรียบ", "Tkinter")):
+            col = QWidget()
+            cvb = QVBoxLayout(col)
+            cvb.setContentsMargins(0, 0, 0, 0)
+            cvb.setSpacing(2)
+
+            b = QPushButton(name)
+            b.setObjectName("settings_backend_btn")
+            b.setFont(QFont(FONT_PRIMARY, 11, QFont.Weight.Bold))
+            b.setFixedHeight(38)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setProperty("state", "inactive")
+            b.setStyleSheet(
+                "QPushButton#settings_backend_btn {"
+                f"  background: {p['btn_bg']}; color: {p['text']};"
+                f"  border: 1px solid {p['border_subtle']}; border-radius: 8px;"
+                "  padding: 3px 6px;"
+                "}"
+                'QPushButton#settings_backend_btn[state="active"] {'
+                f"  background: {p['accent']}; color: {p['toggled_text']};"
+                f"  border: 2px solid {p['accent']};"
+                "}"
+                "QPushButton#settings_backend_btn:hover {"
+                f"  border: 1px solid {p['accent']};"
+                "}"
+                'QPushButton#settings_backend_btn[state="active"]:hover {'
+                f"  border: 2px solid {p['accent']};"
+                "}"
+            )
+            b.clicked.connect(lambda _=False, k=key: self._on_select_backend(k == "qt"))
+            cvb.addWidget(b)
+
+            sub = QLabel(real)
+            sub.setObjectName("settings_backend_sub")
+            sub.setFont(QFont(FONT_MONO, 8))
+            sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cvb.addWidget(sub)
+
+            row.addWidget(col, stretch=1)
+            self._backend_btns[key] = b
+        cv.addLayout(row)
+
+        hint = QLabel("กดเลือกเพื่อสลับ แล้วระบบจะส่งบทสนทนาตัวอย่างให้ดูผลทันที")
+        hint.setObjectName("settings_backend_hint")
+        hint.setFont(QFont(FONT_PRIMARY, 9))
+        hint.setWordWrap(True)
+        cv.addWidget(hint)
+
+        layout.addWidget(card)
+        self._refresh_backend_buttons()
+
+    def _refresh_backend_buttons(self):
+        use_qt = bool(self.settings.get("use_qt_dialogue", True))
+        for key, b in getattr(self, "_backend_btns", {}).items():
+            active = (key == "qt") == use_qt
+            b.setProperty("state", "active" if active else "inactive")
+            b.style().unpolish(b)
+            b.style().polish(b)
+
+    def _on_select_backend(self, use_qt):
+        if not self.main_app or not hasattr(self.main_app, "apply_dialogue_backend"):
+            log.warning("[backend] main_app.apply_dialogue_backend unavailable")
+            return
+        try:
+            self.main_app.apply_dialogue_backend(bool(use_qt))
+        except Exception as e:
+            log.error(f"[backend] swap failed: {e}")
+            if hasattr(self, "_status_label"):
+                self._status_label.setText(f"สลับ backend ไม่สำเร็จ: {e}")
+            return
+        self._refresh_backend_buttons()
+        if hasattr(self, "_status_label"):
+            self._status_label.setText(
+                f"กล่องบทสนทนา: {'ใหม่ (PyQt6)' if use_qt else 'Tk (เดิม)'} — ส่งตัวอย่างให้ดู…")
+        # Preview via the existing dialog test injection (real pipeline).
+        self._inject_test_dialog()
 
     def _make_section_btn(self, text):
         btn = QPushButton(text)
@@ -1045,6 +1145,19 @@ class SettingsPanel(QWidget):
                 border-radius: 8px;
             }}
             QLabel#settings_test_caption {{
+                color: {p['text_dim']};
+                background: transparent;
+            }}
+            QWidget#settings_backend_card {{
+                background: {p['bg_deeper']};
+                border: 1px solid {p['border_active']};
+                border-radius: 8px;
+            }}
+            QLabel#settings_backend_hint {{
+                color: {p['text_dim']};
+                background: transparent;
+            }}
+            QLabel#settings_backend_sub {{
                 color: {p['text_dim']};
                 background: transparent;
             }}

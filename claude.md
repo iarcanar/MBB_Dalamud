@@ -227,12 +227,14 @@ per-pixel alpha). New files:
 ## Feature flag — dialogue backend
 MBB.py construction (~line 3263) branches on:
 ```python
-_use_qt_dialogue = (os.environ.get("MBB_QT_DIALOGUE") == "1"
-                    or bool(self.settings.get("use_qt_dialogue", False)))
+_qt_env = os.environ.get("MBB_QT_DIALOGUE")          # "1" force-on · "0" force-off
+if _qt_env == "1":   _use_qt_dialogue = True
+elif _qt_env == "0": _use_qt_dialogue = False
+else:                _use_qt_dialogue = bool(self.settings.get("use_qt_dialogue", True))
 ```
-- **OFF (default):** legacy Tk `Translated_UI` (unchanged — safe revert).
-- **ON:** `TranslatedUIQt`; `self.translated_ui_window` = `translated_ui.root` (a `TkWindowShim`) so MBB's ~20 direct Tk calls on that window keep working untouched. `_ui_args`/`_ui_kwargs` are shared by both branches.
-Test a session: launch with `MBB_QT_DIALOGUE=1`. Persist: `use_qt_dialogue: true` in settings. Standalone preview: `python pyqt_ui/translated_ui_qt.py` (has a sys.path bootstrap).
+- **ON (DEFAULT since 2026-06-29):** `TranslatedUIQt`; `self.translated_ui_window` = `translated_ui.root` (a `TkWindowShim`) so MBB's ~20 direct Tk calls keep working untouched. `_ui_args`/`_ui_kwargs` shared by both branches. Also seeded in `settings.py default_settings` (`use_qt_dialogue: True`).
+- **OFF (opt-out):** legacy Tk `Translated_UI` — set `use_qt_dialogue: false` in settings.json or env `MBB_QT_DIALOGUE=0` (safe revert).
+- ⚠️ **Why the default was flipped Tk→Qt:** a packaged exe's settings.json has no `use_qt_dialogue` key, so the old `False` default shipped the **legacy Tk dialogue** in the frozen build even though dev (settings.json `use_qt_dialogue: true`) showed Qt. The flag MUST default ON so the exe gets Qt. Standalone preview: `python pyqt_ui/translated_ui_qt.py`.
 
 ## `tk_compat.py` — `TkWindowShim`
 Plain **wrapper** over a QWidget (NOT a QWidget mixin — a Tk-style `geometry()`
@@ -245,9 +247,36 @@ Used as Mini UI's `.mini_ui` and the dialogue's `.root`.
 ## What the Qt dialogue ports
 - **Feathered diffuse bg** (cached pixmap; stacked rounded-rects, ease-in alpha
   ramp). Tunables: `FEATHER_PX=30`, `EDGE_FALLOFF=1.8`, `BG_RADIUS=16`.
+  **`BG_MARGIN=30` (2026-06-29)** expands the window into a transparent feather
+  *ring* around the text — the live window = CONTENT + 2·`BG_MARGIN`, so the diffuse
+  fade lives OUTSIDE the text instead of bleeding under it (fixed the "bg eats into
+  the bottom line" report). `PAD_*` / `GRIP_MARGIN` / `MIN_*` all derive from it;
+  `_save/_restore_geometry` persist the CONTENT box (window − ring) so the saved
+  `tui_positions/tui_geometries["dialog"]` stay in the same units as the Tk TUI
+  (shared key, no drift on backend switch). Old saved geo migrates seamlessly (read
+  as content → window grows +ring, text stays put). Tune the inset with `BG_MARGIN`
+  alone — everything else follows.
 - **Rich text reuses Tk `RichTextFormatter`** (Tk-free) → identical segmentation;
   rendered via `QTextDocument` (Thai wrap + per-segment HTML: italic=FC Minimal,
   `**highlight**`=#FFB366, name=cyan/purple).
+  - **Thai soft-wrap (2026-06-29):** `_segments_to_html` runs each segment through
+    `_insert_thai_breakpoints` (reused from `translated_logs.py`, Tk-free) — injects
+    ZWSP at syllable boundaries so `QTextDocument` breaks between syllables, not
+    mid-cluster (Thai has no inter-word spaces; without it long lines split inside a
+    word, e.g. `อันช|าญฉลาด`). Inserted AFTER the typewriter slice so char counts
+    track visible glyphs.
+  - **Auto-fit height + user floor (2026-06-29):** `_fit_height_to_text()` (called
+    in `_render_dialogue`) measures the FULL body at the current wrap width and grows
+    the window HEIGHT for overflow — `needed = max(_user_min_h, content)`. Width stays
+    user-controlled (drives wrapping). **`_user_min_h` is the user's set size = a
+    FLOOR: the box grows ABOVE it but NEVER shrinks below it** — the dialogue is
+    placed OVER the in-game text UI, so a smaller box would expose the game's chat
+    bubble behind it (UX, user-reported). `_user_min_h` is set on restore + manual
+    grip-release ONLY; the transient auto-grown height is never written —
+    `_save_geometry_now` persists the FLOOR (`_user_min_h − ring`), so a single long
+    line can't inflate the saved size. Measures the complete text, not the typewriter
+    slice, so the box doesn't grow line-by-line while typing. Bottom margin = `PAD_Y`
+    so the last line lands on the solid core.
 - **Typewriter matches Tk `type_writer_effect`** — batch 5 Thai / 4 long / 3
   default at `TYPE_BASE_MS=15` + punctuation pauses (NOT the slow 50ms
   `_continue_typing_animation`). ⚠️ if it feels slow it regressed to 1 char/tick.
@@ -264,6 +293,10 @@ Used as Mini UI's `.mini_ui` and the dialogue's `.root`.
   - **log button** → `main_app.toggle_translated_logs()` (NOT `toggle_ui`, which
     swaps Main/Mini — a bug that bit during P5).
   - **Click the speaker name** → `toggle_npc_manager_callback(name)`.
+- **Resize grip** (bottom-right, `_ResizeGrip`) → **`assets/scale.png`** (2026-06-29,
+  white-line dotted icon, auto-inverts on light themes via `invert_pixmap`; painted
+  diagonal-triangle fallback if the asset can't load). Loaded once in `__init__`.
+  Ships in `python-app/assets/` → already bundled by `mbb.spec`, **deploy-ready**.
 - **Dispatcher + FLOWFIX_8 chain-memory** in `_dispatch` (a `pyqtSignal` slot, so
   the translator thread's `update_text` marshals onto the UI thread): 68/71 →
   dissolve, 70/pipe → choice, 61 → dialogue; exits the active overlay on
