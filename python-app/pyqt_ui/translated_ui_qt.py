@@ -121,10 +121,15 @@ DEFAULT_BG = "#0b0f14"
 DEFAULT_BG_ALPHA = 0.97
 DEFAULT_FONT = "Anuphan"
 DEFAULT_FONT_SIZE = 24
-DEFAULT_W = 600
-DEFAULT_H = 150
-MIN_W = 280
-MIN_H = 90
+DEFAULT_W = 600                          # content-box default width (window adds the ring)
+DEFAULT_H = 150                          # content-box default height
+# BG_MARGIN: a transparent feather "ring" expanded around the text content box on
+# every side, so the diffuse-edge fade lives OUTSIDE the text instead of bleeding
+# under it. The live window = CONTENT + 2*BG_MARGIN; the saved geometry stays the
+# CONTENT box (shared "dialog" keys with the Tk dialogue TUI — see _save/_restore).
+BG_MARGIN = 30
+MIN_W = 280 + 2 * BG_MARGIN              # window min = content-min(280) + ring
+MIN_H = 90 + 2 * BG_MARGIN              # window min = content-min(90)  + ring
 GRIP_SIZE = 16
 SAVE_DEBOUNCE_MS = 400
 HOVER_POLL_MS = 140
@@ -133,16 +138,17 @@ AUTO_HIDE_MS = 10000                     # fade out + hide after this idle time
 FADE_OUT_MS = 500
 # Diffuse radial-gradient shape (fraction of size). cy below centre so the halo
 # sits a touch low, matching where dialogue text usually lands.
-FEATHER_PX = 30                          # soft-edge band width (px) for diffuse bg
+FEATHER_PX = BG_MARGIN                    # feather fills the BG_MARGIN ring exactly →
+                                         # solid core edge == content-box edge
 EDGE_FALLOFF = 1.8                        # >1 → outermost edge fades nearer to 0
 BG_RADIUS = 16                           # rounded-corner radius
-GRIP_MARGIN = FEATHER_PX - 6             # inset resize grip onto the SOLID bar,
-                                         # clear of the transparent feathered halo
+GRIP_MARGIN = BG_MARGIN + 6              # inset rail/grip ~6px onto the SOLID core,
+                                         # clear of the transparent feathered ring
 RAIL_BTN = 20                            # rail icon-button size
 RAIL_GAP = 4                             # gap between rail buttons
-PAD_L = 22                               # left text padding
-PAD_R = 48                               # right padding (room for the rail)
-PAD_Y = 16                               # top/bottom text padding
+PAD_L = BG_MARGIN + 22                    # left text padding (ring + inner pad)
+PAD_R = BG_MARGIN + 48                    # right padding (ring + inner pad + rail room)
+PAD_Y = BG_MARGIN + 16                    # top/bottom text padding (ring + inner pad)
 
 
 @dataclass
@@ -172,17 +178,35 @@ class _ResizeGrip(QWidget):
         self._dragging = False
         self._start = QPoint()
         self._start_size = None
+        self._pixmap = self._load_pixmap()
         self.setVisible(False)
+
+    def _load_pixmap(self):
+        """assets/scale.png — white-line resize-grip icon, inverted on a light bg.
+        None → paintEvent falls back to the drawn triangle."""
+        pm = QPixmap(resource_path("assets/scale.png"))
+        if pm.isNull():
+            return None
+        pm = pm.scaled(GRIP_SIZE, GRIP_SIZE, Qt.AspectRatioMode.KeepAspectRatio,
+                       Qt.TransformationMode.SmoothTransformation)
+        if is_light_theme("#%02x%02x%02x" % self._target._bg_rgb):
+            pm = invert_pixmap(pm)
+        return pm
 
     def paintEvent(self, event):  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        s = GRIP_SIZE
-        m = 2
-        tri = QPolygon([QPoint(s - m, m), QPoint(s - m, s - m), QPoint(m, s - m)])
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(200, 200, 200, 170))
-        p.drawPolygon(tri)
+        if self._pixmap is not None and not self._pixmap.isNull():
+            x = (GRIP_SIZE - self._pixmap.width()) // 2
+            y = (GRIP_SIZE - self._pixmap.height()) // 2
+            p.drawPixmap(x, y, self._pixmap)
+        else:                                # fallback: painted diagonal triangle
+            s = GRIP_SIZE
+            m = 2
+            tri = QPolygon([QPoint(s - m, m), QPoint(s - m, s - m), QPoint(m, s - m)])
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(200, 200, 200, 170))
+            p.drawPolygon(tri)
         p.end()
 
     def mousePressEvent(self, event):  # noqa: N802
@@ -203,6 +227,7 @@ class _ResizeGrip(QWidget):
     def mouseReleaseEvent(self, event):  # noqa: N802
         if self._dragging:
             self._dragging = False
+            self._target._user_min_h = self._target.height()  # new manual size = floor
             self._target._schedule_save_geometry()
             event.accept()
 
@@ -362,6 +387,11 @@ class TranslatedUIQt(QWidget):
         self._drag_offset = QPoint()
         self._cursor_inside = False
         self._save_armed = False
+        # window-height FLOOR = the user's set size; auto-fit grows ABOVE it for
+        # overflow but NEVER shrinks below it (the box covers the in-game text UI —
+        # shrinking would expose the game's chat bubble). Updated on restore + manual
+        # resize only; the transient auto-grown height is never persisted.
+        self._user_min_h = MIN_H
 
         self._init_window()
 
@@ -444,9 +474,11 @@ class TranslatedUIQt(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         self.setMinimumSize(MIN_W, MIN_H)
+        # settings width/height describe the CONTENT box; the live window adds the
+        # BG_MARGIN feather ring on every side.
         w = int(self._setting("width", DEFAULT_W) or DEFAULT_W)
         h = int(self._setting("height", DEFAULT_H) or DEFAULT_H)
-        self.resize(max(MIN_W, w), max(MIN_H, h))
+        self.resize(max(MIN_W, w + 2 * BG_MARGIN), max(MIN_H, h + 2 * BG_MARGIN))
 
     # ── hover-revealed icon rail (close/lock/color/fadeout/log) ─────
     def _accent(self):
@@ -742,8 +774,36 @@ class TranslatedUIQt(QWidget):
         doc.setHtml(self._segments_to_html(self._segments, limit))
         self._doc = doc
 
+    def _fit_height_to_text(self):
+        """Auto-fit the window HEIGHT to the FULL body so long dialogue never
+        overflows the bottom. Width stays user-controlled (it drives wrapping);
+        only the height follows the content. Measures the complete text — not the
+        typewriter-revealed slice — so the box doesn't grow line-by-line while
+        typing. body-top math mirrors _paint_text; bottom margin = PAD_Y (the
+        BG_MARGIN ring + inner pad), so the last line lands on the solid core."""
+        doc = QTextDocument()
+        doc.setDefaultFont(QFont(self._font_family, self._font_size))
+        doc.setTextWidth(max(40, self.width() - PAD_L - PAD_R))
+        doc.setHtml(self._segments_to_html(self._segments, None))
+        body_h = doc.size().height()
+        if self._speaker:
+            fm = QFontMetrics(QFont(self._font_family, max(10, self._font_size - 6)))
+            body_top = PAD_Y + fm.ascent() + 20
+        else:
+            body_top = PAD_Y
+        # Never shrink below the user's set size (_user_min_h) — the box sits OVER
+        # the in-game text UI, so going smaller would expose the game's chat bubble
+        # (UX). Overflow may grow ABOVE the floor; clamp to the screen height.
+        needed = max(self._user_min_h, int(body_top + body_h + PAD_Y))
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            needed = min(needed, screen.availableGeometry().height())
+        if needed != self.height():
+            self.resize(self.width(), needed)
+
     def _segments_to_html(self, segments, limit=None):
         import html as _html
+        from pyqt_ui.translated_logs import _insert_thai_breakpoints
         out = []
         count = 0
         for seg in segments:
@@ -755,7 +815,10 @@ class TranslatedUIQt(QWidget):
                 if len(raw) > room:
                     raw = raw[:room]
                 count += len(raw)
-            t = _html.escape(raw).replace("\n", "<br>")
+            # ZWSP at Thai syllable boundaries → QTextDocument breaks between
+            # syllables, not mid-cluster (Thai has no inter-word spaces). Inserted
+            # AFTER the typewriter slice so the char counts track visible glyphs.
+            t = _html.escape(_insert_thai_breakpoints(raw)).replace("\n", "<br>")
             style = seg.get("font_style", "normal")
             if style == "italic":
                 out.append(f'<span style="font-family:\'{_ITALIC_FAMILY}\';'
@@ -886,38 +949,47 @@ class TranslatedUIQt(QWidget):
         if self.settings is None:
             return
         try:
+            # Persist the CONTENT box (window minus the BG_MARGIN ring) so the saved
+            # geometry stays in the same units the Tk dialogue TUI uses — both share
+            # tui_positions/tui_geometries["dialog"].
+            # Height persists the USER FLOOR (_user_min_h), not the transient
+            # auto-fit-grown height — one long line must not inflate the saved size.
+            cx, cy = int(self.x()) + BG_MARGIN, int(self.y()) + BG_MARGIN
+            cw = int(self.width()) - 2 * BG_MARGIN
+            ch = int(self._user_min_h) - 2 * BG_MARGIN
             positions = self.settings.get("tui_positions", {}) or {}
             if not isinstance(positions, dict):
                 positions = {}
-            positions[MODE_KEY] = {"x": int(self.x()), "y": int(self.y())}
+            positions[MODE_KEY] = {"x": cx, "y": cy}
             self.settings.set("tui_positions", positions, save_immediately=False)
 
             geometries = self.settings.get("tui_geometries", {}) or {}
             if not isinstance(geometries, dict):
                 geometries = {}
-            geometries[MODE_KEY] = {"w": int(self.width()), "h": int(self.height())}
+            geometries[MODE_KEY] = {"w": cw, "h": ch}
             self.settings.set("tui_geometries", geometries, save_immediately=True)
-            log.info(f"[TUIQT] saved dialog pos=({self.x()},{self.y()}) "
-                     f"size=({self.width()}x{self.height()})")
+            log.info(f"[TUIQT] saved dialog content pos=({cx},{cy}) size=({cw}x{ch})")
         except Exception as e:
             log.debug(f"save_geometry_now failed: {e}")
 
     def _restore_geometry(self):
-        # size
+        # size — the saved value is the CONTENT box; live window = content + ring
         w, h = self.width(), self.height()
         try:
             geo = (self.settings.get("tui_geometries", {}) or {}).get(MODE_KEY) or {}
             if isinstance(geo.get("w"), int) and isinstance(geo.get("h"), int):
-                w, h = max(MIN_W, geo["w"]), max(MIN_H, geo["h"])
+                w = max(MIN_W, geo["w"] + 2 * BG_MARGIN)
+                h = max(MIN_H, geo["h"] + 2 * BG_MARGIN)
                 self.resize(w, h)
         except Exception:
             pass
-        # position — saved, else default (centred, y = 70.7% of screen)
+        # position — saved value is the CONTENT top-left; the window sits BG_MARGIN
+        # further out so the content lands where the user (or the Tk TUI) left it.
         x = y = None
         try:
             pos = (self.settings.get("tui_positions", {}) or {}).get(MODE_KEY) or {}
             if isinstance(pos.get("x"), int) and isinstance(pos.get("y"), int):
-                x, y = pos["x"], pos["y"]
+                x, y = pos["x"] - BG_MARGIN, pos["y"] - BG_MARGIN
         except Exception:
             pass
         if x is None or y is None:
@@ -929,6 +1001,7 @@ class TranslatedUIQt(QWidget):
             else:
                 x, y = 200, 400
         self.move(int(x), int(y))
+        self._user_min_h = self.height()   # restored size is the user's floor
 
     # ════════════════════════════════════════════════════════════════
     # PUBLIC CONTRACT — signatures match Translated_UI
@@ -961,6 +1034,7 @@ class TranslatedUIQt(QWidget):
         self._total_chars = len(self._type_text)
         self._typed_chars = 0
         self._typing = self._total_chars > 0
+        self._fit_height_to_text()      # grow/shrink the box to fit the full text
         self._rebuild_doc()
         if self._typing:
             self._type_timer.start(TYPE_BASE_MS)

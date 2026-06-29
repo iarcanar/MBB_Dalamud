@@ -12,6 +12,10 @@ python-app/.env
 .dev_hook
 !.dev_hook.example
 
+# Vercel account recovery codes / keys — SECRET, NEVER commit
+vercel-key/
+*recovery-codes*
+
 # Python cache
 __pycache__/
 *.py[cod]
