@@ -160,24 +160,27 @@ body::after {
     gap: 0;
 }
 
-/* ── Sync banner (provenance — span full width below header) ── */
+/* ── Sync badge — compact pill, fixed top-right (was a full-width sticky bar
+   that crowded the content below; v1.8.21) ── */
 .sync-banner {
-    grid-column: 1 / -1;
-    position: sticky;
-    top: var(--header-h);
-    z-index: 99;
-    background: linear-gradient(90deg,
-        rgba(245, 158, 11, 0.10) 0%,
-        rgba(245, 158, 11, 0.06) 50%,
-        rgba(245, 158, 11, 0.10) 100%);
-    border-bottom: 1px solid rgba(245, 158, 11, 0.22);
-    padding: 7px 24px;
-    font-size: 11.5px;
+    position: fixed;
+    top: calc(var(--header-h) + 10px);
+    right: 16px;
+    z-index: 90;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(10, 20, 36, 0.9);
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    border-radius: 99px;
+    padding: 4px 13px;
+    font-size: 10.5px;
     color: var(--text-faint);
-    text-align: center;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 }
 .sync-banner .sync-dot {
     display: inline-block;
@@ -207,8 +210,7 @@ body::after {
     padding-left: 10px;
 }
 @media (max-width: 760px) {
-    .sync-banner { font-size: 10.5px; padding: 6px 12px; letter-spacing: 0.04em; }
-    .sync-banner a { display: block; margin: 4px 0 0; border-left: none; padding-left: 0; }
+    .sync-banner { display: none; }   /* meta-only — hide on mobile to free the header */
 }
 
 /* ── Top Header (sticky) ── */
@@ -922,3 +924,212 @@ pre::before {
     vertical-align: middle;
     margin-right: 6px;
 }
+
+/* ════════════════════════════════════════════════════════════
+   Asset / Visual Library  (library.html — generated)
+   ════════════════════════════════════════════════════════════ */
+.asset-search {
+    width: 100%;
+    margin: 4px 0 18px;
+    padding: 10px 14px;
+    background: rgba(10, 20, 36, 0.6);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    color: var(--text);
+    font-family: 'Noto Sans Thai', 'Kanit', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.asset-search:focus {
+    border-color: var(--accent-1);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.18);
+}
+
+.asset-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    margin: 8px 0 4px;
+}
+.asset-grid:has(.big) { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+.asset-tile {
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 11px;
+    background: var(--card-grad);
+    overflow: hidden;
+    transition: border-color 0.25s ease, transform 0.25s ease;
+}
+.asset-tile:hover {
+    border-color: var(--card-border-hover);
+    transform: translateY(-2px);
+}
+.asset-swatch {
+    position: relative;
+    height: 74px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* checker-ish dark base so white icons + transparency read clearly */
+    background:
+        linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25)),
+        repeating-conic-gradient(#0c1626 0% 25%, #0a1220 0% 50%) 0 / 16px 16px;
+    border-bottom: 1px solid var(--card-border);
+}
+.asset-tile.big .asset-swatch { height: 120px; }
+.asset-swatch img {
+    max-width: 46px;
+    max-height: 46px;
+    object-fit: contain;
+}
+.asset-tile.big .asset-swatch img { max-width: 92%; max-height: 104px; }
+.asset-legacy {
+    position: absolute;
+    top: 6px; right: 6px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--warning);
+    background: var(--warning-bg);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 99px;
+    padding: 1px 7px;
+}
+.asset-inuse {
+    position: absolute;
+    top: 7px; left: 7px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 2px rgba(6,13,26,0.75);
+}
+.lib-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin: 0 0 22px;
+    padding: 11px 16px;
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    background: rgba(10,20,36,0.5);
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+.lib-legend-item { display: inline-flex; align-items: center; gap: 8px; }
+.lib-legend .asset-inuse,
+.lib-legend .asset-legacy { position: static; }
+.asset-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 8px 8px 2px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.asset-sub {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 0 8px 9px;
+    line-height: 1.45;
+    min-height: 0;
+}
+
+/* ── Fonts ── */
+.font-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    margin: 8px 0;
+}
+.font-tile {
+    margin: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 11px;
+    background: var(--card-grad);
+    padding: 16px 18px 14px;
+    transition: border-color 0.25s ease;
+}
+.font-tile:hover { border-color: var(--card-border-hover); }
+.font-sample {
+    font-size: 26px;
+    line-height: 1.3;
+    color: #e6edf3;
+    margin-bottom: 10px;
+    word-break: break-word;
+}
+.font-tile .asset-name { padding: 0; text-align: left; }
+.font-tile .asset-sub { padding: 4px 0 0; text-align: left; }
+
+/* ── NPC avatars ── */
+.asset-details > summary {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    background: rgba(10, 20, 36, 0.6);
+    color: var(--accent-soft);
+    font-size: 13.5px;
+    font-weight: 500;
+    list-style: none;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+.asset-details > summary::-webkit-details-marker { display: none; }
+.asset-details > summary::before { content: '▸'; font-size: 12px; }
+.asset-details[open] > summary::before { content: '▾'; }
+.asset-details > summary:hover { border-color: var(--card-border-hover); color: #c7d2fe; }
+.avatar-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+    margin: 16px 0 4px;
+}
+.avatar-tile { margin: 0; text-align: center; }
+.avatar-tile img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    object-position: top center;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--bg-elev);
+    transition: border-color 0.25s ease, transform 0.25s ease;
+}
+.avatar-tile img:hover { border-color: var(--accent-1); transform: scale(1.04); }
+.avatar-tile figcaption {
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-top: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ════════════════════════════════════════════════════════════
+   Readability pass (v1.8.21) — calmer + more credible: default
+   cursor, no CRT/particle haze, no neon glows. (Appended last so
+   these win the cascade, incl. the !important custom-cursor rules.)
+   ════════════════════════════════════════════════════════════ */
+*, *::before, *::after { cursor: auto !important; }
+a, button, [role="button"], summary, .card, [onclick], .hamburger,
+select, details summary { cursor: pointer !important; }
+input[type="search"], textarea { cursor: text !important; }
+
+.bg-particles { display: none; }       /* floating blurred orbs off */
+body::after { content: none; }         /* CRT scanlines off */
+body::before { opacity: 0.45; }        /* dimmer background aura */
+
+.hero-card h1 { text-shadow: none; }
+.card:hover { box-shadow: 0 10px 26px rgba(0,0,0,0.30); }
+.tag, .tag.success, .tag.warning, .tag.danger { box-shadow: none; }
+h2.section-head::before { box-shadow: none; }
+pre::before { display: none; }

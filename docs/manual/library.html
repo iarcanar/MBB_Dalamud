@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBB Manual — Asset Library</title>
+    <link rel="icon" type="image/png" href="../web_assets/mbb_icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/manual.css?v=1782700923">
+    <style>
+@font-face{font-family:'lib-font-0';src:url('../../python-app/fonts/Anuphan.ttf');font-display:swap;}
+@font-face{font-family:'lib-font-1';src:url('../../python-app/fonts/Caveat.ttf');font-display:swap;}
+@font-face{font-family:'lib-font-2';src:url('../../python-app/fonts/FC%20Minimal.ttf');font-display:swap;}
+@font-face{font-family:'lib-font-3';src:url('../../python-app/fonts/Google%20Sans%2017pt%20Medium.ttf');font-display:swap;}
+@font-face{font-family:'lib-font-4';src:url('../../python-app/fonts/Pacifico.ttf');font-display:swap;}
+    </style>
+</head>
+<body>
+<div class="bg-particles" aria-hidden="true"></div>
+<div class="manual-shell">
+    <header class="manual-header">
+        <a href="index.html" class="brand">
+            <span class="dot"></span>
+            <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
+            <span class="tag" style="margin-left:8px">v1.8.21</span>
+        </a>
+        <button class="hamburger" aria-label="Toggle nav">&#8801;</button>
+        <nav>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">Landing</a>
+            <a href="index.html">Overview</a>
+            <a href="ui.html">UI Systems</a>
+            <a href="npc-translation.html">NPC + Translation</a>
+            <a href="styling.html">Theme + Settings</a>
+            <a href="reference.html">Reference</a>
+            <a href="library.html" class="active">Assets</a>
+            <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub &#8599;</a>
+        </nav>
+    </header>
+
+    <div class="sync-banner">
+        <span class="sync-dot"></span>
+        Auto-generated · v1.8.21
+        <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank">Repo &#8599;</a>
+    </div>
+
+    <aside class="manual-sidebar">
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Asset Library</div>
+            <ul>
+                <li><a href="library.html#svg"><span class="lead">&#9656;</span>SVG Icons</a></li>
+                <li><a href="library.html#ui"><span class="lead">&#9656;</span>PNG UI Icons</a></li>
+                <li><a href="library.html#status"><span class="lead">&#9656;</span>Status / Colored</a></li>
+                <li><a href="library.html#brand"><span class="lead">&#9656;</span>Brand &amp; Art</a></li>
+                <li><a href="library.html#fonts"><span class="lead">&#9656;</span>Fonts</a></li>
+                <li><a href="library.html#avatars"><span class="lead">&#9656;</span>NPC Avatars</a></li>
+            </ul>
+        </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Back to manual</div>
+            <ul>
+                <li><a href="index.html"><span class="lead">&#183;</span>Overview</a></li>
+                <li><a href="ui.html"><span class="lead">&#183;</span>UI Systems</a></li>
+                <li><a href="reference.html"><span class="lead">&#183;</span>Reference</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <main class="manual-content">
+        <div class="breadcrumb">
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">MBB</a><span class="sep">/</span>
+            <a href="index.html">Manual</a><span class="sep">/</span>
+            <span class="here">Asset Library</span>
+        </div>
+
+        <div class="hero-row">
+            <div class="hero-card">
+                <div class="page-eyebrow">Visual Library</div>
+                <h1>Asset Library</h1>
+                <p>ไฟล์ภาพ ไอคอน และฟอนต์ทั้งหมดที่โปรเจ็คใช้จริง — แยกตามหมวดตามโครงสร้างโฟลเดอร์ <code>python-app/</code>. หน้านี้ <strong>generate อัตโนมัติ</strong>จากโฟลเดอร์จริง (ไม่ตกหล่น ไม่ค้างของเก่า).</p>
+            </div>
+            <div class="card" style="padding:20px">
+                <div class="card-eyebrow">Summary</div>
+                <div class="card-grid" style="margin:0;gap:10px;grid-template-columns:repeat(2,1fr)">
+<div class="card compact"><h3>8 SVG</h3><p style="color:var(--text-dim);font-size:13px;margin:0">ไอคอน themed (assets/icons/) — v1.8.21</p></div><div class="card compact"><h3>45 PNG</h3><p style="color:var(--text-dim);font-size:13px;margin:0">UI icons (assets/) — white, auto-invert</p></div><div class="card compact"><h3>10 Status</h3><p style="color:var(--text-dim);font-size:13px;margin:0">good / bad / error / pin …</p></div><div class="card compact"><h3>6 Brand</h3><p style="color:var(--text-dim);font-size:13px;margin:0">splash · logo · meteor</p></div><div class="card compact"><h3>5 Fonts</h3><p style="color:var(--text-dim);font-size:13px;margin:0">bundled .ttf (fonts/)</p></div><div class="card compact"><h3>71 Avatars</h3><p style="color:var(--text-dim);font-size:13px;margin:0">npc_images/main_characters/</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lib-legend">
+            <span class="lib-legend-item"><span class="asset-inuse"></span> ใช้งานบนเวอร์ชันล่าสุด (36/63 ไอคอน)</span>
+            <span class="lib-legend-item"><span class="asset-legacy">legacy</span> ไฟล์รุ่นเก่า</span>
+        </div>
+
+        <section class="doc-section">
+            <h2 class="section-head" id="svg">SVG Icons <span class="tag">assets/icons/</span></h2>
+            <p>ไอคอน vector ใหม่ (v1.8.21) — โหลดผ่าน <code>pyqt_ui/qt_icons.py</code> แล้ว <strong>tint สีตามธีม</strong> อัตโนมัติ (asset เดียวใช้ได้ทุกธีม). แสดงด้วยสีขาวบนพื้นเข้มตามต้นฉบับ.</p>
+<div class="asset-grid">
+<figure class="asset-tile big" data-name="chevron.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/chevron.svg" alt="chevron.svg"></div><figcaption class="asset-name">chevron.svg</figcaption><div class="asset-sub">Model · ลูกศร dropdown</div></figure>
+<figure class="asset-tile big" data-name="edit.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/edit.svg" alt="edit.svg"></div><figcaption class="asset-name">edit.svg</figcaption><div class="asset-sub">Model · แก้ไข API Key</div></figure>
+<figure class="asset-tile big" data-name="eye_close.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/eye_close.svg" alt="eye_close.svg"></div><figcaption class="asset-name">eye_close.svg</figcaption><div class="asset-sub">Model · ซ่อน API Key</div></figure>
+<figure class="asset-tile big" data-name="eye_open.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/eye_open.svg" alt="eye_open.svg"></div><figcaption class="asset-name">eye_open.svg</figcaption><div class="asset-sub">Model · เผย API Key</div></figure>
+<figure class="asset-tile big" data-name="folder.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/folder.svg" alt="folder.svg"></div><figcaption class="asset-name">folder.svg</figcaption><div class="asset-sub">Settings · ปุ่มเปิดโฟลเดอร์ log</div></figure>
+<figure class="asset-tile big" data-name="lock.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/lock.svg" alt="lock.svg"></div><figcaption class="asset-name">lock.svg</figcaption><div class="asset-sub">Model · พารามิเตอร์ล็อก (trial)</div></figure>
+<figure class="asset-tile big" data-name="reload.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/reload.svg" alt="reload.svg"></div><figcaption class="asset-name">reload.svg</figcaption><div class="asset-sub">Settings · เมนูรีสตาร์ท</div></figure>
+<figure class="asset-tile big" data-name="save.svg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/icons/save.svg" alt="save.svg"></div><figcaption class="asset-name">save.svg</figcaption><div class="asset-sub">Model · บันทึก API Key</div></figure>
+</div>
+        </section>
+
+        <section class="doc-section">
+            <h2 class="section-head" id="ui">PNG UI Icons <span class="tag">assets/</span></h2>
+            <p>ไอคอน UI สีขาว (auto-invert บนธีมสว่าง) ใช้ใน TUI / Mini UI / overlays. พิมพ์ค้นหาเพื่อกรอง:</p>
+            <input class="asset-search" type="search" placeholder="ค้นหาไอคอน… (เช่น lock, scale, fade)" oninput="filterAssets(this)">
+<div class="asset-grid" data-searchable="1">
+<figure class="asset-tile" data-name="add.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/add.png" alt="add.png"></div><figcaption class="asset-name">add.png</figcaption></figure>
+<figure class="asset-tile" data-name="add_1.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/add_1.png" alt="add_1.png"></div><figcaption class="asset-name">add_1.png</figcaption></figure>
+<figure class="asset-tile" data-name="arrow.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/arrow.png" alt="arrow.png"></div><figcaption class="asset-name">arrow.png</figcaption></figure>
+<figure class="asset-tile" data-name="bg_lock.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/BG_lock.png" alt="BG_lock.png"></div><figcaption class="asset-name">BG_lock.png</figcaption></figure>
+<figure class="asset-tile" data-name="camera.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/camera.png" alt="camera.png"></div><figcaption class="asset-name">camera.png</figcaption></figure>
+<figure class="asset-tile" data-name="chat.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/chat.png" alt="chat.png"></div><figcaption class="asset-name">chat.png</figcaption></figure>
+<figure class="asset-tile" data-name="clear.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/clear.png" alt="clear.png"></div><figcaption class="asset-name">clear.png</figcaption></figure>
+<figure class="asset-tile" data-name="clear_2.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/clear_2.png" alt="clear_2.png"></div><figcaption class="asset-name">clear_2.png</figcaption></figure>
+<figure class="asset-tile" data-name="cloud.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/cloud.png" alt="cloud.png"></div><figcaption class="asset-name">cloud.png</figcaption></figure>
+<figure class="asset-tile" data-name="copy.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/copy.png" alt="copy.png"></div><figcaption class="asset-name">copy.png</figcaption></figure>
+<figure class="asset-tile" data-name="del.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/del.png" alt="del.png"></div><figcaption class="asset-name">del.png</figcaption></figure>
+<figure class="asset-tile" data-name="disappear.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/disappear.png" alt="disappear.png"></div><figcaption class="asset-name">disappear.png</figcaption></figure>
+<figure class="asset-tile" data-name="draw.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/draw.png" alt="draw.png"></div><figcaption class="asset-name">draw.png</figcaption></figure>
+<figure class="asset-tile" data-name="draw_1.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/draw_1.png" alt="draw_1.png"></div><figcaption class="asset-name">draw_1.png</figcaption></figure>
+<figure class="asset-tile" data-name="expand.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/expand.png" alt="expand.png"></div><figcaption class="asset-name">expand.png</figcaption></figure>
+<figure class="asset-tile" data-name="fade.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/fade.png" alt="fade.png"></div><figcaption class="asset-name">fade.png</figcaption></figure>
+<figure class="asset-tile" data-name="fade_old.png"><div class="asset-swatch"><span class="asset-legacy">legacy</span><img loading="lazy" src="../../python-app/assets/fade_old.png" alt="fade_old.png"></div><figcaption class="asset-name">fade_old.png</figcaption></figure>
+<figure class="asset-tile" data-name="force.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/force.png" alt="force.png"></div><figcaption class="asset-name">force.png</figcaption></figure>
+<figure class="asset-tile" data-name="gap.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/gap.png" alt="gap.png"></div><figcaption class="asset-name">gap.png</figcaption></figure>
+<figure class="asset-tile" data-name="images.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/images.png" alt="images.png"></div><figcaption class="asset-name">images.png</figcaption></figure>
+<figure class="asset-tile" data-name="loading_4.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/loading_4.png" alt="loading_4.png"></div><figcaption class="asset-name">loading_4.png</figcaption></figure>
+<figure class="asset-tile" data-name="lock.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/lock.png" alt="lock.png"></div><figcaption class="asset-name">lock.png</figcaption></figure>
+<figure class="asset-tile" data-name="normal.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/normal.png" alt="normal.png"></div><figcaption class="asset-name">normal.png</figcaption></figure>
+<figure class="asset-tile" data-name="note.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/note.png" alt="note.png"></div><figcaption class="asset-name">note.png</figcaption></figure>
+<figure class="asset-tile" data-name="pause.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/pause.png" alt="pause.png"></div><figcaption class="asset-name">pause.png</figcaption></figure>
+<figure class="asset-tile" data-name="pin.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/pin.png" alt="pin.png"></div><figcaption class="asset-name">pin.png</figcaption></figure>
+<figure class="asset-tile" data-name="play.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/play.png" alt="play.png"></div><figcaption class="asset-name">play.png</figcaption></figure>
+<figure class="asset-tile" data-name="resize.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/resize.png" alt="resize.png"></div><figcaption class="asset-name">resize.png</figcaption></figure>
+<figure class="asset-tile" data-name="rotate.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/rotate.png" alt="rotate.png"></div><figcaption class="asset-name">rotate.png</figcaption></figure>
+<figure class="asset-tile" data-name="s_force.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/s_force.png" alt="s_force.png"></div><figcaption class="asset-name">s_force.png</figcaption></figure>
+<figure class="asset-tile" data-name="s_force_m.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/s_force_m.png" alt="s_force_m.png"></div><figcaption class="asset-name">s_force_m.png</figcaption></figure>
+<figure class="asset-tile" data-name="s_force_m_old.png"><div class="asset-swatch"><span class="asset-legacy">legacy</span><img loading="lazy" src="../../python-app/assets/s_force_m_old.png" alt="s_force_m_old.png"></div><figcaption class="asset-name">s_force_m_old.png</figcaption></figure>
+<figure class="asset-tile" data-name="scale.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/scale.png" alt="scale.png"></div><figcaption class="asset-name">scale.png</figcaption></figure>
+<figure class="asset-tile" data-name="scale_16_9.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/scale_16_9.png" alt="scale_16_9.png"></div><figcaption class="asset-name">scale_16_9.png</figcaption></figure>
+<figure class="asset-tile" data-name="scale_1_1.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/scale_1_1.png" alt="scale_1_1.png"></div><figcaption class="asset-name">scale_1_1.png</figcaption></figure>
+<figure class="asset-tile" data-name="scale_9_16.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/scale_9_16.png" alt="scale_9_16.png"></div><figcaption class="asset-name">scale_9_16.png</figcaption></figure>
+<figure class="asset-tile" data-name="setting.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/setting.png" alt="setting.png"></div><figcaption class="asset-name">setting.png</figcaption></figure>
+<figure class="asset-tile" data-name="swap.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/swap.png" alt="swap.png"></div><figcaption class="asset-name">swap.png</figcaption></figure>
+<figure class="asset-tile" data-name="theme.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/theme.png" alt="theme.png"></div><figcaption class="asset-name">theme.png</figcaption></figure>
+<figure class="asset-tile" data-name="theme_a.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/theme_A.png" alt="theme_A.png"></div><figcaption class="asset-name">theme_A.png</figcaption></figure>
+<figure class="asset-tile" data-name="theme_c.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/theme_C.png" alt="theme_C.png"></div><figcaption class="asset-name">theme_C.png</figcaption></figure>
+<figure class="asset-tile" data-name="trans.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/trans.png" alt="trans.png"></div><figcaption class="asset-name">trans.png</figcaption></figure>
+<figure class="asset-tile" data-name="tui_bg.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/TUI_BG.png" alt="TUI_BG.png"></div><figcaption class="asset-name">TUI_BG.png</figcaption></figure>
+<figure class="asset-tile" data-name="unlock.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/unlock.png" alt="unlock.png"></div><figcaption class="asset-name">unlock.png</figcaption></figure>
+<figure class="asset-tile" data-name="unpin.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/unpin.png" alt="unpin.png"></div><figcaption class="asset-name">unpin.png</figcaption></figure>
+</div>
+        </section>
+
+        <section class="doc-section">
+            <h2 class="section-head" id="status">Status / Colored <span class="tag">assets/</span></h2>
+            <p>ไอคอนที่มีสีในตัว (สถานะ / pin / like) — ไม่ invert ตามธีม.</p>
+<div class="asset-grid">
+<figure class="asset-tile" data-name="good.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/good.png" alt="good.png"></div><figcaption class="asset-name">good.png</figcaption></figure>
+<figure class="asset-tile" data-name="bad.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/bad.png" alt="bad.png"></div><figcaption class="asset-name">bad.png</figcaption></figure>
+<figure class="asset-tile" data-name="error.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/error.png" alt="error.png"></div><figcaption class="asset-name">error.png</figcaption></figure>
+<figure class="asset-tile" data-name="confirm.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/confirm.png" alt="confirm.png"></div><figcaption class="asset-name">confirm.png</figcaption></figure>
+<figure class="asset-tile" data-name="liked.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/liked.png" alt="liked.png"></div><figcaption class="asset-name">liked.png</figcaption></figure>
+<figure class="asset-tile" data-name="unlike.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/unlike.png" alt="unlike.png"></div><figcaption class="asset-name">unlike.png</figcaption></figure>
+<figure class="asset-tile" data-name="green_pin.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/green_pin.png" alt="green_pin.png"></div><figcaption class="asset-name">green_pin.png</figcaption></figure>
+<figure class="asset-tile" data-name="pin_gold.png"><div class="asset-swatch"><img loading="lazy" src="../../python-app/assets/pin_gold.png" alt="pin_gold.png"></div><figcaption class="asset-name">pin_gold.png</figcaption></figure>
+<figure class="asset-tile" data-name="red_icon.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/red_icon.png" alt="red_icon.png"></div><figcaption class="asset-name">red_icon.png</figcaption></figure>
+<figure class="asset-tile" data-name="black_icon.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/black_icon.png" alt="black_icon.png"></div><figcaption class="asset-name">black_icon.png</figcaption></figure>
+</div>
+        </section>
+
+        <section class="doc-section">
+            <h2 class="section-head" id="brand">Brand &amp; Art <span class="tag">assets/</span></h2>
+            <p>ภาพแบรนด์และอาร์ตเวิร์ก — splash (ปัจจุบัน + รุ่นเก่า/fallback), โลโก้, meteor. <span style="color:var(--text-faint)">เรียงตัวที่ใช้งานก่อน แล้วตามด้วย legacy.</span></p>
+<div class="asset-grid">
+<figure class="asset-tile big" data-name="mbbvisual.jpg"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/MBBvisual.jpg" alt="MBBvisual.jpg"></div><figcaption class="asset-name">MBBvisual.jpg</figcaption><div class="asset-sub">splash ปัจจุบัน (fallback → _mar26 / _legacy)</div></figure>
+<figure class="asset-tile big" data-name="mbb_meteor.png"><div class="asset-swatch"><span class="asset-inuse" title="อ้างอิงในโค้ดเวอร์ชันล่าสุด"></span><img loading="lazy" src="../../python-app/assets/mbb_meteor.png" alt="mbb_meteor.png"></div><figcaption class="asset-name">mbb_meteor.png</figcaption><div class="asset-sub">splash meteor + โลโก้ main window</div></figure>
+<figure class="asset-tile big" data-name="mbbvisual_mar26.png"><div class="asset-swatch"><span class="asset-legacy">legacy</span><img loading="lazy" src="../../python-app/assets/MBBvisual_mar26.png" alt="MBBvisual_mar26.png"></div><figcaption class="asset-name">MBBvisual_mar26.png</figcaption><div class="asset-sub">เลิกใช้แล้ว / fallback</div></figure>
+<figure class="asset-tile big" data-name="mbbvisual_legacy.png"><div class="asset-swatch"><span class="asset-legacy">legacy</span><img loading="lazy" src="../../python-app/assets/MBBvisual_legacy.png" alt="MBBvisual_legacy.png"></div><figcaption class="asset-name">MBBvisual_legacy.png</figcaption><div class="asset-sub">เลิกใช้แล้ว / fallback</div></figure>
+<figure class="asset-tile big" data-name="ybb_logo.png"><div class="asset-swatch"><span class="asset-legacy">legacy</span><img loading="lazy" src="../../python-app/assets/YBB_logo.png" alt="YBB_logo.png"></div><figcaption class="asset-name">YBB_logo.png</figcaption><div class="asset-sub">เลิกใช้แล้ว / fallback</div></figure>
+<figure class="asset-tile big" data-name="mbb_pixel.png"><div class="asset-swatch"><span class="asset-legacy">legacy</span><img loading="lazy" src="../../python-app/assets/mbb_pixel.png" alt="mbb_pixel.png"></div><figcaption class="asset-name">mbb_pixel.png</figcaption><div class="asset-sub">เลิกใช้แล้ว / fallback</div></figure>
+</div>
+        </section>
+
+        <section class="doc-section">
+            <h2 class="section-head" id="fonts">Fonts <span class="tag">fonts/</span></h2>
+            <p>ฟอนต์ที่ bundle มากับโปรเจ็ค — PyQt6 ต้อง <code>QFontDatabase.addApplicationFont()</code> (จัดการโดย <code>QtFontManager</code>). ตัวอย่าง render จริง:</p>
+<div class="font-grid"><figure class="font-tile" data-name="anuphan.ttf"><div class="font-sample" style="font-family:'lib-font-0'">ก ข ค Aa Bb · MBB 123</div><figcaption class="asset-name">Anuphan.ttf</figcaption><div class="asset-sub">ฟอนต์หลัก Thai — TUI / Logs default</div></figure>
+<figure class="font-tile" data-name="caveat.ttf"><div class="font-sample" style="font-family:'lib-font-1'">ก ข ค Aa Bb · MBB 123</div><figcaption class="asset-name">Caveat.ttf</figcaption><div class="asset-sub">ลายมือ — ชื่อใน Polaroid</div></figure>
+<figure class="font-tile" data-name="fc minimal.ttf"><div class="font-sample" style="font-family:'lib-font-2'">ก ข ค Aa Bb · MBB 123</div><figcaption class="asset-name">FC Minimal.ttf</figcaption><div class="asset-sub">italic segments ใน rich text</div></figure>
+<figure class="font-tile" data-name="google sans 17pt medium.ttf"><div class="font-sample" style="font-family:'lib-font-3'">ก ข ค Aa Bb · MBB 123</div><figcaption class="asset-name">Google Sans 17pt Medium.ttf</figcaption><div class="asset-sub">UI accent</div></figure>
+<figure class="font-tile" data-name="pacifico.ttf"><div class="font-sample" style="font-family:'lib-font-4'">ก ข ค Aa Bb · MBB 123</div><figcaption class="asset-name">Pacifico.ttf</figcaption><div class="asset-sub">decorative</div></figure></div>
+        </section>
+
+        <section class="doc-section">
+            <h2 class="section-head" id="avatars">NPC Avatars <span class="tag">71 files</span></h2>
+            <p>ภาพตัวละครใน <code>npc_images/main_characters/</code> (512px WebP, แสดงใน NPC Manager + speaker icon). คลิกเพื่อกาง:</p>
+            <details class="asset-details">
+                <summary>แสดง avatars ทั้งหมด (71)</summary>
+                <div class="avatar-grid">
+<figure class="avatar-tile" data-name="2b.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/2b.webp" alt="2b.webp"><figcaption>2b</figcaption></figure>
+<figure class="avatar-tile" data-name="2p.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/2p.webp" alt="2p.webp"><figcaption>2p</figcaption></figure>
+<figure class="avatar-tile" data-name="9s.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/9s.webp" alt="9s.webp"><figcaption>9s</figcaption></figure>
+<figure class="avatar-tile" data-name="alisaie.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/alisaie.webp" alt="alisaie.webp"><figcaption>alisaie</figcaption></figure>
+<figure class="avatar-tile" data-name="alphinaud.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/alphinaud.webp" alt="alphinaud.webp"><figcaption>alphinaud</figcaption></figure>
+<figure class="avatar-tile" data-name="ameliance_leveilleur.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/ameliance_leveilleur.webp" alt="ameliance_leveilleur.webp"><figcaption>ameliance_leveilleur</figcaption></figure>
+<figure class="avatar-tile" data-name="amon.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/amon.webp" alt="amon.webp"><figcaption>amon</figcaption></figure>
+<figure class="avatar-tile" data-name="archbishop_thordan_vii.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/archbishop_thordan_vii.webp" alt="archbishop_thordan_vii.webp"><figcaption>archbishop_thordan_vii</figcaption></figure>
+<figure class="avatar-tile" data-name="ardbert.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/ardbert.webp" alt="ardbert.webp"><figcaption>ardbert</figcaption></figure>
+<figure class="avatar-tile" data-name="aymeric.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/aymeric.webp" alt="aymeric.webp"><figcaption>aymeric</figcaption></figure>
+<figure class="avatar-tile" data-name="bakool_ja_ja.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/bakool_ja_ja.webp" alt="bakool_ja_ja.webp"><figcaption>bakool_ja_ja</figcaption></figure>
+<figure class="avatar-tile" data-name="bakool_ja_ja_the_mighty.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/bakool_ja_ja_the_mighty.webp" alt="bakool_ja_ja_the_mighty.webp"><figcaption>bakool_ja_ja_the_mighty</figcaption></figure>
+<figure class="avatar-tile" data-name="bakool_ja_ja_the_mystic.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/bakool_ja_ja_the_mystic.webp" alt="bakool_ja_ja_the_mystic.webp"><figcaption>bakool_ja_ja_the_mystic</figcaption></figure>
+<figure class="avatar-tile" data-name="chainuzz.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/chainuzz.webp" alt="chainuzz.webp"><figcaption>chainuzz</figcaption></figure>
+<figure class="avatar-tile" data-name="character.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/character.webp" alt="character.webp"><figcaption>character</figcaption></figure>
+<figure class="avatar-tile" data-name="cid_garlond.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/cid_garlond.webp" alt="cid_garlond.webp"><figcaption>cid_garlond</figcaption></figure>
+<figure class="avatar-tile" data-name="crystal_exarch.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/crystal_exarch.webp" alt="crystal_exarch.webp"><figcaption>crystal_exarch</figcaption></figure>
+<figure class="avatar-tile" data-name="duliachai.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/duliachai.webp" alt="duliachai.webp"><figcaption>duliachai</figcaption></figure>
+<figure class="avatar-tile" data-name="emet_selch.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/emet_selch.webp" alt="emet_selch.webp"><figcaption>emet_selch</figcaption></figure>
+<figure class="avatar-tile" data-name="erenville.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/erenville.webp" alt="erenville.webp"><figcaption>erenville</figcaption></figure>
+<figure class="avatar-tile" data-name="estinien.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/estinien.webp" alt="estinien.webp"><figcaption>estinien</figcaption></figure>
+<figure class="avatar-tile" data-name="eyaney.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/eyaney.webp" alt="eyaney.webp"><figcaption>eyaney</figcaption></figure>
+<figure class="avatar-tile" data-name="fourchenault_leveilleur.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/fourchenault_leveilleur.webp" alt="fourchenault_leveilleur.webp"><figcaption>fourchenault_leveilleur</figcaption></figure>
+<figure class="avatar-tile" data-name="g_raha_tia.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/g_raha_tia.webp" alt="g_raha_tia.webp"><figcaption>g_raha_tia</figcaption></figure>
+<figure class="avatar-tile" data-name="gaia.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/gaia.webp" alt="gaia.webp"><figcaption>gaia</figcaption></figure>
+<figure class="avatar-tile" data-name="gaius.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/gaius.webp" alt="gaius.webp"><figcaption>gaius</figcaption></figure>
+<figure class="avatar-tile" data-name="gosetsu.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/gosetsu.webp" alt="gosetsu.webp"><figcaption>gosetsu</figcaption></figure>
+<figure class="avatar-tile" data-name="gulool_ja.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/gulool_ja.webp" alt="gulool_ja.webp"><figcaption>gulool_ja</figcaption></figure>
+<figure class="avatar-tile" data-name="haurchefant.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/haurchefant.webp" alt="haurchefant.webp"><figcaption>haurchefant</figcaption></figure>
+<figure class="avatar-tile" data-name="hermes.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/hermes.webp" alt="hermes.webp"><figcaption>hermes</figcaption></figure>
+<figure class="avatar-tile" data-name="hien.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/hien.webp" alt="hien.webp"><figcaption>hien</figcaption></figure>
+<figure class="avatar-tile" data-name="hildibrand.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/hildibrand.webp" alt="hildibrand.webp"><figcaption>hildibrand</figcaption></figure>
+<figure class="avatar-tile" data-name="hydaelyn.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/hydaelyn.webp" alt="hydaelyn.webp"><figcaption>hydaelyn</figcaption></figure>
+<figure class="avatar-tile" data-name="hythlodaeus.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/hythlodaeus.webp" alt="hythlodaeus.webp"><figcaption>hythlodaeus</figcaption></figure>
+<figure class="avatar-tile" data-name="kan_e_senna.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/kan_e_senna.webp" alt="kan_e_senna.webp"><figcaption>kan_e_senna</figcaption></figure>
+<figure class="avatar-tile" data-name="koana.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/koana.webp" alt="koana.webp"><figcaption>koana</figcaption></figure>
+<figure class="avatar-tile" data-name="krile.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/krile.webp" alt="krile.webp"><figcaption>krile</figcaption></figure>
+<figure class="avatar-tile" data-name="louisoix.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/louisoix.webp" alt="louisoix.webp"><figcaption>louisoix</figcaption></figure>
+<figure class="avatar-tile" data-name="lumull.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/lumull.webp" alt="lumull.webp"><figcaption>lumull</figcaption></figure>
+<figure class="avatar-tile" data-name="lyna.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/lyna.webp" alt="lyna.webp"><figcaption>lyna</figcaption></figure>
+<figure class="avatar-tile" data-name="lyse.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/lyse.webp" alt="lyse.webp"><figcaption>lyse</figcaption></figure>
+<figure class="avatar-tile" data-name="matoya.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/matoya.webp" alt="matoya.webp"><figcaption>matoya</figcaption></figure>
+<figure class="avatar-tile" data-name="meteion.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/meteion.webp" alt="meteion.webp"><figcaption>meteion</figcaption></figure>
+<figure class="avatar-tile" data-name="minfilia.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/minfilia.webp" alt="minfilia.webp"><figcaption>minfilia</figcaption></figure>
+<figure class="avatar-tile" data-name="nanamo_ul_namo.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/nanamo_ul_namo.webp" alt="nanamo_ul_namo.webp"><figcaption>nanamo_ul_namo</figcaption></figure>
+<figure class="avatar-tile" data-name="nashu_mhakaracca.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/nashu_mhakaracca.webp" alt="nashu_mhakaracca.webp"><figcaption>nashu_mhakaracca</figcaption></figure>
+<figure class="avatar-tile" data-name="nidhana.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/nidhana.webp" alt="nidhana.webp"><figcaption>nidhana</figcaption></figure>
+<figure class="avatar-tile" data-name="otis.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/otis.webp" alt="otis.webp"><figcaption>otis</figcaption></figure>
+<figure class="avatar-tile" data-name="prishe.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/prishe.webp" alt="prishe.webp"><figcaption>prishe</figcaption></figure>
+<figure class="avatar-tile" data-name="ranjit.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/ranjit.webp" alt="ranjit.webp"><figcaption>ranjit</figcaption></figure>
+<figure class="avatar-tile" data-name="raubahn.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/raubahn.webp" alt="raubahn.webp"><figcaption>raubahn</figcaption></figure>
+<figure class="avatar-tile" data-name="ryne.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/ryne.webp" alt="ryne.webp"><figcaption>ryne</figcaption></figure>
+<figure class="avatar-tile" data-name="sphene.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/sphene.webp" alt="sphene.webp"><figcaption>sphene</figcaption></figure>
+<figure class="avatar-tile" data-name="tataru.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/tataru.webp" alt="tataru.webp"><figcaption>tataru</figcaption></figure>
+<figure class="avatar-tile" data-name="tesleen.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/tesleen.webp" alt="tesleen.webp"><figcaption>tesleen</figcaption></figure>
+<figure class="avatar-tile" data-name="thancred.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/thancred.webp" alt="thancred.webp"><figcaption>thancred</figcaption></figure>
+<figure class="avatar-tile" data-name="urianger.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/urianger.webp" alt="urianger.webp"><figcaption>urianger</figcaption></figure>
+<figure class="avatar-tile" data-name="vauthry.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/vauthry.webp" alt="vauthry.webp"><figcaption>vauthry</figcaption></figure>
+<figure class="avatar-tile" data-name="venat.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/venat.webp" alt="venat.webp"><figcaption>venat</figcaption></figure>
+<figure class="avatar-tile" data-name="vow_of_resolve_gulool_ja_ja.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/vow_of_resolve_gulool_ja_ja.webp" alt="vow_of_resolve_gulool_ja_ja.webp"><figcaption>vow_of_resolve_gulool_ja_ja</figcaption></figure>
+<figure class="avatar-tile" data-name="wuk_lamat.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/wuk_lamat.webp" alt="wuk_lamat.webp"><figcaption>wuk_lamat</figcaption></figure>
+<figure class="avatar-tile" data-name="xande.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/xande.webp" alt="xande.webp"><figcaption>xande</figcaption></figure>
+<figure class="avatar-tile" data-name="y_shtola.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/y_shtola.webp" alt="y_shtola.webp"><figcaption>y_shtola</figcaption></figure>
+<figure class="avatar-tile" data-name="yda.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/yda.webp" alt="yda.webp"><figcaption>yda</figcaption></figure>
+<figure class="avatar-tile" data-name="yotsuyu.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/yotsuyu.webp" alt="yotsuyu.webp"><figcaption>yotsuyu</figcaption></figure>
+<figure class="avatar-tile" data-name="yugiri.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/yugiri.webp" alt="yugiri.webp"><figcaption>yugiri</figcaption></figure>
+<figure class="avatar-tile" data-name="zenos.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/zenos.webp" alt="zenos.webp"><figcaption>zenos</figcaption></figure>
+<figure class="avatar-tile" data-name="zenos_yae_galvus.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/zenos_yae_galvus.webp" alt="zenos_yae_galvus.webp"><figcaption>zenos_yae_galvus</figcaption></figure>
+<figure class="avatar-tile" data-name="zero.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/zero.webp" alt="zero.webp"><figcaption>zero</figcaption></figure>
+<figure class="avatar-tile" data-name="zodiark.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/zodiark.webp" alt="zodiark.webp"><figcaption>zodiark</figcaption></figure>
+<figure class="avatar-tile" data-name="zoraal_ja.webp"><img loading="lazy" src="../../python-app/npc_images/main_characters/zoraal_ja.webp" alt="zoraal_ja.webp"><figcaption>zoraal_ja</figcaption></figure>
+                </div>
+            </details>
+        </section>
+
+        <nav class="page-nav">
+            <a href="reference.html" class="prev"><span class="nav-dir">&#8592; Prev</span><span class="nav-title">Reference</span></a>
+            <a href="index.html" class="next"><span class="nav-dir">Next &#8594;</span><span class="nav-title">Overview</span></a>
+        </nav>
+    </main>
+
+    <footer class="manual-footer">
+        &copy; 2026 MBB Dalamud · Asset Library auto-generated · <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">&#8592; Landing</a>
+    </footer>
+</div>
+
+<script src="assets/manual.js"></script>
+<script>
+function filterAssets(input) {
+    var q = input.value.trim().toLowerCase();
+    var grid = input.parentElement.querySelector('[data-searchable]');
+    if (!grid) return;
+    grid.querySelectorAll('.asset-tile').forEach(function(t) {
+        t.style.display = (!q || t.dataset.name.indexOf(q) !== -1) ? '' : 'none';
+    });
+}
+</script>
+</body>
+</html>

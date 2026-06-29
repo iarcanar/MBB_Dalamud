@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/manual.css">
+    <link rel="stylesheet" href="assets/manual.css?v=20260629">
 </head>
 <body>
 
@@ -21,25 +21,25 @@
         <a href="index.html" class="brand">
             <span class="dot"></span>
             <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
-            <span class="tag" style="margin-left:8px">v1.8.18</span>
+            <span class="tag" style="margin-left:8px">v1.8.21</span>
         </a>
         <button class="hamburger" aria-label="Toggle nav">≡</button>
         <nav>
-            <a href="../index.html">Landing</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">Landing</a>
             <a href="index.html" class="active">Overview</a>
             <a href="ui.html">UI Systems</a>
             <a href="npc-translation.html">NPC + Translation</a>
             <a href="styling.html">Theme + Settings</a>
             <a href="reference.html">Reference</a>
-            <a href="prototype.html">[Proto]</a>
+            <a href="library.html">Assets</a>
             <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
         </nav>
     </header>
 
     <div class="sync-banner">
         <span class="sync-dot"></span>
-        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
-        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+        v1.8.21 · 2026-06-29
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">CLAUDE.md ↗</a>
     </div>
 
     <!-- ════════════════════ SIDEBAR ════════════════════ -->
@@ -95,13 +95,22 @@
                 <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
             </ul>
         </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Asset Library</div>
+            <ul>
+                <li><a href="library.html#svg"><span class="lead">▸</span>SVG Icons</a></li>
+                <li><a href="library.html#ui"><span class="lead">▸</span>PNG UI Icons</a></li>
+                <li><a href="library.html#fonts"><span class="lead">▸</span>Fonts</a></li>
+                <li><a href="library.html#avatars"><span class="lead">▸</span>NPC Avatars</a></li>
+            </ul>
+        </div>
     </aside>
 
     <!-- ════════════════════ CONTENT ════════════════════ -->
     <main class="manual-content">
 
         <div class="breadcrumb">
-            <a href="../index.html">MBB</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">MBB</a>
             <span class="sep">/</span>
             <span class="here">Manual</span>
         </div>
@@ -109,7 +118,7 @@
         <!-- Hero -->
         <div class="hero-row">
             <div class="hero-card">
-                <div class="page-eyebrow">Internal Reference · v1.8.13</div>
+                <div class="page-eyebrow">Internal Reference · v1.8.21</div>
                 <h1>MBB Dalamud Project</h1>
                 <p>คู่มืออ้างอิงสำหรับการพัฒนาต่อ — architecture, subsystems, ข้อตกลงที่ผ่านการพิสูจน์มาแล้ว และกฎที่ห้ามฝ่าฝืน. <strong>AI-readable</strong> + <strong>human-readable</strong>.</p>
                 <div class="meta-row">
@@ -142,19 +151,19 @@
 
             <div class="card-grid">
                 <div class="card compact">
-                    <h3>🧹 Code Cleanup</h3>
+                    <h3>Code Cleanup</h3>
                     <p style="color:var(--text-dim); font-size:13.5px">ลบ hardcoded paths ทั้งหมด, OCR-era code ถูก purge แล้ว, theme v2 + PyQt6 migration เสร็จสมบูรณ์</p>
                 </div>
                 <div class="card compact">
-                    <h3>📦 Custom Repository</h3>
+                    <h3>Custom Repository</h3>
                     <p style="color:var(--text-dim); font-size:13.5px">สร้าง <code>pluginmaster.json</code> ให้ Dalamud auto-discover plugin</p>
                 </div>
                 <div class="card compact">
-                    <h3>⚡ PyInstaller</h3>
+                    <h3>PyInstaller</h3>
                     <p style="color:var(--text-dim); font-size:13.5px">บรรจุ Python app เป็น standalone .exe พร้อม updater</p>
                 </div>
                 <div class="card compact">
-                    <h3>🚀 One-Click Install</h3>
+                    <h3>One-Click Install</h3>
                     <p style="color:var(--text-dim); font-size:13.5px">ติดตั้งผ่าน Dalamud plugin installer โดยไม่ต้อง setup เอง</p>
                 </div>
             </div>
@@ -172,7 +181,9 @@
 │   ├── <span class="accent">npc.json</span>          <span class="note"># Character database (218 main / 65 npc / 135 lore)</span>
 │   ├── <span class="folder">pyqt_ui/</span>          <span class="note"># PyQt6 panels + overlays</span>
 │   ├── <span class="folder">fonts/</span>            <span class="note"># Anuphan, FC Minimal, Caveat, Pacifico, Google Sans</span>
-│   └── <span class="folder">assets/</span>           <span class="note"># 60+ icons (white-themed, auto-invert on light)</span>
+│   ├── <span class="folder">assets/</span>           <span class="note"># 60+ PNG icons (white, auto-invert)</span>
+│   │   └── <span class="folder">icons/</span>        <span class="note"># themed SVG icons (v1.8.21 · qt_icons.py)</span>
+│   └── <span class="folder">npc_images/</span>       <span class="note"># character avatars (512 WebP)</span>
 ├── <span class="folder">DalamudMBBBridge/</span>     <span class="note"># C# Dalamud plugin</span>
 ├── <span class="folder">docs/</span>                 <span class="note"># Landing page (index.html) + screenshots</span>
 │   └── <span class="accent">manual/</span>           <span class="note"># ← You are here</span>
@@ -356,6 +367,11 @@
                     <h3>Models, Gotchas, Roadmap</h3>
                     <p style="color:var(--text-dim); font-size:13.5px">Gemini model matrix, test messages, hard-won rules (must-read for AI), plugin manifest, deferred work</p>
                 </a>
+                <a href="library.html" class="card" style="text-decoration:none">
+                    <div class="card-eyebrow">Asset Library →</div>
+                    <h3>Icons, Images, Fonts</h3>
+                    <p style="color:var(--text-dim); font-size:13.5px">คลังภาพ/ไอคอน/ฟอนต์ทั้งหมดที่ใช้จริง แยกตามหมวด — SVG, PNG UI, status, brand, fonts, NPC avatars (generate อัตโนมัติ)</p>
+                </a>
             </div>
         </section>
 
@@ -386,7 +402,7 @@
     <!-- ════════════════════ FOOTER ════════════════════ -->
     <footer class="manual-footer">
         © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
-        · Compacted 2026-05-19 · <a href="../index.html">← Landing page</a>
+        · Compacted 2026-05-19 · <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">← Landing page</a>
     </footer>
 
 </div>

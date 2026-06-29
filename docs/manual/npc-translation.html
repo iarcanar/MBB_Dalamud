@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/manual.css">
+    <link rel="stylesheet" href="assets/manual.css?v=20260629">
 </head>
 <body>
 
@@ -20,25 +20,25 @@
         <a href="index.html" class="brand">
             <span class="dot"></span>
             <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
-            <span class="tag" style="margin-left:8px">v1.8.18</span>
+            <span class="tag" style="margin-left:8px">v1.8.21</span>
         </a>
         <button class="hamburger" aria-label="Toggle nav">≡</button>
         <nav>
-            <a href="../index.html">Landing</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">Landing</a>
             <a href="index.html">Overview</a>
             <a href="ui.html">UI Systems</a>
             <a href="npc-translation.html" class="active">NPC + Translation</a>
             <a href="styling.html">Theme + Settings</a>
             <a href="reference.html">Reference</a>
-            <a href="prototype.html">[Proto]</a>
+            <a href="library.html">Assets</a>
             <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
         </nav>
     </header>
 
     <div class="sync-banner">
         <span class="sync-dot"></span>
-        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
-        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+        v1.8.21 · 2026-06-29
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">CLAUDE.md ↗</a>
     </div>
 
     <aside class="manual-sidebar">
@@ -87,12 +87,21 @@
                 <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
             </ul>
         </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Asset Library</div>
+            <ul>
+                <li><a href="library.html#svg"><span class="lead">▸</span>SVG Icons</a></li>
+                <li><a href="library.html#ui"><span class="lead">▸</span>PNG UI Icons</a></li>
+                <li><a href="library.html#fonts"><span class="lead">▸</span>Fonts</a></li>
+                <li><a href="library.html#avatars"><span class="lead">▸</span>NPC Avatars</a></li>
+            </ul>
+        </div>
     </aside>
 
     <main class="manual-content">
 
         <div class="breadcrumb">
-            <a href="../index.html">MBB</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">MBB</a>
             <span class="sep">/</span>
             <a href="index.html">Manual</a>
             <span class="sep">/</span>
@@ -720,7 +729,7 @@ clean = char["firstName"].strip().translate(str.maketrans("", "", _zws))</code><
 
     <footer class="manual-footer">
         © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
-        · <a href="../index.html">← Landing page</a>
+        · <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">← Landing page</a>
     </footer>
 
 </div>

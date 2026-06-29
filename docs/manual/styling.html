@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/manual.css">
+    <link rel="stylesheet" href="assets/manual.css?v=20260629">
 </head>
 <body>
 
@@ -20,25 +20,25 @@
         <a href="index.html" class="brand">
             <span class="dot"></span>
             <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
-            <span class="tag" style="margin-left:8px">v1.8.18</span>
+            <span class="tag" style="margin-left:8px">v1.8.21</span>
         </a>
         <button class="hamburger" aria-label="Toggle nav">≡</button>
         <nav>
-            <a href="../index.html">Landing</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">Landing</a>
             <a href="index.html">Overview</a>
             <a href="ui.html">UI Systems</a>
             <a href="npc-translation.html">NPC + Translation</a>
             <a href="styling.html" class="active">Theme + Settings</a>
             <a href="reference.html">Reference</a>
-            <a href="prototype.html">[Proto]</a>
+            <a href="library.html">Assets</a>
             <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
         </nav>
     </header>
 
     <div class="sync-banner">
         <span class="sync-dot"></span>
-        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
-        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+        v1.8.21 · 2026-06-29
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">CLAUDE.md ↗</a>
     </div>
 
     <aside class="manual-sidebar">
@@ -86,12 +86,21 @@
                 <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
             </ul>
         </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Asset Library</div>
+            <ul>
+                <li><a href="library.html#svg"><span class="lead">▸</span>SVG Icons</a></li>
+                <li><a href="library.html#ui"><span class="lead">▸</span>PNG UI Icons</a></li>
+                <li><a href="library.html#fonts"><span class="lead">▸</span>Fonts</a></li>
+                <li><a href="library.html#avatars"><span class="lead">▸</span>NPC Avatars</a></li>
+            </ul>
+        </div>
     </aside>
 
     <main class="manual-content">
 
         <div class="breadcrumb">
-            <a href="../index.html">MBB</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">MBB</a>
             <span class="sep">/</span>
             <a href="index.html">Manual</a>
             <span class="sep">/</span>
@@ -366,19 +375,17 @@ fp.raise_()</code></pre>
         <!-- ──────────────── Splash + Updater ──────────────── -->
         <section class="doc-section">
             <h2 class="section-head" id="splash">Splash Screen</h2>
-            <p><code>MBB.py</code> — Tkinter Toplevel + PIL rendering, max 1280×720, aspect-preserved, centered on screen. Redesigned v1.8.14 (2026-05-20) via <a href="prototype.html">prototype tab</a>.</p>
+            <p><code>MBB.py</code> — <strong>PyQt6 translucent <code>QWidget</code></strong> + PIL rendering (migrated จาก Tkinter Toplevel 2026-06-21, v1.8.19). ย้ายเพราะต้องการ <strong>drop shadow แบบ feathered</strong> ที่ Tk's 1-bit <code>transparentcolor</code> ทำไม่ได้ — Qt <code>WA_TranslucentBackground</code> เก็บ per-pixel alpha. <code>QApplication</code> มีอยู่แล้วตอน splash สร้าง.</p>
 
             <h3 class="subsection">Visual</h3>
             <ul>
-                <li>PIL rounded mask + <code>transparentcolor</code> (no border)</li>
-                <li>Corner radius: <code>max(14, new_width // 48)</code> — subtle (~22px at 1080 wide). Halved from old <code>max(28, w//24)</code></li>
-                <li>Image: <code>assets/MBBvisual.jpg</code> (fallback chain: <code>.png</code> → <code>.jpeg</code> → <code>_mar26.png</code> → <code>_legacy.png</code>)</li>
-                <li><strong>Bottom-center group:</strong> <code>[meteor icon] [4px gap] [version text]</code> — NO dark bar background</li>
-                <li>Meteor icon (<code>assets/mbb_meteor.png</code>): height <code>max(60, font_size × 3.7)</code> ≈ 88px at font 24, width auto (preserves ~3:2 aspect). Cyan halo + dark drop-shadow + sharp icon composited via PIL <code>alpha_composite</code></li>
-                <li>Icon vertical-centered on text vertical-center — overflows top/bottom so meteor trail keeps its dynamic shape</li>
-                <li>Version text: bright cyan <code>#00e5ff</code>, font Anuphan <code>max(22, new_width // 44)</code> ≈ 24px at 1080 wide</li>
-                <li>Text layering (no bar bg, so heavier shadow stack): dark drop-shadow halo (radii 18/6, alphas 150/200) + cyan glow (radii 12/6/2, alphas 90/140/200) + sharp 1px shadow + sharp cyan top</li>
-                <li>Bottom margin: <code>max(36, new_height × 0.07)</code></li>
+                <li><strong>ขอบเหลี่ยม (sharp)</strong> — rounded mask ถูกถอด (v1.8.19); paste ภาพตรงๆ ลง canvas RGBA ที่ใหญ่กว่าเดิม</li>
+                <li><strong>Drop shadow โมเดิร์น</strong> — <code>SHADOW_PAD = 64</code> ขอบโปร่งใส + feathered PIL blur ซ้อน 2 ชั้น (ambient 34/α90 Δy14 + contact 16/α110 Δy6) = floating-card แบบ Windows-11/macOS (เหตุผลหลักของการย้ายมา Qt)</li>
+                <li>Image: <code>assets/MBBvisual.jpg</code> (fallback: <code>.png</code> → <code>.jpeg</code> → <code>_mar26.png</code> → <code>_legacy.png</code>)</li>
+                <li><strong>Bottom-center group:</strong> <code>[meteor icon] [6px gap] [version text]</code></li>
+                <li>Meteor (<code>assets/mbb_meteor.png</code>): height <code>max(60, font × 3.7)</code>, cyan halo <code>#00e5ff</code> α130 + dark shadow + sharp, composited via PIL</li>
+                <li><strong>Version text: ขาว <code>#FFFFFF</code>, ฟอนต์ Segoe UI Light</strong> (→ Semilight → bundled Google Sans → Anuphan) — บาง/สะอาด/โมเดิร์น. soft dark shadow ให้อ่านออกบนท้องฟ้าสว่าง (ไม่มี cyan glow แล้ว)</li>
+                <li>พิกัด element ทุกตัว offset ด้วย <code>(SHADOW_PAD, SHADOW_PAD)</code> (canvas ใหญ่กว่าภาพ)</li>
             </ul>
 
             <h3 class="subsection" id="splash-gates">Control — 2 gates</h3>
@@ -387,15 +394,15 @@ fp.raise_()</code></pre>
                 <table>
                     <thead><tr><th>Layer</th><th>Key</th><th>Effect</th></tr></thead>
                     <tbody>
-                        <tr><td>Master</td><td><code>enable_starting_key_visual</code> (Settings)</td><td>False → no splash</td></tr>
-                        <tr><td>Daily</td><td><code>splash_skip_date</code> (checkbox)</td><td>matches today → skip</td></tr>
+                        <tr><td>Master</td><td><code>enable_starting_key_visual</code> (Settings)</td><td>False → no splash <span class="tag faint">re-wired v1.8.19 (เคย dead)</span></td></tr>
+                        <tr><td>Daily</td><td><code>splash_skip_date</code></td><td><span class="tag faint">ยังไม่มี checkbox จริง</span> — logic อยู่ แต่ไม่มี UI</td></tr>
                     </tbody>
                 </table>
             </div>
 
             <div class="callout warning">
                 <span class="lead">Direct JSON I/O</span>
-                ทั้ง 2 settings อ่าน/เขียน <code>settings.json</code> โดยตรงด้วย <code>json.load/dump</code> — splash สร้าง (~line 549) <strong>BEFORE</strong> <code>Settings()</code> init (~line 698)
+                splash สร้าง <strong>BEFORE</strong> <code>Settings()</code> init — ดังนั้น <code>enable_starting_key_visual</code> ถูกอ่านผ่าน <code>json.load("settings.json")</code> ที่ต้นของ <code>show_splash</code> โดยตรง (ไม่ผ่าน Settings class)
             </div>
 
             <h3 class="subsection">Timing</h3>
@@ -461,7 +468,7 @@ fp.raise_()</code></pre>
 
     <footer class="manual-footer">
         © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
-        · <a href="../index.html">← Landing page</a>
+        · <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">← Landing page</a>
     </footer>
 
 </div>

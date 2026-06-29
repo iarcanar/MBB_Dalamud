@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/manual.css">
+    <link rel="stylesheet" href="assets/manual.css?v=20260629">
 </head>
 <body>
 
@@ -20,25 +20,25 @@
         <a href="index.html" class="brand">
             <span class="dot"></span>
             <span>MBB <strong style="color:#a5b4fc">Manual</strong></span>
-            <span class="tag" style="margin-left:8px">v1.8.18</span>
+            <span class="tag" style="margin-left:8px">v1.8.21</span>
         </a>
         <button class="hamburger" aria-label="Toggle nav">≡</button>
         <nav>
-            <a href="../index.html">Landing</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">Landing</a>
             <a href="index.html">Overview</a>
             <a href="ui.html">UI Systems</a>
             <a href="npc-translation.html">NPC + Translation</a>
             <a href="styling.html">Theme + Settings</a>
             <a href="reference.html" class="active">Reference</a>
-            <a href="prototype.html">[Proto]</a>
+            <a href="library.html">Assets</a>
             <a href="https://github.com/iarcanar/MBB_Dalamud" target="_blank" style="color:#94a3b8">GitHub ↗</a>
         </nav>
     </header>
 
     <div class="sync-banner">
         <span class="sync-dot"></span>
-        Snapshot derived from <code>CLAUDE.md</code> · last synced <strong>2026-06-03</strong> · v1.8.18
-        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">View source ↗</a>
+        v1.8.21 · 2026-06-29
+        <a href="https://github.com/iarcanar/MBB_Dalamud/blob/main/CLAUDE.md" target="_blank">CLAUDE.md ↗</a>
     </div>
 
     <aside class="manual-sidebar">
@@ -86,12 +86,21 @@
                 <li><a href="reference.html#roadmap"><span class="lead">▸</span>Roadmap</a></li>
             </ul>
         </div>
+        <div class="group">
+            <div class="group-title"><span class="group-icon"></span>Asset Library</div>
+            <ul>
+                <li><a href="library.html#svg"><span class="lead">▸</span>SVG Icons</a></li>
+                <li><a href="library.html#ui"><span class="lead">▸</span>PNG UI Icons</a></li>
+                <li><a href="library.html#fonts"><span class="lead">▸</span>Fonts</a></li>
+                <li><a href="library.html#avatars"><span class="lead">▸</span>NPC Avatars</a></li>
+            </ul>
+        </div>
     </aside>
 
     <main class="manual-content">
 
         <div class="breadcrumb">
-            <a href="../index.html">MBB</a>
+            <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">MBB</a>
             <span class="sep">/</span>
             <a href="index.html">Manual</a>
             <span class="sep">/</span>
@@ -106,34 +115,46 @@
         <section class="doc-section">
             <h2 class="section-head" id="gemini">Gemini Models</h2>
 
+            <p>รองรับ 3 models (อัปเดต 2026-06-10 หลัง deprecation sweep) เรียงถูก→แพง:</p>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Model</th><th>Notes</th></tr></thead>
+                    <thead><tr><th>Model</th><th>In · Out / 1M</th><th>Speed</th><th>Shutdown</th><th>Notes</th></tr></thead>
                     <tbody>
                         <tr>
-                            <td><code>gemini-3.1-flash-lite-preview</code></td>
-                            <td><span class="tag success">Default</span> since v1.8.7. <code>-preview</code> suffix <strong>REQUIRED</strong>. Has Fast/Standard/Deep thinking modes</td>
+                            <td><code>gemini-2.5-flash-lite</code></td>
+                            <td>$0.10 · $0.40</td><td>mid</td><td>2026-10-16</td>
+                            <td>ถูกสุด — budget pick</td>
                         </tr>
-                        <tr><td><code>gemini-2.5-flash</code></td><td>Supported</td></tr>
-                        <tr><td><code>gemini-2.5-flash-lite</code></td><td>Supported</td></tr>
-                        <tr><td><code>gemini-2.5-pro</code></td><td>Supported</td></tr>
-                        <tr><td><code>gemini-2.0-flash</code></td><td>Supported (legacy)</td></tr>
+                        <tr>
+                            <td><code>gemini-3.1-flash-lite</code></td>
+                            <td>$0.25 · $1.50</td><td>~382 tok/s</td><td>2027-05-07</td>
+                            <td><span class="tag success">Default</span> quality/cost ดีสุด + runway ยาวสุด (user benchmark 2026-05-20)</td>
+                        </tr>
+                        <tr>
+                            <td><code>gemini-2.5-flash</code></td>
+                            <td>$0.30 · $2.50</td><td>~232 tok/s</td><td>2026-10-16</td>
+                            <td>mid-tier alternative</td>
+                        </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <div class="callout info">
+                <span class="lead">ทำไม 3.1 Flash-Lite เป็น default (ไม่ใช่ตัวถูกสุด)</span>
+                User benchmark FFXIV cutscenes 2026-05-20: 3.1 ให้คุณภาพการแปล + character voice ดีกว่า 2.5 Flash-Lite และเร็วกว่า 3.5 Flash (ที่ over-reason + Thai แบนกว่า). ต้นทุน &lt;$1/วันแม้ session 6 ชม. + deprecation runway ยาวกว่า 7 เดือน.
             </div>
 
             <div class="callout warning">
                 <span class="lead">4 ไฟล์ที่ต้อง update เมื่อแก้ model list</span>
                 <ul style="margin-top:8px; padding-left:20px">
-                    <li><code>settings.py</code> — <code>VALID_MODELS</code></li>
+                    <li><code>settings.py</code> — <code>VALID_MODELS</code> + 5 default-string sites</li>
                     <li><code>pyqt_ui/model_panel.py</code> — <code>AVAILABLE_MODELS</code></li>
-                    <li><code>translator_gemini.py</code> — <code>valid_models</code></li>
-                    <li><code>model.py</code> (legacy — pending cleanup)</li>
+                    <li><code>translator_gemini.py</code> — 3 default sites + <code>valid_models</code></li>
+                    <li><code>appearance.py</code> — legacy combobox <span class="tag faint">model.py ลบแล้ว v1.8.19</span></li>
                 </ul>
             </div>
 
-            <p>Guide: <code>docs/GEMINI_MODELS_GUIDE.md</code></p>
-            <p><strong>Future opportunity:</strong> 3.1 Flash-Lite thinking modes → auto-switch by ChatType (Fast for dialog, Deep for cutscene).</p>
+            <p style="font-size:13.5px; color:var(--text-dim)">ถอดออกแล้ว: <code>-preview</code> variants, <code>gemini-2.0-flash</code>, <code>gemini-2.5-pro</code>, <code>gemini-3.5-flash</code> (over-reason, Thai แบน). Saved models เก่า auto-fallback เป็น default. Guide: <code>docs/GEMINI_MODELS_GUIDE.md</code> (เชื่อ CLAUDE.md ก่อนถ้าขัดแย้ง).</p>
         </section>
 
         <!-- ──────────────── Test Messages ──────────────── -->
@@ -430,7 +451,7 @@ git show &lt;commit&gt;:CLAUDE.md      # any old version of this doc</code></pre
 
     <footer class="manual-footer">
         © 2026 MBB Dalamud · Developed by <a href="https://github.com/iarcanar">iarcanar</a> · MIT License
-        · <a href="../index.html">← Landing page</a>
+        · <a href="https://mbb-ffxiv.vercel.app" target="_blank" rel="noopener">← Landing page</a>
     </footer>
 
 </div>

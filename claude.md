@@ -25,7 +25,7 @@ The skill is a 4-section behavioral checklist (Think before coding · Simplicity
 | Surface | Location | Use when |
 |---------|----------|----------|
 | **CLAUDE.md** (canonical) | `c:\MBB_Dalamud\CLAUDE.md` | Daily dev · bug fixes · AI agent context · `grep`/`Ctrl-F` lookups · single source of truth |
-| **HTML manual** (derived view) | `docs/manual/` (5 pages) | Onboarding new contributors · visual reference for layout math / data flow / cloud sync (SVG diagrams + UI screenshots) · understanding new subsystems faster than reading prose · sharing the project externally |
+| **HTML manual** (derived view) | `docs/manual/` (6 pages) | Onboarding new contributors · visual reference for layout math / data flow / cloud sync (SVG diagrams + UI screenshots) · understanding new subsystems faster than reading prose · sharing the project externally |
 
 **Why both, not just one** (validated by QA review 2026-05-19):
 - HTML is **2.6× more verbose** than MD for the same content (~4× token cost for AI). Bad for daily grep work and AI context.
@@ -38,7 +38,7 @@ The skill is a 4-section behavioral checklist (Think before coding · Simplicity
    - A subsystem grows large enough to benefit from a diagram
    - You're about to share the project with an external collaborator
    - On each release (bump the banner date + version)
-3. HTML pages carry a `Snapshot derived from CLAUDE.md · last synced YYYY-MM-DD · vX.Y.Z` banner — keep it honest. Update the date in all 5 files when you re-sync (find-replace).
+3. HTML pages carry a `Snapshot derived from CLAUDE.md · last synced YYYY-MM-DD · vX.Y.Z` banner — keep it honest. Update the date in the 5 hand-maintained pages when you re-sync (find-replace). `library.html` is regenerated (its banner is auto-stamped), and its shared-CSS link is cache-busted by `manual.css` mtime — bump nothing by hand there.
 4. **HTML drift risk:** if banner date lags 2+ versions, treat HTML as suspect; trust this file.
 
 **HTML file inventory** (`docs/manual/`):
@@ -46,7 +46,8 @@ The skill is a 4-section behavioral checklist (Think before coding · Simplicity
 - `ui.html` — Main Window layout math, Mini UI, TUI dialog/choice, DissolveOverlay 3 dispatcher rules, Translated Logs, Glass Mode
 - `npc-translation.html` — NPC Manager + Polaroid patterns, Cloud Sync flow, Translation engine, 3-layer name preservation, Wide-context, NPC database
 - `styling.html` — Theme system (12 palettes), Font dual storage, Settings, Splash, Updater
-- `reference.html` — Gemini models, test messages, Hard-Won Rules (6 PyQt6 gotchas + Win32 don'ts), plugin manifest, roadmap
+- `reference.html` — Gemini models (3-model matrix, re-synced v1.8.21), test messages, Hard-Won Rules, plugin manifest, roadmap
+- `library.html` — **Asset / Visual Library (new v1.8.21)** — categorised gallery of every real project asset (SVG icons · PNG UI icons · status · brand/art · fonts · NPC avatars). **Auto-generated** by `scripts/gen_asset_library.py` (scans `python-app/assets`, `assets/icons`, `fonts`, `npc_images`); re-run it instead of hand-editing. Served from repo root so it can reference `python-app/…`.
 - Shared: `assets/manual.css` + `assets/manual.js` (sidebar nav, scroll-spy TOC, copy-code buttons, diagram toggles)
 
 **Landing page** (`docs/index.html`) is a separate public-facing artifact (user-friendly hero, screenshots, install guide). Don't conflate it with the manual — the manual is for developers/AI; the landing page is for users.
